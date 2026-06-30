@@ -10,8 +10,11 @@ The narrative goal and headline results live in `FINDINGS.md`; open avenues in `
 - Environments are managed with conda, not uv. All environment manifests live in `envs/`.
   The main environment is `envs/main.yml`; the conflicting target generators have isolated
   environments under the same directory (`envs/osmordred.yml`, `envs/jazzy.yml` for its exact
-  RDKit pin, `envs/minimol.yml`, `envs/mlqm.yml`). Declare a dependency in the relevant
-  manifest before installing; never `pip install` or `conda install` ad hoc into a shared env.
+  RDKit pin, `envs/minimol.yml`, `envs/mlqm.yml`). osmordred has no package release and is
+  built from source into its env via `envs/build_osmordred.sh` after the env is created;
+  minimol pulls the PyG C++ extensions from the find-links pinned in its manifest. Declare a
+  dependency in the relevant manifest before installing; never `pip install` or `conda install`
+  ad hoc into a shared env.
 - The analysis package runs from the repo root as `python -m analysis.<module>`.
   `analysis/paths.py` is the single source of truth for on-disk locations; scripts
   never hardcode experiment paths.
