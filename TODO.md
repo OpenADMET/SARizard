@@ -69,6 +69,16 @@ Headline results and the read on each flavor: `FINDINGS.md`.
 - [ ] Fully unlocked MPNN: repeat with `mpnn_lr` equal to `ffn_lr` (1e-3). Establishes the
   upper bound on what full finetuning can achieve and quantifies how much signal the frozen
   protocol sacrifices; the gap between frozen and unlocked is the cost of the clean ablation.
+- [ ] Target-dropout fraction for small flavors: the masked-pretext dropout in `losses.py`
+  (`DROPOUT_FRACTION=0.30`, applied per target element to every flavor) keeps a fixed
+  fraction, not a fixed count. Its rationale (stop the head co-adapting across a wide
+  descriptor block) is strong at 3585 dims (osmordred) but weak at low dims: jazzy (6) keeps
+  ~4 of 6 targets per step with high variance (Binomial(6, 0.7), std ≈ 1.1), so the dropout
+  mostly injects gradient noise. Mechanically safe (loss aggregates over all kept elements in
+  the batch, not per-row, so no divide-by-zero). If jazzy/ml_qm/surrogate_adme underperform,
+  ablate the fraction (e.g. 0.0, 0.15, 0.30) the same way as the prescaling triage, holding
+  the backbone and target fixed. Keep it fixed across the main sweep until then; varying it
+  per flavor would confound the report card.
 - [ ] Frozen warmup then coadaptation: train for N epochs with `mpnn_lr=0` so the FFN head
   finds a reasonable operating point against the fixed representations, then unfreeze the
   MPNN and continue training at a reduced rate. Avoids the large gradient shock that occurs
@@ -92,3 +102,8 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   mid-sweep confounds the report card the same way changing the backbone would. The triage
   itself varies prescaling only because the backbone, corpus, and target (osmordred) are held
   fixed there.
+- The masked-pretext target dropout (`losses.py`, `DROPOUT_FRACTION=0.30`) is a fixed
+  fraction applied to every flavor, so its effect scales with target width: near-uniform 70%
+  supervision at high dims, noisy and high-variance at low dims (jazzy 6, ml_qm 24). It is
+  part of the fixed regime; do not special-case small flavors mid-sweep. See the dropout
+  ablation in Future experiments.
