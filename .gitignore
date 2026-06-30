@@ -219,9 +219,7 @@ __marimo__/
 
 # --- SARizard project artifacts ---
 
-# Raw benchmark datasets (not redistributed; keep the provenance README)
-data/*
-!data/README.md
+# data/ is committed to the repo; nothing excluded here
 
 # Shared pretraining corpus and per-flavor descriptor target caches (regenerable)
 corpus/*.parquet
@@ -253,6 +251,7 @@ slurm/logs/
 *.npz
 *.zarr
 *.parquet
+!data/**/*.parquet
 *.feather
 *.pkl
 *.joblib
