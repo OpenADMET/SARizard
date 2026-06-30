@@ -57,6 +57,13 @@ Headline results and the read on each flavor: `FINDINGS.md`.
 - [ ] Fully unlocked MPNN: repeat with `mpnn_lr` equal to `ffn_lr` (1e-3). Establishes the
   upper bound on what full finetuning can achieve and quantifies how much signal the frozen
   protocol sacrifices; the gap between frozen and unlocked is the cost of the clean ablation.
+- [ ] Frozen warmup then coadaptation: train for N epochs with `mpnn_lr=0` so the FFN head
+  finds a reasonable operating point against the fixed representations, then unfreeze the
+  MPNN and continue training at a reduced rate. Avoids the large gradient shock that occurs
+  when a randomly initialized head immediately backpropagates into a pretrained backbone,
+  while still allowing the MPNN and FFN to coadapt once the head has stabilized. Requires
+  a two-phase training schedule not currently supported by the anvil config; likely needs a
+  custom Lightning callback or a sequential two-recipe approach.
 
 ## Methodology watch-items
 
