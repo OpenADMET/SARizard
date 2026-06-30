@@ -6,9 +6,11 @@ fixed subset with a single seed. The resulting ``corpus/corpus_250k.parquet`` (o
 column) is the one molecule set every flavor computes its target on, so the report-card
 columns stay comparable.
 
-The source is already cleaned by the CheMeleon authors, so this step canonicalizes and
-drops unparseable rows rather than re-running a full standardization that would diverge from
-their corpus.
+The source is already cleaned by the CheMeleon authors, so this step is deliberately light:
+strip salts and solvents (keep the largest fragment), canonicalize, and drop unparseable
+rows rather than re-running a full standardization. Stripping is applied uniformly to every
+flavor's molecule set, so the report-card columns stay comparable; an already-clean,
+single-fragment corpus changes only by canonicalization.
 
 Usage:
     python -m sarizard.corpus.prepare_corpus              # download and build the 250K parquet
@@ -24,9 +26,10 @@ from urllib.request import urlretrieve
 
 import numpy as np
 import polars as pl
-from rdkit import Chem, RDLogger
+from rdkit import RDLogger
 
 from sarizard.analysis.paths import CORPUS_DIR, CORPUS_SMILES
+from sarizard.standardize import standardize_to_canonical
 
 logger = logging.getLogger(__name__)
 
@@ -72,8 +75,8 @@ def _read_smiles(path: Path) -> list[str]:
     return smiles
 
 
-def canonical_subset(raw: list[str], n: int, seed: int) -> tuple[list[str], int]:
-    """Shuffle, canonicalize, and collect ``n`` valid canonical SMILES.
+def canonical_subset(raw: list[str], n: int, seed: int) -> tuple[list[str], int, int]:
+    """Shuffle, salt-strip, canonicalize, and collect ``n`` valid canonical SMILES.
 
     Parameters
     ----------
@@ -90,20 +93,24 @@ def canonical_subset(raw: list[str], n: int, seed: int) -> tuple[list[str], int]
         ``n`` canonical SMILES (or fewer if the source is exhausted).
     n_failed : int
         Count of source rows that failed to parse.
+    n_stripped : int
+        Count of kept molecules that had a salt or solvent fragment removed.
     """
     rng = np.random.default_rng(seed)
     order = rng.permutation(len(raw))
     kept: list[str] = []
     n_failed = 0
+    n_stripped = 0
     for idx in order:
-        mol = Chem.MolFromSmiles(raw[idx])
-        if mol is None:
+        canonical, stripped = standardize_to_canonical(raw[idx])
+        if canonical is None:
             n_failed += 1
             continue
-        kept.append(Chem.MolToSmiles(mol))
+        kept.append(canonical)
+        n_stripped += int(stripped)
         if len(kept) >= n:
             break
-    return kept, n_failed
+    return kept, n_failed, n_stripped
 
 
 def main() -> None:
@@ -129,10 +136,13 @@ def main() -> None:
     raw = _read_smiles(source)
     logger.info("read %d raw SMILES from %s", len(raw), source.name)
 
-    smiles, n_failed = canonical_subset(raw, args.n, args.seed)
+    smiles, n_failed, n_stripped = canonical_subset(raw, args.n, args.seed)
     if len(smiles) < args.n:
         logger.warning("collected only %d valid SMILES (requested %d)", len(smiles), args.n)
-    logger.info("kept %d canonical SMILES; %d failed to parse", len(smiles), n_failed)
+    logger.info(
+        "kept %d canonical SMILES; %d failed to parse; %d had salts/solvents stripped",
+        len(smiles), n_failed, n_stripped,
+    )
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     pl.DataFrame({"SMILES": smiles}).write_parquet(args.out)

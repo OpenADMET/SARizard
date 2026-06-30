@@ -11,8 +11,8 @@ This module writes two files to ``cache/targets/surrogate_adme/``:
 
 - ``target.npy``: ``(n, 25)`` float32 array of ADME predictions, NaN where a value is missing.
 - ``corpus_smiles.parquet``: one ``SMILES`` column of the n canonical SMILES that passed
-  RDKit parsing. This parquet replaces the shared 250K corpus when ``split.py`` runs for
-  this flavor.
+  RDKit parsing, salt- and solvent-stripped to the largest fragment like the shared corpus.
+  This parquet replaces the shared 250K corpus when ``split.py`` runs for this flavor.
 
 Released dataset (download once, not redistributed here):
   https://static-content.springer.com/esm/art%3A10.1038%2Fs41467-024-49979-3/MediaObjects/41467_2024_49979_MOESM4_ESM.zip
@@ -28,9 +28,10 @@ from pathlib import Path
 
 import numpy as np
 import polars as pl
-from rdkit import Chem, RDLogger
+from rdkit import RDLogger
 
 from sarizard.analysis.paths import TARGETS_DIR
+from sarizard.standardize import standardize_to_canonical
 
 logger = logging.getLogger(__name__)
 
@@ -103,16 +104,18 @@ def build_from_csv(
     kept_targets: list[list[float]] = []
     n_total = 0
     n_parse_fail = 0
+    n_stripped = 0
 
     with csv_path.open(newline="") as handle:
         reader = csv.DictReader(handle)
         for row in reader:
             n_total += 1
-            mol = Chem.MolFromSmiles(row.get(SMILES_COLUMN, "") or "")
-            if mol is None:
+            canonical, stripped = standardize_to_canonical(row.get(SMILES_COLUMN, "") or "")
+            if canonical is None:
                 n_parse_fail += 1
                 continue
-            kept_smiles.append(Chem.MolToSmiles(mol))
+            kept_smiles.append(canonical)
+            n_stripped += int(stripped)
             vals: list[float] = []
             for col in target_cols:
                 raw = row.get(col, "")
@@ -124,10 +127,11 @@ def build_from_csv(
 
     n_kept = len(kept_smiles)
     logger.info(
-        "read %d CSV rows: %d kept, %d failed SMILES parse",
+        "read %d CSV rows: %d kept, %d failed SMILES parse, %d salts/solvents stripped",
         n_total,
         n_kept,
         n_parse_fail,
+        n_stripped,
     )
 
     arr = np.array(kept_targets, dtype=np.float32)  # (n_kept, n_cols)
