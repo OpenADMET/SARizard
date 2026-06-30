@@ -64,7 +64,12 @@ foundation, so treat each as a gate.
 - **One shared corpus.** Every flavor computes its target on the same fixed 250K
   molecule subset (single seed, persisted). Do not let a flavor drift to a different
   molecule set; the report-card columns must be comparable. Learned-model flavors run
-  their source model over this same corpus.
+  their source model over this same corpus. The lone exception is `surrogate_adme`: its
+  target (the 25 Novartis ADME predictions) is only defined on the Novartis molecules, so
+  that flavor pretrains on its own corpus (`compute_target --flavor surrogate_adme` writes
+  `corpus_smiles.parquet` alongside its `target.npy`, and `split.py` uses it). Its column is
+  therefore a different-corpus reference arm, not an apples-to-apples comparison; keep it
+  labelled as such. No other flavor may use a non-shared corpus.
 - **One fixed pretraining regime.** Corpus size, epoch cap, and LR schedule are shared
   across flavors and recorded in each flavor's pretrain config; the only intended
   difference between flavors is the target block (and MSE vs BCE for binary targets).

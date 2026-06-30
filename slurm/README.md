@@ -80,6 +80,11 @@ ls configs/ablation_*/*.yaml | wc -l
 
 - Every stage is resumable: a flavor or recipe whose output already exists is skipped, so a
   re-submission only fills gaps.
+- The chain is wired with `afterok`, so a stage is released only if every array task of the
+  prior stage succeeds. If one task fails, the dependent stage is cancelled
+  (`DependencyNeverSatisfied`) and the chain stops there. Recover by fixing the cause and
+  re-running `run_all.sh`: resumability means only the failed gaps recompute and the chain
+  re-arms. Read the failing task's `slurm/logs/<stage>_<jobid>_<taskid>.out` first.
 - The learned-model flavors (minimol, ml_qm) need their isolated envs created before the
   targets stage (`conda env create -f envs/minimol.yml`, `conda env create -f envs/mlqm.yml`).
   `surrogate_adme` runs in the main env and only needs the released CSV.

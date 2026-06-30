@@ -3773,7 +3773,6 @@ if __name__ == "__main__":
 
     import polars as pl
     import zarr
-    from get_chunksize import get_chunk_rows
     from rdkit import Chem
     from rdkit.rdBase import BlockLogs
     from tqdm import tqdm
@@ -3809,7 +3808,10 @@ if __name__ == "__main__":
 
         n_mols = df.shape[0]
         shape = (n_mols, DESCRIPTOR_COUNT)
-        chunk_rows = get_chunk_rows(DTYPE, DESCRIPTOR_COUNT)
+        # rows per ~1 MB chunk (was get_chunksize.get_chunk_rows, now removed); this standalone
+        # CLI is superseded by the package pipeline, which fixes chunking via CORPUS_CHUNK_ROWS
+        bytes_per_value = np.dtype(DTYPE).itemsize
+        chunk_rows = (1 * 1024 * 1024) // (DESCRIPTOR_COUNT * bytes_per_value)
         chunk_shape = (chunk_rows, DESCRIPTOR_COUNT)
 
         # Create the dataset with compression and concurrency settings
