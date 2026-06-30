@@ -96,33 +96,44 @@ environment packs to zarr, so their dependencies never reach this training env.
 `surrogate_adme` runs in the main environment; it reads the Novartis released CSV directly
 and requires no isolated env.
 
-## Reproducing a result
+## Running the full experiment
 
+Edit the `EDIT_PARTITION` and `EDIT_ACCOUNT` placeholders in every `slurm/*.sbatch` header,
+create the conda environments, then:
+
+```bash
+# one-time: create isolated envs for the four conflicting target generators
+conda env create -f envs/osmordred.yml
+conda env create -f envs/jazzy.yml
+conda env create -f envs/minimol.yml
+conda env create -f envs/mlqm.yml
+
+# set the path to the Novartis surrogate-ADME CSV (download link in surrogate_target.py)
+export SURROGATE_CSV=/path/to/protacdb2.0_zinc_chembl_dataset.csv
+
+# submit the full pipeline as a SLURM dependency chain and walk away
+bash slurm/run_all.sh
 ```
-# prepare the shared corpus once
-python -m corpus.prepare_corpus
 
-# compute a flavor's target in its environment, then pack it to zarr in the main env
-conda activate sarizard            # or sarizard-osmordred / -jazzy / -minimol / -mlqm
+`run_all.sh` generates the per-flavor finetuning configs, then submits five stages in order
+(corpus preparation, target computation, pretraining, finetuning, analysis), each gated by
+the previous stage completing without errors. Results land in `results/` and `analysis/plots/`
+when the final job finishes. See `slurm/README.md` for the per-stage scripts and how to
+resubmit after a partial failure.
+
+## Reproducing a single flavor
+
+```bash
+# compute target in the flavor's environment, pack in the main env
+conda activate sarizard-ecfp      # or sarizard-osmordred / -jazzy / -minimol / -mlqm
 python -m pretraining.features.compute_target --flavor ecfp
-# for surrogate_adme, pass the released CSV path (download link in surrogate_target.py)
-# python -m pretraining.features.compute_target --flavor surrogate_adme \
-#     --csv-path /path/to/protacdb2.0_zinc_chembl_dataset.csv
 conda activate sarizard
 python -m pretraining.features.pack_target --flavor ecfp
 
-# pretrain every flavor (on the cluster, one node per flavor)
-sbatch slurm/pretrain.sbatch
-
-# export the foundation checkpoints for openadmet
-python -m pretraining.convert_checkpoint --all
-
-# generate per-flavor recipes, finetune every flavor x endpoint, then analyze
-python -m configs.generate
-sbatch slurm/finetune.sbatch
-python -m analysis.evaluate --accelerator gpu
-python -m analysis.report_card --metric r2
-python -m analysis.meta_model
+# pretrain, then finetune one endpoint
+sbatch slurm/pretrain.sbatch      # runs only the flavor if foundation already exists for others
+python -m configs.generate --flavors ecfp
+openadmet anvil --recipe-path configs/ecfp/cyp_mt.yaml --output-dir results/ecfp/cyp_mt/
 ```
 
 Datasets and the pretraining corpus are not redistributed; regenerate or obtain them
