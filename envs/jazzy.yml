@@ -1,0 +1,17 @@
+# Isolated environment for the Jazzy hydration-energy target. Jazzy pins rdkit==2024.3.1
+# exactly, which would fight the training env's RDKit, so quarantine it here. Writes
+# cache/targets/jazzy/target.npy (numpy only); pack to zarr in the sarizard env. pip pulls
+# the exact RDKit pin plus kallisto; no deep-learning deps.
+#
+#   conda activate sarizard-jazzy
+#   python -m pretraining.features.compute_target --flavor jazzy
+name: sarizard-jazzy
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - numpy
+  - pyarrow>=15
+  - pip:
+      - jazzy

@@ -1,0 +1,16 @@
+# This file is no longer needed. The surrogate_adme target now reads the Novartis released
+# CSV directly (no model training, no isolated environment). compute_target --flavor
+# surrogate_adme runs in the main sarizard environment. This file can be deleted.
+#
+# Kept for reference only in case you need to reproduce the original chemprop v1 approach.
+name: sarizard-surrogate
+channels:
+  - conda-forge
+dependencies:
+  - python=3.8
+  - pip
+  - rdkit>=2020.09
+  - numpy
+  - "pyarrow<16"  # last pyarrow line supporting python 3.8
+  - pip:
+      - chemprop==1.6.1

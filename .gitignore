@@ -216,3 +216,48 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- SARizard project artifacts ---
+
+# Raw benchmark datasets (not redistributed; keep the provenance README)
+data/*
+!data/README.md
+
+# Shared pretraining corpus and per-flavor descriptor target caches (regenerable)
+corpus/*.parquet
+corpus/*.zarr
+corpus/*.smiles
+cache/*
+!cache/.gitkeep
+
+# Converted foundation checkpoints (regenerable from pretraining runs)
+foundations/*
+!foundations/.gitkeep
+
+# Generated per-flavor finetuning recipes (regenerate with configs/generate.py);
+# the committed _baseline templates are the source of truth
+configs/*/
+!configs/_baseline/
+!configs/_baseline/**
+
+# Finetuning and pretraining outputs: result dirs, checkpoints, logs, predictions
+results/
+pretraining/runs/
+slurm/logs/
+
+# Binary model and array artifacts anywhere (belt-and-suspenders against stray copies)
+*.ckpt
+*.pth
+*.pt
+*.npy
+*.npz
+*.zarr
+*.parquet
+*.feather
+*.pkl
+*.joblib
+*.h5
+*.hdf5
+
+# Obsidian per-user UI state (keep graph/app config, drop the machine-local layout)
+wiki/.obsidian/workspace.json
