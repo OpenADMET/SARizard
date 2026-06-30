@@ -130,7 +130,9 @@ def main() -> None:
     n_written = 0
     for flavor in flavors:
         foundation_rel = str(foundation_path(flavor).relative_to(REPO_ROOT))
-        n = _generate_one(templates, CONFIGS_DIR / flavor, foundation_rel, flavor, args.accelerator)
+        n = _generate_one(
+            templates, CONFIGS_DIR / flavor, foundation_rel, flavor, args.accelerator
+        )
         n_written += n
         logger.info("flavor %s: %d recipes", flavor, n)
     logger.info("wrote %d recipes across %d flavors", n_written, len(flavors))
