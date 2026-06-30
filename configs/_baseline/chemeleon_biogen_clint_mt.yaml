@@ -1,0 +1,89 @@
+data:
+  resource: data/biogen.csv
+  type: intake
+  input_col: OPENADMET_CANONICAL_SMILES
+  target_cols:
+  - LOG_CLint_HLM
+  - LOG_CLint_RLM
+  dropna: true
+
+metadata:
+  authors: Sean Colby
+  email: seanmcolby@gmail.com
+  biotargets:
+  - HLM_CLint
+  - RLM_CLint
+  build_number: 0
+  description: Multitask CheMeleon regression for HLM and RLM intrinsic clearance (Biogen proprietary set)
+  driver: pytorch
+  name: chemeleon_biogen_clint_mt
+  tag: chemeleon-biogen-clint-mt
+  tags:
+  - openadmet
+  - chemeleon
+  - clearance
+  - clint
+  - hlm
+  - rlm
+  - multitask
+  - biogen
+  version: v1
+
+procedure:
+  random_seed: 42
+
+  feat:
+    type: ChemPropFeaturizer
+    params:
+      batch_size: 128
+      normalize_targets: true
+      n_jobs: 4
+      shuffle: true
+      random_seed: 42
+
+  model:
+    type: ChemPropModel
+    params:
+      random_seed: 42
+      ffn_hidden_dim: 1024
+      ffn_num_layers: 3
+      mpnn_lr: 1.0e-3
+      ffn_lr: 1.0e-3
+      mpnn_weight_decay: 0
+      ffn_weight_decay: 1.0e-4
+      dropout: 0.1
+      batch_norm: false
+      scheduler: plateau
+      reduce_lr_patience: 5
+      reduce_lr_factor: 0.5
+      n_tasks: 2
+      from_foundation: chemeleon
+
+  split:
+    type: ClusterSplitter
+    params:
+      method: butina
+      butina_cutoff: 0.65
+      random_seed: 42
+      train_size: 0.7
+      val_size: 0.1
+      test_size: 0.2
+
+  train:
+    type: LightningTrainer
+    params:
+      accelerator: mps
+      monitor_metric: val_loss
+      gradient_clip_val: 0.5
+      early_stopping: true
+      early_stopping_patience: 20
+      early_stopping_mode: min
+      early_stopping_min_delta: 0.001
+      max_epochs: 100
+      use_wandb: false
+      wandb_project: openadmet
+
+report:
+  eval:
+  - type: RegressionMetrics
+    params: {}

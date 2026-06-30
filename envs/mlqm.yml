@@ -1,0 +1,17 @@
+# Isolated environment for the ML-QM (qmdesc) target. qmdesc bundles an older D-MPNN and
+# its weights and pins an older torch; quarantine it here. Writes
+# cache/targets/ml_qm/target.npy (numpy only); pack to zarr in the sarizard env.
+#
+#   conda activate sarizard-mlqm
+#   python -m pretraining.features.compute_target --flavor ml_qm
+name: sarizard-mlqm
+channels:
+  - conda-forge
+dependencies:
+  - python=3.8
+  - pip
+  - rdkit>=2020.09
+  - numpy
+  - "pyarrow<16"  # last pyarrow line supporting python 3.8
+  - pip:
+      - qmdesc

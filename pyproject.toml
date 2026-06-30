@@ -1,0 +1,78 @@
+[project]
+name = "sarizard"
+version = "0.1.0"
+description = "Fit-to-purpose CheMeleon foundations: pretrain D-MPNN foundations against varied descriptor targets, finetune on ADMET benchmarks, and compare"
+requires-python = ">=3.11"
+# The training and feature stacks (chemprop, lightning, torch, rdkit, zarr,
+# scikit-fingerprints, osmordred) live in the conda environments declared in
+# AGENTS.md (environment.yml and the isolated environment-*.yml files). The
+# dependencies below cover the importable analysis/ package only.
+dependencies = [
+    "matplotlib>=3.8",
+    "numpy>=2",
+    "pandas>=2",
+    "pyarrow>=15",
+    "scikit-learn>=1.5",
+    "scipy>=1.12",
+    "lightgbm>=4.3",
+    # install openadmet-models from the local repo: pip install -e ../openadmet-models
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pyright>=1.1",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 99
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W", # pycodestyle + pyflakes baseline
+    "I",           # import sorting
+    "N",           # pep8-naming
+    "UP",          # deprecated aliases and syntax upgrades
+    "B",           # bugbear: mutable defaults, useless expressions
+    "PT",          # pytest style: fixtures, parametrize, assertions
+    "PTH",         # pathlib over os.path
+    "S",           # bandit: shell=True, hardcoded secrets, unsafe yaml/pickle
+    "D",           # pydocstyle
+    "TID",         # banned-api enforcement
+]
+ignore = [
+    "D105", "D107", # docstrings not required on magic methods or __init__
+    "S603", "S607", # trusted fixed-argv subprocess; partial exec paths for PATH portability
+    "N803", "N806", # X/y design-matrix naming is the ML/sklearn convention
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"unittest.TestCase".msg = "Use plain pytest functions (python-testing rule)"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "D"]     # assert usage and docstrings not required in tests
+# vendored pretraining code follows the upstream how-to-train-your-chemeleon
+# style (top-level script imports, no docstrings); relax docstring and import
+# gates there rather than diverging from upstream.
+"pretraining/**" = ["D", "E402"]
+"notebooks/**" = ["D", "E402", "E501", "B905", "B007"]
+
+# Basic mode: catch real defects (undefined names, bad calls, arity) without
+# demanding strict annotations on untyped pandas/matplotlib/numpy returns in
+# this analysis codebase. The rules below are disabled because they fire almost
+# entirely on missing or loose third-party stubs (pandas scalar indexing and
+# groupby/iterrows, rdkit and matplotlib partial stubs), not on real defects.
+[tool.pyright]
+typeCheckingMode = "basic"
+reportArgumentType = false
+reportCallIssue = false
+reportGeneralTypeIssues = false
+reportAttributeAccessIssue = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
