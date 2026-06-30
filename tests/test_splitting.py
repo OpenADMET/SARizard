@@ -57,3 +57,14 @@ def test_chunk_row_ranges_expands_to_half_open_blocks():
     ranges = chunk_row_ranges(np.array([0, 2, 5]), rows_per_chunk=128)
 
     assert ranges == [(0, 128), (256, 384), (640, 768)]
+
+
+def test_rejects_fewer_than_two_chunks():
+    # a single chunk cannot be split into a non-empty train and validation side
+    with pytest.raises(ValueError, match="2 chunks"):
+        train_val_chunk_indices(1)
+
+
+def test_rejects_train_frac_that_empties_validation():
+    with pytest.raises(ValueError, match="empty split side"):
+        train_val_chunk_indices(40, train_frac=1.0)

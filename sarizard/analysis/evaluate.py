@@ -17,6 +17,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 from pathlib import Path
 
@@ -76,6 +77,10 @@ def evaluate_result_dir(
     y_test = pd.read_csv(data_dir / "y_test.csv")
     y_train = pd.read_csv(data_dir / "y_train.csv")
 
+    # record the model's target column order so the meta-model can align its cached predictions
+    # without re-loading openadmet; the prediction array columns follow data_spec.target_cols
+    (data_dir / "target_cols.json").write_text(json.dumps(list(data_spec.target_cols)))
+
     cache = data_dir / "y_pred.npy"
     if cache.exists() and not force:
         preds = np.load(cache)
@@ -113,10 +118,12 @@ def collect(
         if not flavor_dir.is_dir():
             continue
         for result_dir in sorted(p for p in flavor_dir.iterdir() if p.is_dir()):
+            # each result dir is independent: log and skip a failed one (missing file, corrupt
+            # checkpoint, inference error) so one bad dir does not abort the whole sweep
             try:
                 rows.extend(evaluate_result_dir(result_dir, flavor, accelerator, force=force))
-            except FileNotFoundError as err:
-                logger.warning("skipping %s: %s", result_dir, err)
+            except Exception:
+                logger.exception("skipping %s: evaluation failed", result_dir)
     return pd.DataFrame(rows)
 
 

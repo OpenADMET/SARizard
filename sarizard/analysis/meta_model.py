@@ -25,6 +25,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 from pathlib import Path
 
@@ -85,7 +86,15 @@ def collect_predictions(results_root: Path, flavors: list[str]) -> dict:
                 continue
             preds = np.asarray(np.load(pred_path))
             y_test = pd.read_csv(test_path)
-            for i, col in enumerate(y_test.columns):
+            # align prediction columns to the model's target order. evaluate.py writes that
+            # order to target_cols.json; fall back to the y_test columns for older result dirs
+            cols_path = result_dir / "data" / "target_cols.json"
+            target_cols = (
+                json.loads(cols_path.read_text())
+                if cols_path.exists()
+                else list(y_test.columns)
+            )
+            for i, col in enumerate(target_cols):
                 mask = y_test[col].notna().to_numpy()
                 if mask.sum() == 0:
                     continue

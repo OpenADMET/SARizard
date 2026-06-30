@@ -21,7 +21,12 @@ import torch
 from chemprop.models import MPNN
 from chemprop.nn import BondMessagePassing
 
-from flavors import flavor_names
+# dual import: script-style when run from pretraining/ (sbatch), package-style when imported
+# from the repo root (tests)
+try:
+    from flavors import flavor_names
+except ImportError:
+    from sarizard.pretraining.flavors import flavor_names
 
 logger = logging.getLogger(__name__)
 
@@ -60,12 +65,29 @@ def extract_foundation(mpnn: MPNN) -> dict:
         )
     # keep only JSON-plain hyperparameters; drop the 'cls' key and any module-valued
     # transforms (None or nn.Module) so weights_only loading accepts the file
-    hyper_parameters = {
-        key: value
-        for key, value in dict(mp.hparams).items()
-        if isinstance(value, (int, float, str, bool))
-    }
+    hyper_parameters = {}
+    for key, value in dict(mp.hparams).items():
+        plain = _plain_scalar(value)
+        if plain is not None:
+            hyper_parameters[key] = plain
     return {"hyper_parameters": hyper_parameters, "state_dict": mp.state_dict()}
+
+
+def _plain_scalar(value: object) -> int | float | str | bool | None:
+    """Coerce a hyperparameter to a weights_only-safe plain scalar, or None to drop it.
+
+    chemprop stores ``activation`` as an ``Activation`` str-enum, which passes an
+    ``isinstance(str)`` check but pickles as a ``chemprop.nn.utils.Activation`` class global
+    that ``torch.load(weights_only=True)`` refuses. Collapsing str subclasses to a plain
+    ``str`` (and dropping None/module-valued transforms) keeps the foundation loadable.
+    """
+    if isinstance(value, bool):  # before int: bool is an int subclass
+        return value
+    if isinstance(value, (int, float)):
+        return value
+    if isinstance(value, str):
+        return str(value)  # plain str, even for a str-enum subclass like Activation
+    return None
 
 
 def save_foundation(mpnn: MPNN, out_path: Path) -> Path:
