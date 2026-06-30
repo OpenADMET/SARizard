@@ -4,7 +4,7 @@ from pathlib import Path
 
 import yaml
 
-from configs.generate import _endpoint_name, _generate_one, _retarget
+from sarizard.configs.generate import _endpoint_name, _generate_one, _retarget
 
 
 def _baseline_recipe() -> dict:

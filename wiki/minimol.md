@@ -8,7 +8,7 @@ tags: [flavor, status/planned]
 > representation into our backbone.
 
 - Target: 512 continuous values · Loss: MSE · Source: learned model (isolated env, graphium stack)
-- Calculator: `pretraining/features/minimol_target.py`
+- Calculator: `sarizard/pretraining/features/minimol_target.py`
 
 ## Hypothesis
 

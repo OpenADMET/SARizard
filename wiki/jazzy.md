@@ -8,7 +8,7 @@ tags: [flavor, status/planned]
 > A small, physically grounded solvation target.
 
 - Target: 6 continuous values · Loss: MSE · Source: direct compute (isolated env, pins rdkit==2024.3.1)
-- Calculator: `pretraining/features/jazzy_target.py`
+- Calculator: `sarizard/pretraining/features/jazzy_target.py`
 
 ## Hypothesis
 

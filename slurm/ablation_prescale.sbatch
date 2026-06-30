@@ -38,7 +38,7 @@ SUMMARY="$REPO_DIR/cache/ablations/$ABLATION/prescaling_summary.json"
 CORPUS="$REPO_DIR/corpus/corpus_250k.parquet"
 
 # prescaling.py and split.py run script-style from the pretraining directory
-cd "$REPO_DIR/pretraining"
+cd "$REPO_DIR/sarizard/pretraining"
 python prescaling.py --input-zarr "$TARGET_ZARR" --output-zarr "$PRESCALED" \
     --ablation "$ABLATION" --summary "$SUMMARY" --force
 python split.py --input-zarr "$PRESCALED" --input-smiles "$CORPUS" \

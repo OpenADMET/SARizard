@@ -232,15 +232,16 @@ cache/*
 foundations/*
 !foundations/.gitkeep
 
-# Generated per-flavor finetuning recipes (regenerate with configs/generate.py);
+# Generated per-flavor finetuning recipes (regenerate with sarizard.configs.generate);
 # the committed _baseline templates are the source of truth
 configs/*/
 !configs/_baseline/
 !configs/_baseline/**
 
-# Finetuning and pretraining outputs: result dirs, checkpoints, logs, predictions
+# Finetuning and pretraining outputs: result dirs, checkpoints, logs, predictions, plots
 results/
-pretraining/runs/
+plots/
+sarizard/pretraining/runs/
 slurm/logs/
 
 # Binary model and array artifacts anywhere (belt-and-suspenders against stray copies)
@@ -260,3 +261,6 @@ slurm/logs/
 
 # Obsidian per-user UI state (keep graph/app config, drop the machine-local layout)
 wiki/.obsidian/workspace.json
+
+# Agent review snapshots (point-in-time, untracked)
+*_review.md

@@ -49,7 +49,7 @@ Each `plus_*` isolates one step's marginal effect over `order_fix`; `full` stack
 ## Run it
 
 `bash slurm/run_ablations.sh` submits the chain (corpus → target → prescale → pretrain →
-finetune → analyze). Read `analysis/plots/prescaling_ranking_r2.csv` and the ablation report
+finetune → analyze). Read `plots/prescaling_ranking_r2.csv` and the ablation report
 card to pick the recipe, then harden it into the core workflow (TODO milestone 5).
 
 ## Related

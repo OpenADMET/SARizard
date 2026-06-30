@@ -15,8 +15,8 @@ The narrative goal and headline results live in `FINDINGS.md`; open avenues in `
   minimol pulls the PyG C++ extensions from the find-links pinned in its manifest. Declare a
   dependency in the relevant manifest before installing; never `pip install` or `conda install`
   ad hoc into a shared env.
-- The analysis package runs from the repo root as `python -m analysis.<module>`.
-  `analysis/paths.py` is the single source of truth for on-disk locations; scripts
+- The analysis package runs from the repo root as `python -m sarizard.analysis.<module>`.
+  `sarizard/analysis/paths.py` is the single source of truth for on-disk locations; scripts
   never hardcode experiment paths.
 - Prefer small, incremental, reviewable changes; follow the commit conventions in the
   global instructions (bare imperative subject, no conventional-commit prefixes, no
@@ -24,18 +24,22 @@ The narrative goal and headline results live in `FINDINGS.md`; open avenues in `
 
 ## Repository layout
 
-- `corpus/` shared 250K corpus preparation; `cache/` per-flavor targets and rescaled
-  stores (gitignored, computed once and reused).
-- `pretraining/` vendored and adapted `how-to-train-your-chemeleon`; `features/` holds
-  one target calculator per flavor, `prescaling.py` holds the toggleable descriptor
-  preprocessing and its ablation registry, `convert_checkpoint.py` exports foundations.
-- `foundations/` converted foundation checkpoints (gitignored).
-- `configs/<flavor>/` finetuning recipes, one per endpoint, generated from the baseline
-  recipes; `configs/ablation_<name>/` are the prescaling-triage recipes (gitignored).
+All Python code lives in the importable `sarizard/` package (`pip install -e .`); the repo
+root holds inputs, recipes, and regenerable artifacts. Run modules from the repo root as
+`python -m sarizard.<sub>.<module>`.
+
+- `sarizard/corpus/` shared 250K corpus preparation; `sarizard/pretraining/` vendored and
+  adapted `how-to-train-your-chemeleon` (`features/` holds one target calculator per flavor,
+  `prescaling.py` the toggleable descriptor preprocessing and ablation registry,
+  `convert_checkpoint.py` exports foundations); `sarizard/configs/` the recipe generator;
+  `sarizard/analysis/` the report card and meta-model.
+- `configs/_baseline/` committed stock-CheMeleon templates; generated `configs/<flavor>/` and
+  `configs/ablation_<name>/` recipes are gitignored.
+- `corpus/`, `data/` inputs; `cache/`, `foundations/`, `results/`, `plots/`,
+  `sarizard/pretraining/runs/` regenerable artifacts (gitignored; `data/` is committed,
+  provenance in `data/README.md`).
 - `slurm/` sbatch job-array scripts: `run_all.sh` drives the flavor sweep, `run_ablations.sh`
-  drives the prescaling triage that precedes it.
-- `analysis/` importable analysis package; `data/` benchmark sets and splits (gitignored,
-  provenance in `data/README.md`); `wiki/` Obsidian vault; `tests/` the test suite.
+  the prescaling triage that precedes it. `wiki/` Obsidian vault; `tests/` the test suite.
 
 ## Compatibility invariants (do not break silently)
 
@@ -66,7 +70,7 @@ foundation, so treat each as a gate.
   difference between flavors is the target block (and MSE vs BCE for binary targets).
 - **Cache targets once, in two steps.** Each flavor's calculator runs in its own
   environment and writes a plain `cache/targets/<flavor>/target.npy` (numpy only), so the
-  conflicting learned-model environments never need zarr. `pretraining.features.pack_target`
+  conflicting learned-model environments never need zarr. `sarizard.pretraining.features.pack_target`
   then converts that `.npy` into the chunked `target.zarr` the trainer reads, in the main
   environment. Targets are expensive and deterministic (3D conformer targets excepted);
   compute each once and reuse. Storage chunk rows are fixed across flavors
@@ -75,7 +79,7 @@ foundation, so treat each as a gate.
 - **No leakage.** Per-flavor target scaling (winsorize and z-score for continuous
   targets) is fit on the pretraining train split only. `prescaling.py` fits every step
   (percentiles, correlation, Yeo-Johnson lambdas, variance, mean/std) on the train chunks
-  from the shared chunk split (`pretraining/splitting.py`), so prescaling and `split.py`
+  from the shared chunk split (`sarizard/pretraining/splitting.py`), so prescaling and `split.py`
   hold out the same molecules. Binary targets skip scaling and train with BCE. The
   meta-model trains on out-of-fold predictions and evaluates on the held-out test split; it
   never sees in-sample finetuned predictions.
@@ -89,7 +93,7 @@ foundation, so treat each as a gate.
 ## Standing gates
 
 - ruff (lint + format) and pyright (basic) run via pre-commit on the package; the
-  vendored `pretraining/` tree relaxes docstring and import-order gates to stay close to
+  vendored `sarizard/pretraining/` tree relaxes docstring and import-order gates to stay close to
   upstream. notebooks are exempt from docstring and import-order gates but not correctness.
 - Commit-message conventions are enforced by a commit-msg hook.
 

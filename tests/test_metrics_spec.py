@@ -2,7 +2,7 @@
 
 import pytest
 
-from analysis.metrics_spec import dataset_of
+from sarizard.analysis.metrics_spec import dataset_of
 
 
 @pytest.mark.parametrize(

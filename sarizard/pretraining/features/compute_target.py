@@ -10,9 +10,9 @@ The ``surrogate_adme`` flavor is an exception: it reads the Novartis released CS
 that replaces the shared corpus for that flavor's pretrain step.
 
 Usage:
-    python -m pretraining.features.compute_target --flavor ecfp
-    python -m pretraining.features.compute_target --flavor osmordred --n-jobs 32
-    python -m pretraining.features.compute_target --flavor surrogate_adme \\
+    python -m sarizard.pretraining.features.compute_target --flavor ecfp
+    python -m sarizard.pretraining.features.compute_target --flavor osmordred --n-jobs 32
+    python -m sarizard.pretraining.features.compute_target --flavor surrogate_adme \\
         --csv-path /data/protacdb2.0_zinc_chembl_dataset.csv
 """
 
@@ -27,10 +27,10 @@ from pathlib import Path
 import numpy as np
 import pyarrow.parquet as pq
 
-from analysis.paths import CORPUS_SMILES, target_npy
-from pretraining.config import COMPUTE_BLOCK_ROWS
-from pretraining.features import _npy
-from pretraining.flavors import Flavor, get_flavor
+from sarizard.analysis.paths import CORPUS_SMILES, target_npy
+from sarizard.pretraining.config import COMPUTE_BLOCK_ROWS
+from sarizard.pretraining.features import _npy
+from sarizard.pretraining.flavors import Flavor, get_flavor
 
 logger = logging.getLogger(__name__)
 
@@ -48,27 +48,27 @@ def _streaming_compute_fn(
     Each branch imports its calculator lazily so a conflicting or heavy dependency only
     loads in the environment that actually computes that flavor.
     """
-    from pretraining.features.skfp_targets import is_skfp_flavor
+    from sarizard.pretraining.features.skfp_targets import is_skfp_flavor
 
     name = flavor.name
     if is_skfp_flavor(name):
-        from pretraining.features.skfp_targets import build_compute_fn
+        from sarizard.pretraining.features.skfp_targets import build_compute_fn
 
         return build_compute_fn(name, n_jobs, flavor.target_dim)
     if name == "osmordred":
-        from pretraining.features.osmordred_target import build_compute_fn
+        from sarizard.pretraining.features.osmordred_target import build_compute_fn
 
         return build_compute_fn(n_jobs)
     if name == "minimol":
-        from pretraining.features.minimol_target import build_compute_fn
+        from sarizard.pretraining.features.minimol_target import build_compute_fn
 
         return build_compute_fn(batch_size)
     if name == "ml_qm":
-        from pretraining.features.qmdesc_target import build_compute_fn
+        from sarizard.pretraining.features.qmdesc_target import build_compute_fn
 
         return build_compute_fn()
     if name == "jazzy":
-        from pretraining.features.jazzy_target import build_compute_fn
+        from sarizard.pretraining.features.jazzy_target import build_compute_fn
 
         return build_compute_fn(n_jobs)
     return None
@@ -115,7 +115,7 @@ def main() -> None:
             raise SystemExit(
                 "surrogate_adme requires --csv-path <protacdb2.0_zinc_chembl_dataset.csv>"
             )
-        from pretraining.features.surrogate_target import build_from_csv
+        from sarizard.pretraining.features.surrogate_target import build_from_csv
 
         n_kept = build_from_csv(args.csv_path, out, force=args.force)
         logger.info(
@@ -141,7 +141,7 @@ def main() -> None:
         raise SystemExit(f"no calculator registered for flavor {flavor.name}")
 
     logger.info(
-        "wrote %s (%d rows, %d failed); now pack with pretraining.features.pack_target",
+        "wrote %s (%d rows, %d failed); now pack with sarizard.pretraining.features.pack_target",
         out,
         len(smiles),
         n_failed,

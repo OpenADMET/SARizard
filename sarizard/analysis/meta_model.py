@@ -15,8 +15,8 @@ This step depends only on numpy, pandas, scikit-learn, lightgbm, and matplotlib 
 predictions are read from cached ``y_pred.npy`` files), so it runs without openadmet or a GPU.
 
 Usage:
-    python -m analysis.meta_model                       # LGBM stacker
-    python -m analysis.meta_model --estimator rf
+    python -m sarizard.analysis.meta_model                       # LGBM stacker
+    python -m sarizard.analysis.meta_model --estimator rf
 """
 
 from __future__ import annotations
@@ -34,9 +34,9 @@ import pandas as pd  # noqa: E402
 from sklearn.metrics import mean_squared_error, r2_score  # noqa: E402
 from sklearn.model_selection import KFold  # noqa: E402
 
-from analysis.metrics_spec import dataset_of  # noqa: E402
-from analysis.paths import PLOTS_DIR, RESULTS_DIR  # noqa: E402
-from pretraining.flavors import flavor_names  # noqa: E402
+from sarizard.analysis.metrics_spec import dataset_of  # noqa: E402
+from sarizard.analysis.paths import PLOTS_DIR, RESULTS_DIR  # noqa: E402
+from sarizard.pretraining.flavors import flavor_names  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

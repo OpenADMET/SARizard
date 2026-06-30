@@ -21,10 +21,10 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   confirm the foundation loads and a sane R-squared lands. This validates the checkpoint
   bridge and the featurizer-dim match before any fan-out.
 - [ ] 4. Prescaling ablation triage (runs BEFORE the flavor sweep). Drive osmordred through
-  every prescaling recipe in `pretraining/prescaling.py` (`chemeleon_baseline`, `order_fix`,
+  every prescaling recipe in `sarizard/pretraining/prescaling.py` (`chemeleon_baseline`, `order_fix`,
   `plus_drop_corr`, `plus_drop_low_var`, `plus_yeo_johnson`, `full`, and the `minimal` floor),
   pretrain and finetune from each, and compare downstream endpoint performance. Submit with
-  `bash slurm/run_ablations.sh`; read `analysis/plots/prescaling_ranking_r2.csv` and the
+  `bash slurm/run_ablations.sh`; read `plots/prescaling_ranking_r2.csv` and the
   ablation report card to pick the production recipe. The backbone, corpus, and regime are
   fixed across ablations, so the difference is the prescaling alone.
 - [ ] 5. (GATED on 4) Harden the chosen prescaling into the core flavor-sweep workflow. Wire
@@ -93,7 +93,7 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   input graph, so they are a leaky and likely weak pretext. Their report-card position is
   a result, not a bug; report it as such.
 - 3D flavors depend on generated conformers, so their targets are not bit-reproducible.
-  The conformer settings and seed live in `pretraining/config.py` (ETKDG + MMFF94,
+  The conformer settings and seed live in `sarizard/pretraining/config.py` (ETKDG + MMFF94,
   `CONFORMER_SEED`); treat reproducibility as approximate.
 - Keep the pretraining regime fixed across flavors. The only intended difference is the
   target block and the MSE/BCE choice; any other change confounds the report card.

@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "sarizard"
 version = "0.1.0"
@@ -23,6 +27,12 @@ dev = [
     "pytest>=8",
     "pyright>=1.1",
 ]
+
+# Flat layout with several importable packages; the repo root also holds non-package
+# directories (data/, cache/, slurm/, wiki/, ...) so discovery must be explicit, or
+# setuptools refuses with "multiple top-level packages discovered".
+[tool.setuptools.packages.find]
+include = ["sarizard*"]
 
 [tool.ruff]
 target-version = "py311"
@@ -58,7 +68,7 @@ convention = "numpy"
 # vendored pretraining code follows the upstream how-to-train-your-chemeleon
 # style (top-level script imports, no docstrings); relax docstring and import
 # gates there rather than diverging from upstream.
-"pretraining/**" = ["D", "E402"]
+"sarizard/pretraining/**" = ["D", "E402"]
 "notebooks/**" = ["D", "E402", "E501", "B905", "B007"]
 
 # Basic mode: catch real defects (undefined names, bad calls, arity) without

@@ -17,7 +17,7 @@ from collections.abc import Callable, Sequence
 import numpy as np
 from rdkit import Chem
 
-from pretraining.config import CONFORMER_FORCE_FIELD, CONFORMER_NUM, CONFORMER_SEED
+from sarizard.pretraining.config import CONFORMER_FORCE_FIELD, CONFORMER_NUM, CONFORMER_SEED
 
 logger = logging.getLogger(__name__)
 

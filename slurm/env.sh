@@ -28,11 +28,11 @@ mkdir -p slurm/logs
 # print the registry flavor list, one per line, using the main environment
 flavor_list() {
     conda run -n "$MAIN_ENV" python -c \
-        "from pretraining.flavors import flavor_names; print('\n'.join(flavor_names()))"
+        "from sarizard.pretraining.flavors import flavor_names; print('\n'.join(flavor_names()))"
 }
 
 # print the prescaling ablation list, one per line, using the main environment
 ablation_list() {
     conda run -n "$MAIN_ENV" python -c \
-        "from pretraining.prescaling import ablation_names; print('\n'.join(ablation_names()))"
+        "from sarizard.pretraining.prescaling import ablation_names; print('\n'.join(ablation_names()))"
 }

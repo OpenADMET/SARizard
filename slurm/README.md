@@ -13,7 +13,7 @@ bash slurm/run_all.sh
 `run_all.sh` generates the per-flavor finetuning configs, then submits all five stages as a
 SLURM dependency chain (corpus → targets → pretrain → finetune → analyze). Each stage waits
 for every task of the previous stage to succeed before starting. Come back when the analyze
-job finishes; results land in `results/` and `analysis/plots/`.
+job finishes; results land in `results/` and `plots/`.
 
 ### Prescaling ablation triage (run before the flavor sweep)
 
@@ -27,7 +27,7 @@ bash slurm/run_ablations.sh
 through every prescaling recipe and submits its own chain (corpus → target → prescale →
 pretrain → finetune → analyze) with the `ablation_*.sbatch` scripts. The backbone, corpus,
 and regime are fixed, so the comparison isolates the prescaling. Read
-`analysis/plots/prescaling_ranking_r2.csv` to pick the production recipe.
+`plots/prescaling_ranking_r2.csv` to pick the production recipe.
 
 ## Before submitting
 
@@ -62,12 +62,12 @@ in the array scripts and recount recipes:
 ```bash
 # flavor count
 conda run -n sarizard python -c \
-    "from pretraining.flavors import flavor_names; print(len(flavor_names()))"
+    "from sarizard.pretraining.flavors import flavor_names; print(len(flavor_names()))"
 # recipe count (after configs.generate)
 ls configs/*/*.yaml | grep -v /_baseline/ | wc -l
 # ablation count (sets ablation_prescale / ablation_pretrain arrays)
 conda run -n sarizard python -c \
-    "from pretraining.prescaling import ablation_names; print(len(ablation_names()))"
+    "from sarizard.pretraining.prescaling import ablation_names; print(len(ablation_names()))"
 # ablation recipe count (sets ablation_finetune array)
 ls configs/ablation_*/*.yaml | wc -l
 ```

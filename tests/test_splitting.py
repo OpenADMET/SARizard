@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from pretraining.splitting import chunk_row_ranges, train_val_chunk_indices
+from sarizard.pretraining.splitting import chunk_row_ranges, train_val_chunk_indices
 
 
 def test_last_chunk_excluded_from_both_sides():

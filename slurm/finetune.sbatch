@@ -4,7 +4,7 @@
 # Resumable: a recipe whose result directory already exists is skipped.
 #
 # Generate the recipes first (they are gitignored), then submit from the repo root:
-#   python -m configs.generate
+#   python -m sarizard.configs.generate
 #   sbatch slurm/finetune.sbatch
 # The array range must cover flavors x endpoints (13 x 24 = 312 -> 0-311). Adjust to match the
 # number of generated recipes: ls configs/*/*.yaml | grep -v /_baseline/ | wc -l
@@ -23,7 +23,7 @@ conda activate "$MAIN_ENV"
 # enumerate generated per-flavor recipes (deterministic sorted order), excluding the templates
 mapfile -t RECIPES < <(ls configs/*/*.yaml 2>/dev/null | grep -v '/_baseline/')
 if [[ ${#RECIPES[@]} -eq 0 ]]; then
-    echo "no recipes found; run: python -m configs.generate" >&2
+    echo "no recipes found; run: python -m sarizard.configs.generate" >&2
     exit 1
 fi
 RECIPE="${RECIPES[$SLURM_ARRAY_TASK_ID]}"

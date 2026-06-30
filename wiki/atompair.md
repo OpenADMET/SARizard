@@ -8,7 +8,7 @@ tags: [flavor, status/planned]
 > pretext whose report-card position is a result, not a bug.
 
 - Target: 2048 binary bits · Loss: BCE · Source: direct compute (scikit-fingerprints)
-- Calculator: `pretraining/features/skfp_targets.py`
+- Calculator: `sarizard/pretraining/features/skfp_targets.py`
 
 ## Hypothesis
 

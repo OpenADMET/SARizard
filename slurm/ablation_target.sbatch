@@ -17,7 +17,7 @@ source "${SLURM_SUBMIT_DIR:-$(pwd)}/slurm/env.sh"
 
 FLAVOR="$ABLATION_FLAVOR"
 FLAVOR_ENV=$(conda run -n "$MAIN_ENV" python -c \
-    "from pretraining.flavors import get_flavor; print(get_flavor('$FLAVOR').env)")
+    "from sarizard.pretraining.flavors import get_flavor; print(get_flavor('$FLAVOR').env)")
 echo "ablation flavor=$FLAVOR env=$FLAVOR_ENV"
 
 if [[ -d "cache/targets/$FLAVOR/target.zarr" ]]; then
@@ -27,6 +27,6 @@ fi
 
 # compute the raw target in the flavor's isolated environment, then pack to zarr in main
 conda activate "$FLAVOR_ENV"
-python -m pretraining.features.compute_target --flavor "$FLAVOR"
+python -m sarizard.pretraining.features.compute_target --flavor "$FLAVOR"
 conda activate "$MAIN_ENV"
-python -m pretraining.features.pack_target --flavor "$FLAVOR"
+python -m sarizard.pretraining.features.pack_target --flavor "$FLAVOR"

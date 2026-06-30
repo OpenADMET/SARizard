@@ -3,15 +3,15 @@
 For each ``results/<flavor>/<recipe>/`` directory written by ``anvil``, this reloads the
 trained model, predicts on the held-out test split, and computes regression metrics per
 target column. Predictions are cached as ``data/y_pred.npy`` inside each result dir so the
-meta-model (analysis/meta_model.py) can stack per-flavor predictions without re-inferring.
+meta-model (sarizard.analysis.meta_model) can stack per-flavor predictions without re-inferring.
 
 Adapted from the sibling igm ``analysis/analyze.py`` evaluation path. Run in the main
 environment (it imports openadmet). The light plotting step lives in ``report_card.py`` and
 reads only the tidy CSV this writes, so it needs neither openadmet nor a GPU.
 
 Usage:
-    python -m analysis.evaluate --accelerator gpu        # all flavors, write results/metrics.csv
-    python -m analysis.evaluate --flavors ecfp jazzy --force
+    python -m sarizard.analysis.evaluate --accelerator gpu   # all flavors -> results/metrics.csv
+    python -m sarizard.analysis.evaluate --flavors ecfp jazzy --force
 """
 
 from __future__ import annotations
@@ -26,9 +26,9 @@ from openadmet.models.inference.inference import load_anvil_model_and_metadata
 from scipy.stats import kendalltau, spearmanr
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
-from analysis.metrics_spec import dataset_of
-from analysis.paths import METRICS_CSV, RESULTS_DIR
-from pretraining.flavors import flavor_names
+from sarizard.analysis.metrics_spec import dataset_of
+from sarizard.analysis.paths import METRICS_CSV, RESULTS_DIR
+from sarizard.pretraining.flavors import flavor_names
 
 logger = logging.getLogger(__name__)
 

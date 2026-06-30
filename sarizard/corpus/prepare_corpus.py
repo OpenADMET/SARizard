@@ -11,8 +11,8 @@ drops unparseable rows rather than re-running a full standardization that would 
 their corpus.
 
 Usage:
-    python -m corpus.prepare_corpus              # download and build the 250K parquet
-    python -m corpus.prepare_corpus --n 100000   # a smaller smoke-test corpus
+    python -m sarizard.corpus.prepare_corpus              # download and build the 250K parquet
+    python -m sarizard.corpus.prepare_corpus --n 100000   # a smaller smoke-test corpus
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ import numpy as np
 import polars as pl
 from rdkit import Chem, RDLogger
 
-from analysis.paths import CORPUS_DIR, CORPUS_SMILES
+from sarizard.analysis.paths import CORPUS_DIR, CORPUS_SMILES
 
 logger = logging.getLogger(__name__)
 

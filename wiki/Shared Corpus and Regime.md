@@ -15,7 +15,7 @@ tags: [method, status/blue]
 - Featurizer: chemprop DEFAULT (`MultiHotAtomFeaturizer.v2` + `MultiHotBondFeaturizer`), so
   `d_v`/`d_e` match openadmet's finetuning featurizer.
 - Aggregation: mean (openadmet rebuilds foundations with mean aggregation).
-- Regime: epoch cap, patience, LR schedule, and model width all in `pretraining/config.py`.
+- Regime: epoch cap, patience, LR schedule, and model width all in `sarizard/pretraining/config.py`.
 - Storage chunking is fixed across flavors, so the train/val split selects the same molecules
   for every flavor and the pretraining batch size is identical.
 - Descriptor prescaling: one recipe, chosen once by the [[Prescaling Ablation]] triage and

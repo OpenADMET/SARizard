@@ -46,7 +46,7 @@ from scipy.stats import yeojohnson
 try:
     from splitting import chunk_row_ranges, train_val_chunk_indices
 except ImportError:
-    from pretraining.splitting import chunk_row_ranges, train_val_chunk_indices
+    from sarizard.pretraining.splitting import chunk_row_ranges, train_val_chunk_indices
 
 logger = logging.getLogger(__name__)
 

@@ -8,7 +8,7 @@ tags: [flavor, status/planned]
 > block [[Stock CheMeleon]] learns, computed on [[Shared Corpus and Regime]].
 
 - Target: 3585 continuous descriptors · Loss: MSE · Source: direct compute (isolated env)
-- Calculator: `pretraining/features/osmordred_target.py`
+- Calculator: `sarizard/pretraining/features/osmordred_target.py`
 
 ## Hypothesis
 

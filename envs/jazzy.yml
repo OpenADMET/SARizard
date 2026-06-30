@@ -4,7 +4,7 @@
 # the exact RDKit pin plus kallisto; no deep-learning deps.
 #
 #   conda activate sarizard-jazzy
-#   python -m pretraining.features.compute_target --flavor jazzy
+#   python -m sarizard.pretraining.features.compute_target --flavor jazzy
 name: sarizard-jazzy
 channels:
   - conda-forge

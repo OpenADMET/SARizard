@@ -3,7 +3,7 @@
 import pandas as pd
 import pytest
 
-from analysis.prescaling_report import rank_ablations
+from sarizard.analysis.prescaling_report import rank_ablations
 
 
 @pytest.fixture

@@ -10,7 +10,7 @@ tags: [flavor, status/planned]
 > 250K PubChem set.
 
 - Target: 25 continuous values · Loss: MSE · Source: Novartis released CSV (CC BY 4.0)
-- Calculator: `pretraining/features/surrogate_target.py` (reads CSV directly, no training step)
+- Calculator: `sarizard/pretraining/features/surrogate_target.py` (reads CSV directly, no training step)
 - Env: `sarizard` (main environment, no isolated env needed)
 
 ## Setup
@@ -25,9 +25,9 @@ Unzip to get `protacdb2.0_zinc_chembl_dataset.csv`, then:
 
 ```
 conda activate sarizard
-python -m pretraining.features.compute_target --flavor surrogate_adme \
+python -m sarizard.pretraining.features.compute_target --flavor surrogate_adme \
     --csv-path /path/to/protacdb2.0_zinc_chembl_dataset.csv
-python -m pretraining.features.pack_target --flavor surrogate_adme
+python -m sarizard.pretraining.features.pack_target --flavor surrogate_adme
 ```
 
 This writes `cache/targets/surrogate_adme/target.npy` (25-dim targets) and

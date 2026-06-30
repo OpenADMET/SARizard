@@ -19,4 +19,4 @@ if [[ -f "corpus/corpus_250k.parquet" ]]; then
     exit 0
 fi
 
-python -m corpus.prepare_corpus
+python -m sarizard.corpus.prepare_corpus
