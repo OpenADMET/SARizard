@@ -6,7 +6,6 @@ computation and pretraining, one task per (flavor, endpoint) for finetuning.
 ## One-shot run
 
 ```bash
-# edit partition and account in every .sbatch header first, then:
 export SURROGATE_CSV=/path/to/protacdb2.0_zinc_chembl_dataset.csv
 bash slurm/run_all.sh
 ```
@@ -18,10 +17,10 @@ job finishes; results land in `results/` and `analysis/plots/`.
 
 ## Before submitting
 
-Edit the `EDIT_PARTITION` and `EDIT_ACCOUNT` placeholders (plus time, GPU, CPU, and memory)
-in every `.sbatch` header to match your cluster. Runtime settings live in `env.sh` and can be
-exported instead of edited (`REPO_DIR`, `MAIN_ENV`, `ACCELERATOR`). Create conda environments
-first (`envs/main.yml` and the isolated envs in `envs/`).
+Adjust the time, CPU, and memory directives in each `.sbatch` header if your cluster requires
+different limits. Runtime settings live in `env.sh` and can be exported instead of edited
+(`REPO_DIR`, `MAIN_ENV`, `ACCELERATOR`). Create conda environments first (`envs/main.yml`
+and the isolated envs in `envs/`).
 
 ## Scripts
 
