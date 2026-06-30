@@ -38,19 +38,25 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   which keeps the resolution that pooling discards; revisit if the pooled target underperforms.
 - [ ] SLURM specifics: partition and account names, GPU type, per-job time limits, whether
   the conda envs exist on the cluster, and whether the cluster shares this filesystem.
-- [ ] Surrogate-ADME inference (resolved approach, needs data + a training run): the
-  Novartis Nat Commun 2024 work (DOI 10.1038/s41467-024-49979-3, CC BY 4.0) ships NO
-  runnable model, only a 273,706-row CSV of 25 precomputed ADME predictions
-  (Supplementary Data 1) plus a chemprop v1.6.1 recipe. To keep this flavor on the shared
-  corpus, `features/surrogate_target.py` retrains a surrogate multitask D-MPNN from that
-  CSV and predicts it over our 250K (documented deviation: a single 25-task model rather
-  than the paper's four per-group models). Remaining: download the dataset, run
-  `surrogate_target.train_surrogate`, then `compute_target --flavor surrogate_adme`.
+- [ ] Surrogate-ADME data: download the Novartis Nat Commun 2024 released CSV
+  (DOI 10.1038/s41467-024-49979-3, Supplementary Data 1, CC BY 4.0) and run
+  `compute_target --flavor surrogate_adme --csv-path <path>`. The CSV is the pretraining
+  corpus for this flavor; no model training step is needed.
 - [ ] MLIP conformer backend for the 3D flavors (usrcat, whim, e3fp): the calculators
   currently use RDKit ETKDG + MMFF94 (seeded, in `features/skfp_targets.py`). Once the
   pipeline runs end to end, add an ML-potential backend (candidates: Auto3D with
   ANI2x/AIMNet2, or MACE-OFF23 via ASE/openmm-ml) in an isolated GPU env and make it the
   pluggable conformer source; compare descriptor stability against MMFF94.
+
+## Future experiments
+
+- [ ] Reduced MPNN LR: repeat the full finetuning sweep with `mpnn_lr` set to a fraction of
+  `ffn_lr` (e.g. 1e-4 vs 1e-3) rather than 0. Tests whether partial unfreezing recovers
+  performance on endpoints where the frozen backbone underperforms random init, or whether
+  it simply reintroduces the initialization-washing problem.
+- [ ] Fully unlocked MPNN: repeat with `mpnn_lr` equal to `ffn_lr` (1e-3). Establishes the
+  upper bound on what full finetuning can achieve and quantifies how much signal the frozen
+  protocol sacrifices; the gap between frozen and unlocked is the cost of the clean ablation.
 
 ## Methodology watch-items
 
