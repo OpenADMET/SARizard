@@ -31,7 +31,12 @@ from sarizard.analysis.metrics_spec import (  # noqa: E402
     METRIC_COLUMNS,
     METRIC_LABELS,
 )
-from sarizard.analysis.paths import PLOTS_DIR, RESULTS_DIR, ablation_label  # noqa: E402
+from sarizard.analysis.paths import (  # noqa: E402
+    PLOTS_DIR,
+    RESULTS_DIR,
+    ablation_label,
+    parse_ablation_variant,
+)
 from sarizard.analysis.report_card import build_matrix, plot_report_card  # noqa: E402
 from sarizard.pretraining.prescaling import ablation_names  # noqa: E402
 
@@ -44,6 +49,20 @@ def _strip(label: str) -> str:
     """Map an ``ablation_<name>`` result label back to the plain ablation name."""
     prefix = "ablation_"
     return label[len(prefix):] if label.startswith(prefix) else label
+
+
+def collapse_seed_variants(frame: pd.DataFrame) -> pd.DataFrame:
+    """Map seeded variant labels in ``flavor`` back to their plain ablation label.
+
+    The triage may run each ablation at several seeds, tagged ``ablation_<name>__s<seed>``.
+    Rewriting those to ``ablation_<name>`` lets ``build_matrix`` average the seeds per
+    (endpoint, ablation) cell, so the report shows one column per ablation over the seed mean.
+    """
+    frame = frame.copy()
+    frame["flavor"] = frame["flavor"].map(
+        lambda label: ablation_label(parse_ablation_variant(label)[0])
+    )
+    return frame
 
 
 def rank_ablations(pivot: pd.DataFrame, metric: str) -> pd.DataFrame:
@@ -107,6 +126,13 @@ def main() -> None:
     if not args.metrics_csv.exists():
         raise SystemExit(f"{args.metrics_csv} not found; run analysis.evaluate on the ablations")
     frame = pd.read_csv(args.metrics_csv)
+
+    # average any per-seed variants back to one column per ablation before pivoting
+    seeds = {parse_ablation_variant(label)[1] for label in frame["flavor"].unique()}
+    seeds.discard(None)
+    if seeds:
+        logger.info("aggregating %d seed(s) per ablation: %s", len(seeds), sorted(seeds))
+    frame = collapse_seed_variants(frame)
 
     # order columns by the ablation ladder, keep only those that produced results
     columns = [ablation_label(name) for name in ablation_names()]

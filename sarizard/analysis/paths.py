@@ -83,6 +83,30 @@ def ablation_label(ablation: str) -> str:
     return f"ablation_{ablation}"
 
 
+def ablation_variant_label(ablation: str, seed: int) -> str:
+    """Return the label for one ``(ablation, seed)`` variant of the prescaling triage.
+
+    The triage drives a single flavor (osmordred) through each prescaling ablation at one or
+    more training seeds, so the prescaling effect can be read against seed-driven variance.
+    Each variant gets its own foundation, recipes, and result dir; the report aggregates the
+    seeds back to one column per ablation.
+    """
+    return f"{ablation_label(ablation)}__s{seed}"
+
+
+def parse_ablation_variant(label: str) -> tuple[str, int | None]:
+    """Split a label into ``(ablation_name, seed)``; seed is ``None`` when absent.
+
+    Accepts both seeded variant labels (``ablation_<name>__s<seed>``) and plain ablation
+    labels (``ablation_<name>``), so the report can collapse either form to its ablation.
+    """
+    base = label[len("ablation_"):] if label.startswith("ablation_") else label
+    name, sep, seed = base.rpartition("__s")
+    if sep and seed.isdigit():
+        return name, int(seed)
+    return base, None
+
+
 def ablation_prescaled_zarr(ablation: str) -> Path:
     """Return the prescaled target store for an ablation."""
     return ABLATIONS_CACHE_DIR / ablation / "prescaled.zarr"
@@ -96,3 +120,8 @@ def ablation_split_dir(ablation: str) -> Path:
 def ablation_foundation_name(ablation: str) -> str:
     """Return the exported foundation filename for an ablation."""
     return f"{ablation_label(ablation)}_mp.pt"
+
+
+def ablation_variant_foundation_name(ablation: str, seed: int) -> str:
+    """Return the exported foundation filename for one ``(ablation, seed)`` variant."""
+    return f"{ablation_variant_label(ablation, seed)}_mp.pt"
