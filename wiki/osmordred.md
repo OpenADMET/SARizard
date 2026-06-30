@@ -20,3 +20,4 @@ strongest test of whether a wide descriptor block helps or just adds noise.
 
 - Regime: [[Shared Corpus and Regime]] · Reference: [[Stock CheMeleon]]
 - Scored on the [[Report Card]]; stacked in the [[Meta-Model]]
+- The representative continuous flavor for the [[Prescaling Ablation]] triage
