@@ -47,8 +47,13 @@ echo "  $N_FLAVORS flavors (targets/pretrain array 0-$((N_FLAVORS - 1)))"
 echo "  $N_RECIPES recipes (finetune array 0-$((N_RECIPES - 1)))"
 echo ""
 
-# submit stages in order; each stage depends on the previous completing without errors
-# (afterok waits for ALL array tasks to succeed before releasing the next stage)
+# submit stages in order; each stage depends on the previous completing without errors.
+# afterok partial-failure contract: the dependent stage is released only if EVERY array task
+# of the prior stage exits 0. If one flavor or recipe task fails, the next stage is cancelled
+# (SLURM marks it DependencyNeverSatisfied) and the rest of the chain never runs. To recover,
+# fix the failing task's cause and re-run this script: every stage is resumable (it skips
+# flavors/recipes whose outputs already exist), so only the gaps are recomputed and the chain
+# is re-armed from there. Inspect a failed task's log under slurm/logs/<stage>_<jobid>_<taskid>.out.
 
 JOB_CORPUS=$(sbatch --parsable "$SCRIPT_DIR/prepare_corpus.sbatch")
 echo "corpus     job=$JOB_CORPUS"

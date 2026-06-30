@@ -6,6 +6,13 @@ side. Both ``split.py`` (which slices the target store into train/val zarrs) and
 ``prescaling.py`` (which fits its transforms on the train rows only, to avoid leakage)
 derive the split from this one helper, so the train rows prescaling fits on are exactly
 the train rows training reads.
+
+The split is random (shuffled chunks), not scaffold- or cluster-based. That is deliberate:
+this validation set only provides an early-stopping signal for the self-supervised
+descriptor-regression pretext, where the target is a deterministic function of structure and
+no generalization claim is made on these molecules. Scaffold overlap between train and
+validation therefore cannot inflate a reported benchmark. The applicability-domain question
+lives downstream, where the ADMET benchmarks carry their own structure-aware splits.
 """
 
 from __future__ import annotations
