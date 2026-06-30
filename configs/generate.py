@@ -38,6 +38,10 @@ def _retarget(recipe: dict, flavor: str, accelerator: str) -> dict:
     params = recipe["procedure"]["model"]["params"]
     params["from_foundation"] = str(foundation_path(flavor).relative_to(REPO_ROOT))
 
+    # freeze the MPNN so finetuning measures representation quality, not initialization luck;
+    # the FFN head (ffn_lr) still trains freely
+    params["mpnn_lr"] = 0
+
     # normalize the accelerator: baselines pin a laptop device, cluster nodes resolve "auto"
     train_params = recipe.get("procedure", {}).get("train", {}).get("params")
     if isinstance(train_params, dict) and "accelerator" in train_params:
