@@ -71,3 +71,27 @@ def foundation_path(flavor: str) -> Path:
 def results_dir(flavor: str, endpoint: str) -> Path:
     """Return the finetuning result directory for a flavor and endpoint."""
     return RESULTS_DIR / flavor / endpoint
+
+
+# prescaling ablation triage (run before the flavor sweep to fix the production recipe)
+ABLATIONS_CACHE_DIR = CACHE_DIR / "ablations"  # cache/ablations/<ablation>/
+
+
+def ablation_label(ablation: str) -> str:
+    """Return the result/config label for an ablation (namespaced from flavors)."""
+    return f"ablation_{ablation}"
+
+
+def ablation_prescaled_zarr(ablation: str) -> Path:
+    """Return the prescaled target store for an ablation."""
+    return ABLATIONS_CACHE_DIR / ablation / "prescaled.zarr"
+
+
+def ablation_split_dir(ablation: str) -> Path:
+    """Return the train/val split directory for an ablation."""
+    return ABLATIONS_CACHE_DIR / ablation / "split"
+
+
+def ablation_foundation_name(ablation: str) -> str:
+    """Return the exported foundation filename for an ablation."""
+    return f"{ablation_label(ablation)}_mp.pt"

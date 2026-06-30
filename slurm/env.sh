@@ -16,6 +16,9 @@ MAIN_ENV="${MAIN_ENV:-sarizard}"
 # lightning accelerator for training and prediction
 ACCELERATOR="${ACCELERATOR:-gpu}"
 
+# the representative continuous flavor driven through the prescaling ablation triage
+ABLATION_FLAVOR="${ABLATION_FLAVOR:-osmordred}"
+
 # make `conda activate` work in a non-interactive batch shell
 source "$(conda info --base)/etc/profile.d/conda.sh"
 
@@ -26,4 +29,10 @@ mkdir -p slurm/logs
 flavor_list() {
     conda run -n "$MAIN_ENV" python -c \
         "from pretraining.flavors import flavor_names; print('\n'.join(flavor_names()))"
+}
+
+# print the prescaling ablation list, one per line, using the main environment
+ablation_list() {
+    conda run -n "$MAIN_ENV" python -c \
+        "from pretraining.prescaling import ablation_names; print('\n'.join(ablation_names()))"
 }

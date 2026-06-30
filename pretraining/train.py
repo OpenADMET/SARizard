@@ -150,6 +150,11 @@ def main() -> None:
         required=True,
         help="run directory; a timestamped subdirectory is created inside it",
     )
+    parser.add_argument(
+        "--foundation-name",
+        default=None,
+        help="exported foundation filename (default <flavor>_mp.pt); set for ablation runs",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     BlockLogs()
@@ -208,8 +213,9 @@ def main() -> None:
     best_ckpt = trainer.checkpoint_callback.best_model_path
     logger.info("best checkpoint: %s", best_ckpt)
     best = MPNN.load_from_checkpoint(best_ckpt, map_location="cpu")
-    save_foundation(best, run_dir / f"{flavor.name}_mp.pt")
-    save_foundation(best, FOUNDATIONS_DIR / f"{flavor.name}_mp.pt")
+    foundation_name = args.foundation_name or f"{flavor.name}_mp.pt"
+    save_foundation(best, run_dir / foundation_name)
+    save_foundation(best, FOUNDATIONS_DIR / foundation_name)
 
     # record provenance next to the run for the report card and reproducibility
     (run_dir / "foundation.json").write_text(

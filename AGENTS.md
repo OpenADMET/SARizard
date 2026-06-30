@@ -24,10 +24,13 @@ The narrative goal and headline results live in `FINDINGS.md`; open avenues in `
 - `corpus/` shared 250K corpus preparation; `cache/` per-flavor targets and rescaled
   stores (gitignored, computed once and reused).
 - `pretraining/` vendored and adapted `how-to-train-your-chemeleon`; `features/` holds
-  one target calculator per flavor, `convert_checkpoint.py` exports foundations.
+  one target calculator per flavor, `prescaling.py` holds the toggleable descriptor
+  preprocessing and its ablation registry, `convert_checkpoint.py` exports foundations.
 - `foundations/` converted foundation checkpoints (gitignored).
-- `configs/<flavor>/` finetuning recipes, one per endpoint, generated from the baseline recipes.
-- `slurm/` sbatch job-array scripts for parallel pretraining and finetuning.
+- `configs/<flavor>/` finetuning recipes, one per endpoint, generated from the baseline
+  recipes; `configs/ablation_<name>/` are the prescaling-triage recipes (gitignored).
+- `slurm/` sbatch job-array scripts: `run_all.sh` drives the flavor sweep, `run_ablations.sh`
+  drives the prescaling triage that precedes it.
 - `analysis/` importable analysis package; `data/` benchmark sets and splits (gitignored,
   provenance in `data/README.md`); `wiki/` Obsidian vault; `tests/` the test suite.
 
@@ -67,9 +70,18 @@ foundation, so treat each as a gate.
   (`config.CORPUS_CHUNK_ROWS`) so the train/val split and pretraining batch size are
   identical for every flavor.
 - **No leakage.** Per-flavor target scaling (winsorize and z-score for continuous
-  targets) is fit on the pretraining train split only. Binary targets skip scaling and
-  train with BCE. The meta-model trains on out-of-fold predictions and evaluates on the
-  held-out test split; it never sees in-sample finetuned predictions.
+  targets) is fit on the pretraining train split only. `prescaling.py` fits every step
+  (percentiles, correlation, Yeo-Johnson lambdas, variance, mean/std) on the train chunks
+  from the shared chunk split (`pretraining/splitting.py`), so prescaling and `split.py`
+  hold out the same molecules. Binary targets skip scaling and train with BCE. The
+  meta-model trains on out-of-fold predictions and evaluates on the held-out test split; it
+  never sees in-sample finetuned predictions.
+- **Prescaling is chosen once, then fixed.** `prescaling.py` makes each preprocessing step
+  (NaN/inf clean, winsorize, correlated-column drop, Yeo-Johnson, low-variance drop,
+  z-score) toggleable so the milestone-4 ablation triage (`slurm/run_ablations.sh`, one
+  flavor, fixed backbone) can pick a recipe. Once picked, bake it into the core workflow and
+  apply it identically to every continuous flavor; varying prescaling mid-sweep confounds the
+  report card like varying the backbone would.
 
 ## Standing gates
 

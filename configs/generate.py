@@ -32,11 +32,23 @@ BACKBONE = "chemeleon"  # token the baseline recipes use in names, tags, and fro
 BASELINE_DIR = CONFIGS_DIR / "_baseline"
 
 
-def _retarget(recipe: dict, flavor: str, accelerator: str) -> dict:
-    """Point a baseline recipe at a flavor's foundation and relabel it for provenance."""
-    # initialize from this flavor's converted foundation (repo-relative; anvil runs from root)
+def _retarget(recipe: dict, foundation_rel: str, label: str, accelerator: str) -> dict:
+    """Point a baseline recipe at a foundation and relabel it for provenance.
+
+    Parameters
+    ----------
+    recipe : dict
+        A parsed baseline recipe (mutated in place and returned).
+    foundation_rel : str
+        Repo-relative path to the foundation checkpoint for ``from_foundation``.
+    label : str
+        Identifier (flavor name or ablation label) substituted into the recipe metadata.
+    accelerator : str
+        Lightning accelerator to normalize the recipe's train block to.
+    """
+    # initialize from this foundation (repo-relative; anvil runs from root)
     params = recipe["procedure"]["model"]["params"]
-    params["from_foundation"] = str(foundation_path(flavor).relative_to(REPO_ROOT))
+    params["from_foundation"] = foundation_rel
 
     # freeze the MPNN so finetuning measures representation quality, not initialization luck;
     # the FFN head (ffn_lr) still trains freely
@@ -47,13 +59,13 @@ def _retarget(recipe: dict, flavor: str, accelerator: str) -> dict:
     if isinstance(train_params, dict) and "accelerator" in train_params:
         train_params["accelerator"] = accelerator
 
-    # relabel machine identifiers from the backbone to the flavor
+    # relabel machine identifiers from the backbone to the label
     meta = recipe.get("metadata", {})
     for key in ("name", "tag"):
         if isinstance(meta.get(key), str):
-            meta[key] = meta[key].replace(BACKBONE, flavor)
+            meta[key] = meta[key].replace(BACKBONE, label)
     if isinstance(meta.get("tags"), list):
-        meta["tags"] = [flavor if tag == BACKBONE else tag for tag in meta["tags"]]
+        meta["tags"] = [label if tag == BACKBONE else tag for tag in meta["tags"]]
     return recipe
 
 
@@ -64,32 +76,63 @@ def _endpoint_name(template: Path) -> str:
     return stem[len(prefix):] if stem.startswith(prefix) else stem
 
 
+def _generate_one(templates: list[Path], out_dir: Path, foundation_rel: str,
+                  label: str, accelerator: str) -> int:
+    """Write one retargeted recipe per template into ``out_dir``; return the count."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for template in templates:
+        recipe = yaml.safe_load(template.read_text())
+        recipe = _retarget(recipe, foundation_rel, label, accelerator)
+        (out_dir / f"{_endpoint_name(template)}.yaml").write_text(
+            yaml.safe_dump(recipe, sort_keys=False)
+        )
+    return len(templates)
+
+
 def main() -> None:
-    """Generate per-flavor recipes for the requested flavors."""
+    """Generate per-flavor recipes, or per-ablation recipes for one explicit foundation."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--flavors", nargs="*", default=None, help="flavor subset (default all)")
     parser.add_argument("--baseline-dir", type=Path, default=BASELINE_DIR, help="templates dir")
     parser.add_argument("--accelerator", default="auto", help="lightning accelerator")
+    parser.add_argument(
+        "--foundation",
+        type=Path,
+        default=None,
+        help="ablation mode: explicit foundation checkpoint (requires --out-subdir)",
+    )
+    parser.add_argument(
+        "--out-subdir",
+        default=None,
+        help="ablation mode: output dir name under configs/ and the recipe label",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     templates = sorted(args.baseline_dir.glob(f"{BACKBONE}_*.yaml"))
     if not templates:
         raise SystemExit(f"no baseline templates in {args.baseline_dir}")
-    flavors = args.flavors or flavor_names()
 
+    # ablation mode: one explicit foundation -> configs/<out-subdir>/
+    if args.foundation is not None:
+        if not args.out_subdir:
+            raise SystemExit("--foundation requires --out-subdir")
+        foundation_rel = str(args.foundation.resolve().relative_to(REPO_ROOT))
+        n = _generate_one(
+            templates, CONFIGS_DIR / args.out_subdir, foundation_rel, args.out_subdir,
+            args.accelerator,
+        )
+        logger.info("ablation %s: %d recipes -> %s", args.out_subdir, n, args.out_subdir)
+        return
+
+    # flavor mode: one recipe set per registry flavor
+    flavors = args.flavors or flavor_names()
     n_written = 0
     for flavor in flavors:
-        out_dir = CONFIGS_DIR / flavor
-        out_dir.mkdir(parents=True, exist_ok=True)
-        for template in templates:
-            recipe = yaml.safe_load(template.read_text())
-            recipe = _retarget(recipe, flavor, args.accelerator)
-            (out_dir / f"{_endpoint_name(template)}.yaml").write_text(
-                yaml.safe_dump(recipe, sort_keys=False)
-            )
-            n_written += 1
-        logger.info("flavor %s: %d recipes", flavor, len(templates))
+        foundation_rel = str(foundation_path(flavor).relative_to(REPO_ROOT))
+        n = _generate_one(templates, CONFIGS_DIR / flavor, foundation_rel, flavor, args.accelerator)
+        n_written += n
+        logger.info("flavor %s: %d recipes", flavor, n)
     logger.info("wrote %d recipes across %d flavors", n_written, len(flavors))
 
 
