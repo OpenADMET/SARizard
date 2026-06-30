@@ -98,8 +98,7 @@ and requires no isolated env.
 
 ## Running the full experiment
 
-Edit the `EDIT_PARTITION` and `EDIT_ACCOUNT` placeholders in every `slurm/*.sbatch` header,
-create the conda environments, then:
+Create the conda environments, then:
 
 ```bash
 # one-time: create isolated envs for the four conflicting target generators
