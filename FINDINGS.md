@@ -11,8 +11,21 @@ per-flavor finetuned predictions into a meta-model beat the best single foundati
 
 ## Status
 
-Scaffolding. No training results yet. This section will lead with the report card (the
-endpoint-by-flavor matrix for the selected metric) once the first flavors finish.
+Scaffolding. No training results yet. The first result expected is the prescaling decision
+(below), which precedes and gates the flavor sweep; the report card follows once the first
+flavors finish.
+
+## Prescaling
+
+To be filled. Before the flavor sweep, one descriptor-preprocessing recipe is chosen by the
+ablation triage (`pretraining/prescaling.py`, `slurm/run_ablations.sh`): osmordred is driven
+through each recipe (`minimal`, `chemeleon_baseline`, `order_fix`, `plus_drop_corr`,
+`plus_drop_low_var`, `plus_yeo_johnson`, `full`) with the backbone, corpus, and regime fixed,
+so the only difference is the prescaling. The read to capture here: which recipe wins on mean
+downstream R-squared and endpoint wins (`analysis/plots/prescaling_ranking_r2.csv`), the
+margin over the `chemeleon_baseline` reproduction of today's `split.py`, and whether the
+order fix alone (winsorize before z-score) accounts for most of the gain. The winning recipe
+is then baked into the core workflow and applied identically to every continuous flavor.
 
 ## Report card
 
