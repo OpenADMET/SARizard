@@ -4,10 +4,10 @@
 # exports the foundation checkpoint (train.py writes it to foundations/). Resumable: a flavor
 # whose foundation already exists is skipped.
 #
-# EDIT the resource directives below for your cluster, then submit from the repo root (after
-# compute_targets has produced cache/targets/<flavor>/target.zarr):
-#   sbatch slurm/pretrain.sbatch
-# The array range must cover the registry (13 flavors -> 0-12).
+# EDIT the resource directives below for your cluster. Prefer submitting through run_all.sh,
+# which sizes the array from the registry. To submit standalone (after compute_targets has
+# produced cache/targets/<flavor>/target.zarr), size the array to the flavor count:
+#   sbatch --array=0-$(($(source slurm/env.sh; flavor_list | wc -l) - 1)) slurm/pretrain.sbatch
 #SBATCH --job-name=sar-pretrain
 #SBATCH --partition=gpu
 #SBATCH --time=24:00:00
@@ -21,6 +21,10 @@ source "${SLURM_SUBMIT_DIR:-$(pwd)}/slurm/env.sh"
 conda activate "$MAIN_ENV"
 
 mapfile -t FLAVORS < <(flavor_list)
+if [[ "$SLURM_ARRAY_TASK_ID" -ge ${#FLAVORS[@]} ]]; then
+    echo "task $SLURM_ARRAY_TASK_ID >= ${#FLAVORS[@]} flavors; nothing to do"
+    exit 0
+fi
 FLAVOR="${FLAVORS[$SLURM_ARRAY_TASK_ID]}"
 echo "task=$SLURM_ARRAY_TASK_ID flavor=$FLAVOR"
 

@@ -52,22 +52,26 @@ Prescaling triage (driven by `run_ablations.sh`):
 |---|---|---|
 | `ablation_target.sbatch` | 1 (CPU) | corpus |
 | `ablation_prescale.sbatch` | 7 (CPU array) | target |
-| `ablation_pretrain.sbatch` | 7 (GPU array) | prescale |
-| `ablation_finetune.sbatch` | 168 (GPU array) | pretrain |
+| `ablation_pretrain.sbatch` | 7 x seeds (GPU array) | prescale |
+| `ablation_finetune.sbatch` | 168 x seeds (GPU array) | pretrain |
 | `ablation_analyze.sbatch` | 1 (GPU) | finetune |
 
-The array ranges default to the current registry. If the flavor set changes, update `--array`
-in the array scripts and recount recipes:
+`ablation_pretrain` and `ablation_finetune` scale with `ABLATION_SEEDS` (default one seed):
+each ablation is pretrained once per seed (`ablation_<name>__s<seed>`), and `ablation_analyze`
+averages the seeds back to one column per ablation. `run_ablations.sh` sizes every array
+automatically; the counts below are only needed to submit a stage standalone.
 
 ```bash
 # flavor count
 conda run -n sarizard python -c \
     "from sarizard.pretraining.flavors import flavor_names; print(len(flavor_names()))"
-# recipe count (after configs.generate)
-ls configs/*/*.yaml | grep -v /_baseline/ | wc -l
-# ablation count (sets ablation_prescale / ablation_pretrain arrays)
+# recipe count (after configs.generate); registry flavors only, excludes ablation dirs
+(source slurm/env.sh; flavor_recipe_list | wc -l)
+# ablation count (sets the ablation_prescale array)
 conda run -n sarizard python -c \
     "from sarizard.pretraining.prescaling import ablation_names; print(len(ablation_names()))"
+# ablation x seed count (sets the ablation_pretrain array)
+(source slurm/env.sh; echo $(( $(ablation_list | wc -l) * $(wc -w <<<"$ABLATION_SEEDS") )))
 # ablation recipe count (sets ablation_finetune array)
 ls configs/ablation_*/*.yaml | wc -l
 ```
