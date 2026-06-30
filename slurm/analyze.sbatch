@@ -7,8 +7,7 @@
 # Submit from the repo root (or let run_all.sh do it):
 #   sbatch slurm/analyze.sbatch
 #SBATCH --job-name=sar-analyze
-#SBATCH --partition=EDIT_PARTITION
-#SBATCH --account=EDIT_ACCOUNT
+#SBATCH --partition=gpu
 #SBATCH --time=08:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
