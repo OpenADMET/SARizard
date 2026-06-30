@@ -31,11 +31,19 @@ fi
 # YAMLs, so it works before pretrain runs and before the foundation files exist
 echo "generating per-flavor finetuning configs..."
 conda run -n "$MAIN_ENV" python -m sarizard.configs.generate
-N_RECIPES=$(ls "$REPO_DIR"/configs/*/*.yaml 2>/dev/null | grep -v '/_baseline/' | wc -l | tr -d ' ')
+N_RECIPES=$(flavor_recipe_list | wc -l | tr -d ' ')
 if [[ "$N_RECIPES" -eq 0 ]]; then
     echo "ERROR: configs.generate produced no recipes; check configs/generate.py" >&2
     exit 1
 fi
+# size the per-flavor arrays (targets, pretrain) from the registry rather than a fixed range,
+# so adding or removing a flavor needs no edits to the sbatch headers
+N_FLAVORS=$(flavor_list | wc -l | tr -d ' ')
+if [[ "$N_FLAVORS" -eq 0 ]]; then
+    echo "ERROR: flavor registry is empty; check sarizard/pretraining/flavors.py" >&2
+    exit 1
+fi
+echo "  $N_FLAVORS flavors (targets/pretrain array 0-$((N_FLAVORS - 1)))"
 echo "  $N_RECIPES recipes (finetune array 0-$((N_RECIPES - 1)))"
 echo ""
 
@@ -47,12 +55,14 @@ echo "corpus     job=$JOB_CORPUS"
 
 JOB_TARGETS=$(sbatch --parsable \
     --dependency=afterok:"$JOB_CORPUS" \
+    --array=0-$((N_FLAVORS - 1)) \
     --export=ALL,SURROGATE_CSV="$SURROGATE_CSV" \
     "$SCRIPT_DIR/compute_targets.sbatch")
 echo "targets    job=$JOB_TARGETS  (after corpus $JOB_CORPUS)"
 
 JOB_PRETRAIN=$(sbatch --parsable \
     --dependency=afterok:"$JOB_TARGETS" \
+    --array=0-$((N_FLAVORS - 1)) \
     "$SCRIPT_DIR/pretrain.sbatch")
 echo "pretrain   job=$JOB_PRETRAIN  (after targets $JOB_TARGETS)"
 

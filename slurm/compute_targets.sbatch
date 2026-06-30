@@ -3,9 +3,10 @@
 # the raw target in the flavor's own conda environment, then packs it to zarr in the main
 # environment. CPU only. Resumable: a flavor whose target.zarr already exists is skipped.
 #
-# EDIT the resource directives below for your cluster, then submit from the repo root:
-#   sbatch slurm/compute_targets.sbatch
-# The array range must cover the registry (13 flavors -> 0-12); update it if the registry grows.
+# EDIT the resource directives below for your cluster. Prefer submitting through run_all.sh,
+# which sizes the array from the registry. To submit standalone, size the array to the flavor
+# count (the --array header below is a conservative default the command line overrides):
+#   sbatch --array=0-$(($(source slurm/env.sh; flavor_list | wc -l) - 1)) slurm/compute_targets.sbatch
 #SBATCH --job-name=sar-targets
 #SBATCH --partition=gpu
 #SBATCH --time=08:00:00
@@ -21,6 +22,10 @@ SURROGATE_CSV="${SURROGATE_CSV:-EDIT_PATH_TO_protacdb2.0_zinc_chembl_dataset.csv
 
 # map this array task to a flavor and look up the environment that computes it
 mapfile -t FLAVORS < <(flavor_list)
+if [[ "$SLURM_ARRAY_TASK_ID" -ge ${#FLAVORS[@]} ]]; then
+    echo "task $SLURM_ARRAY_TASK_ID >= ${#FLAVORS[@]} flavors; nothing to do"
+    exit 0
+fi
 FLAVOR="${FLAVORS[$SLURM_ARRAY_TASK_ID]}"
 FLAVOR_ENV=$(conda run -n "$MAIN_ENV" python -c \
     "from sarizard.pretraining.flavors import get_flavor; print(get_flavor('$FLAVOR').env)")
