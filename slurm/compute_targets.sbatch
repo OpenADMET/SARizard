@@ -7,8 +7,7 @@
 #   sbatch slurm/compute_targets.sbatch
 # The array range must cover the registry (13 flavors -> 0-12); update it if the registry grows.
 #SBATCH --job-name=sar-targets
-#SBATCH --partition=EDIT_PARTITION
-#SBATCH --account=EDIT_ACCOUNT
+#SBATCH --partition=gpu
 #SBATCH --time=08:00:00
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=64G

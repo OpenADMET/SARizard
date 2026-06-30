@@ -9,8 +9,7 @@
 #   sbatch slurm/pretrain.sbatch
 # The array range must cover the registry (13 flavors -> 0-12).
 #SBATCH --job-name=sar-pretrain
-#SBATCH --partition=EDIT_PARTITION
-#SBATCH --account=EDIT_ACCOUNT
+#SBATCH --partition=gpu
 #SBATCH --time=24:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
