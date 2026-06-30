@@ -42,7 +42,7 @@ procedure:
       random_seed: 42
       ffn_hidden_dim: 1024
       ffn_num_layers: 3
-      mpnn_lr: 1.0e-3
+      mpnn_lr: 0
       ffn_lr: 1.0e-3
       mpnn_weight_decay: 0
       ffn_weight_decay: 1.0e-4
