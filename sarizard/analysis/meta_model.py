@@ -8,8 +8,11 @@ question is whether an ensemble of foundations beats the best single foundation.
 Leakage discipline: the flavor predictions are on the held-out finetuning test set (the
 flavor models never trained on these molecules). The meta-model is the only thing being
 fit here, so it is cross-validated over that test set: its reported score is out-of-fold,
-never trained on the rows it scores. A single flavor's prediction is a fixed vector (nothing
-is fit to the test set), so its direct test score is already honest and needs no CV.
+never trained on the rows it scores. The best-single-flavor baseline is scored out-of-fold
+the same way: the winning flavor is chosen on each fold's training rows and scored on its
+held-out rows, so selecting the baseline never peeks at the labels the meta-model is scored
+against. A given flavor's prediction is a fixed vector, but choosing the best among several
+on the full test set would fit the selection to the test labels.
 
 This step depends only on numpy, pandas, scikit-learn, lightgbm, and matplotlib (the flavor
 predictions are read from cached ``y_pred.npy`` files), so it runs without openadmet or a GPU.
@@ -93,7 +96,13 @@ def collect_predictions(results_root: Path, flavors: list[str]) -> dict:
 
 
 def _evaluate_endpoint(entry: dict, estimator: str, n_splits: int, seed: int) -> dict | None:
-    """Cross-validate the stacker for one endpoint and score the best single flavor."""
+    """Cross-validate the stacker against a fold-wise best-single-flavor baseline.
+
+    Both the stacker and the baseline are scored out-of-fold so the comparison is symmetric:
+    within each fold the best single flavor is chosen on the training rows only, then scored on
+    the held-out rows. Picking the best flavor by its score over the full test set would select
+    on the same labels the meta-model is scored against, an optimistic baseline.
+    """
     y = np.asarray(entry["y"], dtype=float)
     flavors = [flavor for flavor in flavor_names() if flavor in entry["preds"]]
     folds = min(n_splits, len(y) // 2)
@@ -102,15 +111,23 @@ def _evaluate_endpoint(entry: dict, estimator: str, n_splits: int, seed: int) ->
 
     features = np.column_stack([entry["preds"][flavor] for flavor in flavors])
     oof = np.full(len(y), np.nan)
+    baseline_oof = np.full(len(y), np.nan)
+    fold_winners: list[str] = []
     splitter = KFold(n_splits=folds, shuffle=True, random_state=seed)
     for train_idx, test_idx in splitter.split(features):
         model = _make_estimator(estimator, seed)
         model.fit(features[train_idx], y[train_idx])
         oof[test_idx] = model.predict(features[test_idx])
+        # fold-wise baseline: select on the training rows, score on the held-out rows
+        train_r2 = [r2_score(y[train_idx], features[train_idx, j]) for j in range(len(flavors))]
+        best_j = int(np.argmax(train_r2))
+        baseline_oof[test_idx] = features[test_idx, best_j]
+        fold_winners.append(flavors[best_j])
 
-    single_r2 = {flavor: float(r2_score(y, entry["preds"][flavor])) for flavor in flavors}
-    best_flavor = max(single_r2, key=single_r2.get)
     meta_r2 = float(r2_score(y, oof))
+    baseline_r2 = float(r2_score(y, baseline_oof))
+    # report the flavor selected in the most folds as the representative single baseline
+    best_flavor = max(set(fold_winners), key=fold_winners.count)
     return {
         "n_test": int(len(y)),
         "n_flavors": len(flavors),
@@ -118,8 +135,8 @@ def _evaluate_endpoint(entry: dict, estimator: str, n_splits: int, seed: int) ->
         "meta_r2": meta_r2,
         "meta_rmse": float(np.sqrt(mean_squared_error(y, oof))),
         "best_single_flavor": best_flavor,
-        "best_single_r2": single_r2[best_flavor],
-        "delta_r2": meta_r2 - single_r2[best_flavor],
+        "best_single_r2": baseline_r2,
+        "delta_r2": meta_r2 - baseline_r2,
     }
 
 
