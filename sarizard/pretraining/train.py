@@ -155,10 +155,20 @@ def main() -> None:
         default=None,
         help="exported foundation filename (default <flavor>_mp.pt); set for ablation runs",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=SEED,
+        help=(
+            "training seed (default 42, shared across the flavor sweep so the only intended "
+            "difference is the target block); vary it only for the osmordred prescaling "
+            "triage to estimate seed-driven variance"
+        ),
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     BlockLogs()
-    seed_everything(SEED, workers=True)
+    seed_everything(args.seed, workers=True)
 
     flavor = get_flavor(args.flavor)
     run_dir = args.output_dir / datetime.now().strftime("%Y-%m-%d_%H-%M-%S")  # noqa: DTZ005
@@ -224,6 +234,7 @@ def main() -> None:
                 "flavor": flavor.name,
                 "kind": flavor.kind,
                 "n_features": n_features,
+                "seed": args.seed,
                 "featurizer": "DEFAULT",
                 "aggregation": "mean",
                 "best_checkpoint": best_ckpt,

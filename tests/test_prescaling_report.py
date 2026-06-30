@@ -1,9 +1,10 @@
-"""Tests for the prescaling-ablation ranking direction and win counts."""
+"""Tests for the prescaling-ablation ranking direction, win counts, and seed aggregation."""
 
 import pandas as pd
 import pytest
 
-from sarizard.analysis.prescaling_report import rank_ablations
+from sarizard.analysis.prescaling_report import collapse_seed_variants, rank_ablations
+from sarizard.analysis.report_card import build_matrix
 
 
 @pytest.fixture
@@ -33,3 +34,30 @@ def test_lower_is_better_flips_the_ranking(pivot):
 
     assert summary.index[0] == "minimal"
     assert summary.loc["minimal", "wins"] == 2
+
+
+def test_collapse_seed_variants_maps_to_plain_ablation_label():
+    frame = pd.DataFrame(
+        {"flavor": ["ablation_full__s1", "ablation_full__s2", "ablation_minimal"]}
+    )
+
+    collapsed = collapse_seed_variants(frame)
+
+    assert list(collapsed["flavor"]) == ["ablation_full", "ablation_full", "ablation_minimal"]
+
+
+def test_seed_variants_average_to_one_column_per_ablation():
+    # two seeds of the same ablation on one endpoint must average to a single matrix cell
+    frame = pd.DataFrame(
+        {
+            "flavor": ["ablation_full__s1", "ablation_full__s2"],
+            "dataset": ["d", "d"],
+            "endpoint": ["e", "e"],
+            "r2": [0.4, 0.6],
+        }
+    )
+
+    pivot = build_matrix(collapse_seed_variants(frame), "r2", columns=["ablation_full"])
+
+    assert pivot.shape == (1, 1)
+    assert pivot.loc["d · e", "ablation_full"] == pytest.approx(0.5)

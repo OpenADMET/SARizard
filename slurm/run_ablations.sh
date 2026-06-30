@@ -24,22 +24,28 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/env.sh"
 
-# number of ablations sets the prescale/pretrain array ranges
+# ablations x seeds set the array ranges; prescale is seed-independent (one task per ablation)
 mapfile -t ABLATIONS < <(ablation_list)
 N_ABL=${#ABLATIONS[@]}
 if [[ "$N_ABL" -eq 0 ]]; then
     echo "ERROR: no ablations registered in pretraining/prescaling.py" >&2
     exit 1
 fi
+read -ra SEEDS <<<"$ABLATION_SEEDS"
+N_SEEDS=${#SEEDS[@]}
+N_PRETRAIN=$(( N_ABL * N_SEEDS ))
 echo "ablations ($N_ABL): ${ABLATIONS[*]}"
+echo "seeds ($N_SEEDS): ${SEEDS[*]}  (flavor: $ABLATION_FLAVOR)"
 
-# generate per-ablation finetuning recipes pointing at each ablation foundation; this only
-# reads templates and writes YAML, so it runs now even though the foundations do not exist yet
-echo "generating per-ablation finetuning configs..."
+# generate finetuning recipes for each (ablation, seed) variant, pointing at that variant's
+# foundation; this only reads templates and writes YAML, so it runs before the foundations exist
+echo "generating per-(ablation, seed) finetuning configs..."
 for ablation in "${ABLATIONS[@]}"; do
-    conda run -n "$MAIN_ENV" python -m sarizard.configs.generate \
-        --foundation "$REPO_DIR/foundations/ablation_${ablation}_mp.pt" \
-        --out-subdir "ablation_${ablation}"
+    for seed in "${SEEDS[@]}"; do
+        conda run -n "$MAIN_ENV" python -m sarizard.configs.generate \
+            --foundation "$REPO_DIR/foundations/ablation_${ablation}__s${seed}_mp.pt" \
+            --out-subdir "ablation_${ablation}__s${seed}"
+    done
 done
 N_RECIPES=$(ls "$REPO_DIR"/configs/ablation_*/*.yaml 2>/dev/null | wc -l | tr -d ' ')
 if [[ "$N_RECIPES" -eq 0 ]]; then
@@ -66,9 +72,9 @@ echo "prescale   job=$JOB_PRESCALE  (after target $JOB_TARGET)"
 
 JOB_PRETRAIN=$(sbatch --parsable \
     --dependency=afterok:"$JOB_PRESCALE" \
-    --array=0-$((N_ABL - 1)) \
+    --array=0-$((N_PRETRAIN - 1)) \
     "$SCRIPT_DIR/ablation_pretrain.sbatch")
-echo "pretrain   job=$JOB_PRETRAIN  (after prescale $JOB_PRESCALE)"
+echo "pretrain   job=$JOB_PRETRAIN  (after prescale $JOB_PRESCALE, $N_PRETRAIN ablation x seed)"
 
 JOB_FINETUNE=$(sbatch --parsable \
     --dependency=afterok:"$JOB_PRETRAIN" \

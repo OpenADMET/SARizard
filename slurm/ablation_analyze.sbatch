@@ -16,14 +16,18 @@
 source "${SLURM_SUBMIT_DIR:-$(pwd)}/slurm/env.sh"
 conda activate "$MAIN_ENV"
 
-# the ablation result labels (ablation_<name>) evaluate should collect
+# the per-(ablation, seed) result labels (ablation_<name>__s<seed>) evaluate should collect;
+# prescaling_report averages the seeds back to one column per ablation
 mapfile -t ABLATIONS < <(ablation_list)
+read -ra SEEDS <<<"$ABLATION_SEEDS"
 LABELS=()
 for ablation in "${ABLATIONS[@]}"; do
-    LABELS+=("ablation_$ablation")
+    for seed in "${SEEDS[@]}"; do
+        LABELS+=("ablation_${ablation}__s${seed}")
+    done
 done
 
-# collect per-(ablation, endpoint) metrics into a dedicated CSV, then compare ablations
+# collect per-(variant, endpoint) metrics into a dedicated CSV, then compare ablations
 python -m sarizard.analysis.evaluate --accelerator "$ACCELERATOR" \
     --flavors "${LABELS[@]}" --out results/ablation_metrics.csv
 python -m sarizard.analysis.prescaling_report --metric r2
