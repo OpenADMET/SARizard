@@ -90,6 +90,19 @@ recipes, and regenerable artifacts.
 
 The project targets Python 3.11+ and uses conda for environments (see `AGENTS.md`).
 
+The fastest path on a cluster is `setup.sh`, which builds every environment from `envs/*.yml`,
+installs SARizard into each (with `--no-deps` so the isolated envs' pinned stacks are left
+intact), runs the test suite in the main env, and prints `okay` if everything passed:
+
+```bash
+bash setup.sh                 # all envs, then test
+bash setup.sh main osmordred  # restrict to specific envs (envs/<name>.yml basenames)
+FORCE=1 bash setup.sh         # recreate envs that already exist
+SKIP_OSMORDRED_BUILD=1 bash setup.sh   # skip the slow osmordred source build
+```
+
+To set up only the main environment by hand:
+
 ```
 conda env create -f envs/main.yml
 conda activate sarizard
