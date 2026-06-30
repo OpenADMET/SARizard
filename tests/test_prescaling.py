@@ -27,6 +27,8 @@ COL_OUTLIER = 5  # one extreme value
 COL_PLAIN = 6
 COL_ALL_NAN = 7  # no finite values at all
 
+ROW_FAILED = 200  # an all-NaN row standing in for a molecule the calculator failed on
+
 
 def _build_store(path) -> zarr.Array:
     """Write the synthetic target store and return the opened array."""
@@ -40,6 +42,7 @@ def _build_store(path) -> zarr.Array:
     x[:, COL_OUTLIER] = rng.normal(size=N_ROWS) * 100.0
     x[0, COL_OUTLIER] = 1e6
     x[:, COL_ALL_NAN] = np.nan
+    x[ROW_FAILED, :] = np.nan
 
     store = zarr.create_array(
         store=str(path),
@@ -66,12 +69,39 @@ def target_store(tmp_path):
     ["minimal", "chemeleon_baseline", "order_fix", "plus_drop_corr",
      "plus_drop_low_var", "plus_yeo_johnson", "full"],
 )
-def test_output_is_always_finite(target_store, tmp_path, ablation: str):
+def test_nonfinite_inputs_are_not_imputed(target_store, tmp_path, ablation: str):
+    out = tmp_path / f"{ablation}.zarr"
+    raw = zarr.open_array(str(target_store), mode="r")[:]
+
+    summary = run_prescaling(target_store, out, get_ablation(ablation), force=True)
+
+    # the output cell is non-finite exactly where the corresponding kept-column input cell
+    # was non-finite: finite inputs scale to finite outputs, and non-finite inputs re-scatter
+    # back to NaN rather than being imputed (the masked loss skips them per element)
+    result = zarr.open_array(str(out), mode="r")[:]
+    dropped = (
+        set(summary["dropped_invalid"])
+        | set(summary["dropped_corr"])
+        | set(summary["dropped_low_var"])
+    )
+    kept = [col for col in range(N_COLS) if col not in dropped]
+    assert np.array_equal(~np.isfinite(raw[:, kept]), ~np.isfinite(result))
+
+
+@pytest.mark.parametrize(
+    "ablation",
+    ["minimal", "chemeleon_baseline", "order_fix", "plus_drop_corr",
+     "plus_drop_low_var", "plus_yeo_johnson", "full"],
+)
+def test_failed_molecule_row_stays_nan(target_store, tmp_path, ablation: str):
     out = tmp_path / f"{ablation}.zarr"
 
     run_prescaling(target_store, out, get_ablation(ablation), force=True)
 
-    assert np.isfinite(zarr.open_array(str(out), mode="r")[:]).all()
+    # a molecule whose target row is all NaN must remain all NaN so the masked pretraining
+    # loss skips it rather than training on re-scattered zeros (the B1 re-scatter regression)
+    result = zarr.open_array(str(out), mode="r")[:]
+    assert np.isnan(result[ROW_FAILED]).all()
 
 
 def test_all_nan_column_is_always_dropped(target_store, tmp_path):
@@ -124,9 +154,10 @@ def test_winsorization_bounds_the_outlier(target_store, tmp_path):
     )
     run_prescaling(target_store, tmp_path / "of.zarr", get_ablation("order_fix"), force=True)
 
-    min_max = np.abs(zarr.open_array(str(tmp_path / "min.zarr"), mode="r")[:]).max()
-    base_max = np.abs(zarr.open_array(str(tmp_path / "base.zarr"), mode="r")[:]).max()
-    of_max = np.abs(zarr.open_array(str(tmp_path / "of.zarr"), mode="r")[:]).max()
+    # nan-aware: the failed-molecule row is NaN in every output store
+    min_max = np.nanmax(np.abs(zarr.open_array(str(tmp_path / "min.zarr"), mode="r")[:]))
+    base_max = np.nanmax(np.abs(zarr.open_array(str(tmp_path / "base.zarr"), mode="r")[:]))
+    of_max = np.nanmax(np.abs(zarr.open_array(str(tmp_path / "of.zarr"), mode="r")[:]))
 
     # no winsorization leaves the 1e6 outlier as a large z-score; both winsorizers bound it
     assert min_max > 10.0
@@ -150,7 +181,8 @@ def test_fitting_does_not_leak_from_validation_rows(target_store, tmp_path):
     run_prescaling(target_store, tmp_path / "dirty.zarr", get_ablation("order_fix"), force=True)
     dirty = zarr.open_array(str(tmp_path / "dirty.zarr"), mode="r")[:]
 
-    assert np.array_equal(clean[train_rows], dirty[train_rows])
+    # equal_nan: the failed-molecule row is NaN on both sides and must compare equal
+    assert np.array_equal(clean[train_rows], dirty[train_rows], equal_nan=True)
 
 
 def test_get_ablation_rejects_unknown_name():
