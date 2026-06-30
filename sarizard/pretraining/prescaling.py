@@ -526,8 +526,14 @@ def run_prescaling(
     )
     for start in range(0, n_rows, chunk_rows):
         end = min(start + chunk_rows, n_rows)
-        transformed = _transform(arr[start:end].astype(DTYPE))
-        out[start:end] = ((transformed - mean) / std).astype(DTYPE)
+        raw = arr[start:end].astype(DTYPE)
+        scaled = ((_transform(raw) - mean) / std).astype(DTYPE)
+        # re-scatter NaN: cells non-finite in the input must stay non-finite in the output so
+        # the masked pretraining loss skips them. _clean_chunk replaces NaN with 0 to keep the
+        # column statistics well-defined, but writing those zeros would train the model on the
+        # failed-molecule rows the mask is meant to drop (a failed molecule is an all-NaN row).
+        scaled[~np.isfinite(raw[:, valid_indices])] = np.nan
+        out[start:end] = scaled
 
     summary = {
         "name": cfg.name,
