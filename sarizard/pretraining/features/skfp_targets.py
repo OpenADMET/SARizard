@@ -46,10 +46,15 @@ def _register_builders() -> None:
             "rdkit2d": lambda n: RDKit2DDescriptorsFingerprint(normalized=False, n_jobs=n),
             # 315-dim continuous extended reduced graph pharmacophore
             "erg": lambda n: ERGFingerprint(n_jobs=n),
-            # 2048-bit ECFP4 (radius 2), binary bits
-            "ecfp": lambda n: ECFPFingerprint(fp_size=2048, radius=2, count=False, n_jobs=n),
-            # 2048-bit topological atom-pair, binary bits
-            "atompair": lambda n: AtomPairFingerprint(fp_size=2048, count=False, n_jobs=n),
+            # 2048-bit ECFP4 (radius 2), binary bits; chirality pinned off (the standard ECFP4
+            # invariant set) so the target is reproducible across skfp/rdkit versions
+            "ecfp": lambda n: ECFPFingerprint(
+                fp_size=2048, radius=2, include_chirality=False, count=False, n_jobs=n
+            ),
+            # 2048-bit topological atom-pair, binary bits; chirality pinned off explicitly
+            "atompair": lambda n: AtomPairFingerprint(
+                fp_size=2048, include_chirality=False, count=False, n_jobs=n
+            ),
             # 881-bit PubChem substructure keys
             "pubchem": lambda n: PubChemFingerprint(count=False, n_jobs=n),
         }
