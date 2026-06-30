@@ -1,9 +1,14 @@
-# Isolated environment for the osmordred target calculator. osmordred is a compiled
-# extension; it is quarantined here so its build never perturbs the training stack.
-# Writes cache/targets/osmordred/target.npy (numpy only); pack to zarr in the sarizard env.
+# Isolated environment for the osmordred target calculator. osmordred is a C++ extension
+# built from source (https://github.com/osmoai/osmordred); there is no PyPI or conda
+# release, so this env provides the build toolchain and the build itself is a second step.
+# It pins rdkit==2023.9.3 and numpy 1.26.4 (the ABI osmordred compiles against), quarantined
+# here so they never perturb the training stack. Writes cache/targets/osmordred/target.npy
+# (numpy only); pack to zarr in the sarizard env.
 #
-# Run from the repo root so `python -m` puts it on the path:
+# Create the env, then build osmordred into it, then compute the target from the repo root:
+#   conda env create -f envs/osmordred.yml
 #   conda activate sarizard-osmordred
+#   bash envs/build_osmordred.sh
 #   python -m pretraining.features.compute_target --flavor osmordred
 name: sarizard-osmordred
 channels:
@@ -11,8 +16,16 @@ channels:
 dependencies:
   - python=3.11
   - pip
-  - rdkit>=2024.03
-  - numpy>=1.26
+  # osmordred C++ build toolchain
+  - cxx-compiler
+  - "cmake>=3.28,<4"   # project requires >=3.28; CMake 4 removed FindBoost
+  - ninja
+  - python-build
+  - boost==1.82.0
+  - eigen
+  - lapack
+  - "blas=*=*openblas"
+  - rdkit==2023.9.3    # osmordred pins this exact RDKit
+  # calculator runtime deps (osmordred is built against the numpy 1.26.4 ABI)
+  - numpy=1.26.4
   - pyarrow>=15
-  - pip:
-      - osmordred

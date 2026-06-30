@@ -1,12 +1,15 @@
-# Isolated environment for the minimol embedding target. minimol pins graphium==2.4.7,
-# which drags a fixed torch 2.3 / PyG stack and torchmetrics<0.11 that conflict with the
-# training env; quarantine it here. Writes cache/targets/minimol/target.npy (numpy only);
-# pack to zarr in the sarizard env.
+# Isolated environment for the minimol embedding target. minimol pulls graphium==2.4.7,
+# which drags torch 2.3 plus the PyG C++ extensions (torch-scatter/sparse/cluster). Those
+# have no workable build-from-source path under pip isolation, so they must come from PyG's
+# prebuilt wheels via the --find-links index below. setuptools is pinned <80 because minimol
+# imports pkg_resources, which setuptools removed in 81. Writes
+# cache/targets/minimol/target.npy (numpy only); pack to zarr in the sarizard env.
 #
-# The PyG C++ extensions (torch-scatter, torch-sparse, torch-cluster) must be installed
-# from wheels matching the resolved torch + CUDA build, per the minimol README; add them
-# after creating this env. Runs on CPU or CUDA (no Graphcore IPU needed).
+# Runs on CPU or CUDA (no Graphcore IPU). The find-links below is the CPU build, which is
+# portable (linux and macOS arm64). For cluster GPU, switch it to the matching CUDA index,
+# e.g. https://data.pyg.org/whl/torch-2.3.0+cu124.html, and let torch resolve to the cu build.
 #
+#   conda env create -f envs/minimol.yml
 #   conda activate sarizard-minimol
 #   python -m pretraining.features.compute_target --flavor minimol
 name: sarizard-minimol
@@ -15,8 +18,14 @@ channels:
 dependencies:
   - python=3.10
   - pip
+  - "setuptools<80"   # minimol imports pkg_resources, removed in setuptools 81
   - rdkit>=2024.03
   - "numpy<2"  # graphium 2.4.7 stack is numpy 1.x
   - pyarrow>=15
   - pip:
+      - --find-links https://data.pyg.org/whl/torch-2.3.0+cpu.html
+      - torch==2.3.*
+      - torch-scatter
+      - torch-sparse
+      - torch-cluster
       - minimol==1.3.5

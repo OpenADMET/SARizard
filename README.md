@@ -93,7 +93,9 @@ pip install -e .
 
 Four target generators with conflicting stacks have isolated environments
 (`envs/osmordred.yml`, `envs/jazzy.yml`, `envs/minimol.yml`, `envs/mlqm.yml`). Each writes a plain `target.npy` to `cache/` that the main
-environment packs to zarr, so their dependencies never reach this training env.
+environment packs to zarr, so their dependencies never reach this training env. osmordred has
+no package release and is built from source into its env with `envs/build_osmordred.sh`;
+minimol needs the PyG extension wheels declared in its env file's find-links.
 `surrogate_adme` runs in the main environment; it reads the Novartis released CSV directly
 and requires no isolated env.
 
@@ -104,6 +106,7 @@ Create the conda environments, then:
 ```bash
 # one-time: create isolated envs for the four conflicting target generators
 conda env create -f envs/osmordred.yml
+conda activate sarizard-osmordred && bash envs/build_osmordred.sh && conda deactivate
 conda env create -f envs/jazzy.yml
 conda env create -f envs/minimol.yml
 conda env create -f envs/mlqm.yml
@@ -130,6 +133,7 @@ downstream endpoint performance so the difference is the prescaling alone:
 
 ```bash
 conda env create -f envs/osmordred.yml   # the triage flavor's target environment
+conda activate sarizard-osmordred && bash envs/build_osmordred.sh && conda deactivate
 bash slurm/run_ablations.sh
 ```
 

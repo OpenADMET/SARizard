@@ -11,6 +11,7 @@
 #
 # Required before running:
 #   conda env create -f envs/osmordred.yml     # the ABLATION_FLAVOR's target environment
+#   conda activate sarizard-osmordred && bash envs/build_osmordred.sh && conda deactivate
 #
 # Optional overrides (defaults in slurm/env.sh):
 #   export ABLATION_FLAVOR=osmordred

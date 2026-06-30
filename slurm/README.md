@@ -19,6 +19,7 @@ job finishes; results land in `results/` and `analysis/plots/`.
 
 ```bash
 conda env create -f envs/osmordred.yml   # the triage flavor's target environment
+conda activate sarizard-osmordred && bash envs/build_osmordred.sh && conda deactivate
 bash slurm/run_ablations.sh
 ```
 
