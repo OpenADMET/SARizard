@@ -42,6 +42,8 @@ def train_val_chunk_indices(
     val_chunks : numpy.ndarray
         Sorted chunk indices assigned to validation.
     """
+    if n_chunks < 2:
+        raise ValueError(f"need >= 2 chunks to form a train/val split, got {n_chunks}")
     # drop the last (possibly partial) chunk so every emitted chunk is full
     chunk_indices = np.arange(n_chunks)[:-1]
     rng = np.random.default_rng(seed=seed)
@@ -50,6 +52,13 @@ def train_val_chunk_indices(
     split_idx = int(train_frac * n_chunks)
     train_chunks = np.sort(chunk_indices[:split_idx])
     val_chunks = np.sort(chunk_indices[split_idx:])
+    # a degenerate train_frac or tiny corpus can empty one side; a model cannot validate (or
+    # train) on zero rows, so fail here rather than deep in the trainer
+    if train_chunks.size == 0 or val_chunks.size == 0:
+        raise ValueError(
+            f"empty split side (train={train_chunks.size}, val={val_chunks.size}); "
+            f"adjust train_frac={train_frac} or n_chunks={n_chunks}"
+        )
     return train_chunks, val_chunks
 
 

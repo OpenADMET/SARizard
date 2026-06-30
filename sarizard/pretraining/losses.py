@@ -8,7 +8,12 @@ Continuous targets use masked MSE; binary fingerprint targets use masked BCE on 
 import torch
 from chemprop.nn.metrics import BCELoss, MSE, LossFunctionRegistry, MetricRegistry
 
-from config import DROPOUT_FRACTION
+# dual import: script-style when run from pretraining/ (sbatch), package-style when imported
+# from the repo root (tests)
+try:
+    from config import DROPOUT_FRACTION
+except ImportError:
+    from sarizard.pretraining.config import DROPOUT_FRACTION
 
 
 class _RandomDropoutMixin:
