@@ -27,12 +27,17 @@ class _RandomDropoutMixin:
         lt_mask: torch.Tensor | None = None,
         gt_mask: torch.Tensor | None = None,
     ) -> None:
-        # combine the random keep-mask with the incoming finiteness keep-mask via AND: a
-        # target enters the loss only if it is finite AND randomly kept. Upstream
-        # how-to-train ORs these, which both defeats the dropout on finite targets and
-        # re-admits non-finite ones; AND is the correct masked-pretext semantics.
-        keep = torch.rand_like(targets) > DROPOUT_FRACTION
-        mask = keep if mask is None else torch.logical_and(keep, mask)
+        # apply the random dropout only while training. As a torch.nn.Module the metric clone
+        # inherits ``self.training``, which Lightning sets to False during validation; gating on
+        # it keeps the monitored validation metric deterministic (binary flavors monitor
+        # val_loss, which is this masked BCE) while still dropping targets during training.
+        # Combine the random keep-mask with the incoming finiteness keep-mask via AND: a target
+        # enters the loss only if it is finite AND randomly kept. Upstream how-to-train ORs
+        # these, which both defeats the dropout on finite targets and re-admits non-finite ones;
+        # AND is the correct masked-pretext semantics.
+        if self.training:
+            keep = torch.rand_like(targets) > DROPOUT_FRACTION
+            mask = keep if mask is None else torch.logical_and(keep, mask)
         super().update(preds, targets, mask, weights, lt_mask, gt_mask)
 
 
