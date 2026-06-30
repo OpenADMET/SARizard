@@ -70,7 +70,8 @@ environment, then a pack step in the main environment converts it to the chunked
 - `corpus/` prepares the shared 250K SMILES subset from the original CheMeleon corpus.
 - `cache/` holds per-flavor descriptor targets and rescaled stores (gitignored, computed once).
 - `pretraining/` vendors and adapts `how-to-train-your-chemeleon`: per-flavor target
-  calculators in `features/`, per-flavor pretrain configs, and `convert_checkpoint.py`.
+  calculators in `features/`, per-flavor pretrain configs, `prescaling.py` (the toggleable
+  descriptor preprocessing and its ablation registry), and `convert_checkpoint.py`.
 - `foundations/` holds the converted foundation checkpoints (gitignored).
 - `configs/<flavor>/` holds one finetuning recipe per endpoint, generated from the baseline recipes.
 - `slurm/` holds the sbatch job-array scripts for parallel pretraining and finetuning.
@@ -119,6 +120,21 @@ bash slurm/run_all.sh
 the previous stage completing without errors. Results land in `results/` and `analysis/plots/`
 when the final job finishes. See `slurm/README.md` for the per-stage scripts and how to
 resubmit after a partial failure.
+
+### Prescaling ablation triage (run first)
+
+Before the flavor sweep, decide how continuous descriptor targets are preprocessed. The
+triage drives one representative flavor (osmordred) through every prescaling recipe in
+`pretraining/prescaling.py` with the backbone, corpus, and regime held fixed, then compares
+downstream endpoint performance so the difference is the prescaling alone:
+
+```bash
+conda env create -f envs/osmordred.yml   # the triage flavor's target environment
+bash slurm/run_ablations.sh
+```
+
+Read `analysis/plots/prescaling_ranking_r2.csv` and the ablation report card to pick the
+production recipe, then bake it into the core workflow before running the flavor sweep.
 
 ## Reproducing a single flavor
 

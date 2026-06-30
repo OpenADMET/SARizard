@@ -39,8 +39,10 @@ from pretraining.flavors import flavor_names  # noqa: E402
 logger = logging.getLogger(__name__)
 
 
-def build_matrix(frame: pd.DataFrame, metric: str) -> pd.DataFrame:
-    """Pivot the tidy metrics into an endpoints-by-flavors matrix for one metric.
+def build_matrix(
+    frame: pd.DataFrame, metric: str, columns: list[str] | None = None
+) -> pd.DataFrame:
+    """Pivot the tidy metrics into an endpoints-by-columns matrix for one metric.
 
     Parameters
     ----------
@@ -48,12 +50,16 @@ def build_matrix(frame: pd.DataFrame, metric: str) -> pd.DataFrame:
         Tidy metrics with columns flavor, dataset, endpoint, and the metric columns.
     metric : str
         Which metric column to display.
+    columns : list of str, optional
+        Column order for the pivot (values of the ``flavor`` field). Defaults to the flavor
+        registry order; pass an explicit list (e.g. ablation labels) to order by something
+        other than the registry. Only columns present in ``frame`` are kept.
 
     Returns
     -------
     pandas.DataFrame
         Rows are ``"<dataset> · <endpoint>"`` ordered by dataset then endpoint; columns are
-        flavors in registry order (only those present in ``frame``).
+        ``columns`` (or registry flavors) that appear in ``frame``.
     """
     frame = frame.copy()
     frame["row"] = frame["dataset"] + " · " + frame["endpoint"]
@@ -64,9 +70,11 @@ def build_matrix(frame: pd.DataFrame, metric: str) -> pd.DataFrame:
         .assign(_rank=lambda d: d["dataset"].map(lambda x: rank.get(x, len(DATASETS))))
         .sort_values(["_rank", "endpoint"])
     )
-    flavors = [flavor for flavor in flavor_names() if flavor in set(frame["flavor"])]
+    order = columns if columns is not None else flavor_names()
+    present = set(frame["flavor"])
+    keep = [col for col in order if col in present]
     pivot = frame.pivot_table(index="row", columns="flavor", values=metric, aggfunc="mean")
-    return pivot.reindex(index=ordered["row"].tolist(), columns=flavors)
+    return pivot.reindex(index=ordered["row"].tolist(), columns=keep)
 
 
 def _row_relative(values: np.ndarray, higher_better: bool) -> np.ndarray:

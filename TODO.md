@@ -20,12 +20,24 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   (MeanAggregation, DEFAULT featurizer), convert checkpoint, finetune one endpoint,
   confirm the foundation loads and a sane R-squared lands. This validates the checkpoint
   bridge and the featurizer-dim match before any fan-out.
-- [ ] 4. Fan out the direct-compute flavors on the cluster: rdkit2d, erg, ecfp, atompair,
+- [ ] 4. Prescaling ablation triage (runs BEFORE the flavor sweep). Drive osmordred through
+  every prescaling recipe in `pretraining/prescaling.py` (`chemeleon_baseline`, `order_fix`,
+  `plus_drop_corr`, `plus_drop_low_var`, `plus_yeo_johnson`, `full`, and the `minimal` floor),
+  pretrain and finetune from each, and compare downstream endpoint performance. Submit with
+  `bash slurm/run_ablations.sh`; read `analysis/plots/prescaling_ranking_r2.csv` and the
+  ablation report card to pick the production recipe. The backbone, corpus, and regime are
+  fixed across ablations, so the difference is the prescaling alone.
+- [ ] 5. (GATED on 4) Harden the chosen prescaling into the core flavor-sweep workflow. Wire
+  the winning `PrescalingConfig` into the default `split.py` path (or insert a prescale step
+  ahead of it) so every flavor pretrains on the same, vetted preprocessing. Until this lands,
+  the flavor sweep keeps the current `chemeleon_baseline` behavior. Record the decision and
+  the margin over baseline in `FINDINGS.md`.
+- [ ] 6. Fan out the direct-compute flavors on the cluster: rdkit2d, erg, ecfp, atompair,
   pubchem, the 3D set (usrcat, whim, e3fp), and jazzy (isolated env for its RDKit pin).
-- [ ] 5. Add the learned-model flavors: minimol, surrogate_adme, ml_qm. Each runs its
+- [ ] 7. Add the learned-model flavors: minimol, surrogate_adme, ml_qm. Each runs its
   source model over the shared corpus in an isolated environment and caches the target.
-- [ ] 6. Report card: heatmap of endpoints by flavors with a selectable metric (default R-squared).
-- [ ] 7. Meta-model: stack per-flavor finetuned predictions per endpoint, fit LGBM/RF/MLP
+- [ ] 8. Report card: heatmap of endpoints by flavors with a selectable metric (default R-squared).
+- [ ] 9. Meta-model: stack per-flavor finetuned predictions per endpoint, fit LGBM/RF/MLP
   on out-of-fold predictions, compare to the best single flavor.
 
 ## Open items (need input or external data)
@@ -75,3 +87,8 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   `CONFORMER_SEED`); treat reproducibility as approximate.
 - Keep the pretraining regime fixed across flavors. The only intended difference is the
   target block and the MSE/BCE choice; any other change confounds the report card.
+- Prescaling is part of the fixed regime. Pick one recipe in the milestone-4 triage, bake it
+  in (milestone 5), and apply it identically to every continuous flavor; changing prescaling
+  mid-sweep confounds the report card the same way changing the backbone would. The triage
+  itself varies prescaling only because the backbone, corpus, and target (osmordred) are held
+  fixed there.

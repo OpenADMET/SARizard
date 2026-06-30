@@ -7,6 +7,7 @@ import zarr
 from tqdm import tqdm
 
 from config import WINSORIZATION_FACTOR
+from splitting import train_val_chunk_indices
 
 
 def combine_stats(stat_a, stat_b):
@@ -162,6 +163,11 @@ if __name__ == "__main__":
     )
     parser.add_argument("--outdir", type=Path, required=True, help="output split directory")
     parser.add_argument("--flavor", required=True, help="flavor name; its kind selects rescaling")
+    parser.add_argument(
+        "--prescaled",
+        action="store_true",
+        help="input is already prescaled (prescaling.py); split only, skip winsorize/z-score",
+    )
     parser.add_argument("--force", action="store_true", help="overwrite an existing outdir")
     args = parser.parse_args()
 
@@ -180,13 +186,9 @@ if __name__ == "__main__":
 
     input_zarr = zarr.open(input_path, mode="r")
     input_n_chunks = input_zarr.nchunks
-    # randomly choose 90% of chunks for training, 10% for validation, skipping the last (potentially partial) chunk for simplicity
-    chunk_indices = np.arange(input_n_chunks)[:-1]
-    rng = np.random.default_rng(seed=42)  # for reproducibility
-    rng.shuffle(chunk_indices)
-    split_idx = int(0.9 * input_n_chunks)
-    train_chunks = chunk_indices[:split_idx]
-    val_chunks = chunk_indices[split_idx:]
+    # chunk-granular 90/10 split from the shared helper, so prescaling.py (which fits on the
+    # train chunks) and this split hold out the same molecules
+    train_chunks, val_chunks = train_val_chunk_indices(input_n_chunks)
     rows_per_chunk = input_zarr.chunks[0]
 
     # load smiles, split by chunk, and save to new files for train and val sets
@@ -225,10 +227,14 @@ if __name__ == "__main__":
         end_row = start_row + rows_per_chunk
         z[i * rows_per_chunk : (i + 1) * rows_per_chunk, :] = input_zarr[start_row:end_row, :]
 
+    # with --prescaled the input came from prescaling.py and is already cleaned, winsorized,
+    # transformed, and z-scored, so this step only splits; do not rescale again
+    if args.prescaled:
+        print(f"Prescaled input for {args.flavor}: split only, no further rescaling.")
     # continuous targets are winsorized and z-scored using statistics fit on the train
     # split only (no leakage from val); binary fingerprint targets stay as raw 0/1, since
     # BCE on logits expects unscaled targets
-    if kind == "continuous":
+    elif kind == "continuous":
         print("Calculating mean and std for training set...")
         mean, std, count = mean_std_zarr_parallel(train_zarr)
 

@@ -22,6 +22,7 @@ tags: [moc]
 ## Method
 
 - [[Shared Corpus and Regime]] 🔵 — the fixed 250K corpus and pretraining regime every flavor shares
+- [[Prescaling Ablation]] 🔵 — triage that fixes the descriptor preprocessing before the flavor sweep
 - [[Stock CheMeleon]] 🟠 — the published 1M-PubChem foundation, an external reference column
 
 ## Foundation flavors (off [[Shared Corpus and Regime]])

@@ -18,6 +18,8 @@ tags: [method, status/blue]
 - Regime: epoch cap, patience, LR schedule, and model width all in `pretraining/config.py`.
 - Storage chunking is fixed across flavors, so the train/val split selects the same molecules
   for every flavor and the pretraining batch size is identical.
+- Descriptor prescaling: one recipe, chosen once by the [[Prescaling Ablation]] triage and
+  applied identically to every continuous flavor.
 
 ## Why it matters
 

@@ -15,6 +15,19 @@ SLURM dependency chain (corpus → targets → pretrain → finetune → analyze
 for every task of the previous stage to succeed before starting. Come back when the analyze
 job finishes; results land in `results/` and `analysis/plots/`.
 
+### Prescaling ablation triage (run before the flavor sweep)
+
+```bash
+conda env create -f envs/osmordred.yml   # the triage flavor's target environment
+bash slurm/run_ablations.sh
+```
+
+`run_ablations.sh` drives one representative flavor (`ABLATION_FLAVOR`, default osmordred)
+through every prescaling recipe and submits its own chain (corpus → target → prescale →
+pretrain → finetune → analyze) with the `ablation_*.sbatch` scripts. The backbone, corpus,
+and regime are fixed, so the comparison isolates the prescaling. Read
+`analysis/plots/prescaling_ranking_r2.csv` to pick the production recipe.
+
 ## Before submitting
 
 Adjust the time, CPU, and memory directives in each `.sbatch` header if your cluster requires
@@ -32,6 +45,16 @@ and the isolated envs in `envs/`).
 | `finetune.sbatch` | 312 (GPU array) | pretrain |
 | `analyze.sbatch` | 1 (GPU) | finetune |
 
+Prescaling triage (driven by `run_ablations.sh`):
+
+| Script | Tasks | Depends on |
+|---|---|---|
+| `ablation_target.sbatch` | 1 (CPU) | corpus |
+| `ablation_prescale.sbatch` | 7 (CPU array) | target |
+| `ablation_pretrain.sbatch` | 7 (GPU array) | prescale |
+| `ablation_finetune.sbatch` | 168 (GPU array) | pretrain |
+| `ablation_analyze.sbatch` | 1 (GPU) | finetune |
+
 The array ranges default to the current registry. If the flavor set changes, update `--array`
 in the array scripts and recount recipes:
 
@@ -41,6 +64,11 @@ conda run -n sarizard python -c \
     "from pretraining.flavors import flavor_names; print(len(flavor_names()))"
 # recipe count (after configs.generate)
 ls configs/*/*.yaml | grep -v /_baseline/ | wc -l
+# ablation count (sets ablation_prescale / ablation_pretrain arrays)
+conda run -n sarizard python -c \
+    "from pretraining.prescaling import ablation_names; print(len(ablation_names()))"
+# ablation recipe count (sets ablation_finetune array)
+ls configs/ablation_*/*.yaml | wc -l
 ```
 
 ## Notes
