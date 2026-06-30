@@ -21,7 +21,7 @@ import numpy as np
 from jazzy.api import molecular_vector_from_smiles
 from jazzy.exception import JazzyError
 
-from pretraining.config import CONFORMER_FORCE_FIELD, CONFORMER_SEED
+from sarizard.pretraining.config import CONFORMER_FORCE_FIELD, CONFORMER_SEED
 
 logger = logging.getLogger(__name__)
 

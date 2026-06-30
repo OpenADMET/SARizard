@@ -11,7 +11,7 @@
 #
 #   conda env create -f envs/minimol.yml
 #   conda activate sarizard-minimol
-#   python -m pretraining.features.compute_target --flavor minimol
+#   python -m sarizard.pretraining.features.compute_target --flavor minimol
 name: sarizard-minimol
 channels:
   - conda-forge

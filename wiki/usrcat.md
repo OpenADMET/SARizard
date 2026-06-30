@@ -8,7 +8,7 @@ tags: [flavor, status/planned]
 > conformer (RDKit ETKDG + MMFF94, seeded) and is only approximately reproducible.
 
 - Target: 60 continuous values · Loss: MSE · Source: direct compute, conformers (scikit-fingerprints)
-- Calculator: `pretraining/features/skfp_targets.py`
+- Calculator: `sarizard/pretraining/features/skfp_targets.py`
 
 ## Hypothesis
 
@@ -18,5 +18,5 @@ matters.
 
 ## Related
 
-- 3D siblings: [[whim]], [[e3fp]] · conformer note in `pretraining/config.py`
+- 3D siblings: [[whim]], [[e3fp]] · conformer note in `sarizard/pretraining/config.py`
 - Regime: [[Shared Corpus and Regime]] · [[Report Card]] · [[Meta-Model]]

@@ -8,7 +8,7 @@ tags: [flavor, status/planned]
 > flavors with the approximate reproducibility of the 3D flavors.
 
 - Target: 1024 binary bits · Loss: BCE · Source: direct compute, conformers (scikit-fingerprints)
-- Calculator: `pretraining/features/skfp_targets.py`
+- Calculator: `sarizard/pretraining/features/skfp_targets.py`
 
 ## Hypothesis
 

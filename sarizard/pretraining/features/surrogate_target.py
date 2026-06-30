@@ -30,7 +30,7 @@ import numpy as np
 import polars as pl
 from rdkit import Chem, RDLogger
 
-from analysis.paths import TARGETS_DIR
+from sarizard.analysis.paths import TARGETS_DIR
 
 logger = logging.getLogger(__name__)
 

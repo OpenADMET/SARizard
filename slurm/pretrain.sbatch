@@ -43,9 +43,9 @@ if [[ "$FLAVOR" == "surrogate_adme" ]]; then
 else
     CORPUS="$REPO_DIR/corpus/corpus_250k.parquet"
 fi
-RUN_DIR="$REPO_DIR/pretraining/runs/$FLAVOR"
+RUN_DIR="$REPO_DIR/sarizard/pretraining/runs/$FLAVOR"
 
-cd "$REPO_DIR/pretraining"
+cd "$REPO_DIR/sarizard/pretraining"
 python split.py --input-zarr "$TARGET_ZARR" --input-smiles "$CORPUS" \
     --outdir "$SPLIT_DIR" --flavor "$FLAVOR" --force
 python train.py --flavor "$FLAVOR" --input-dir "$SPLIT_DIR" --output-dir "$RUN_DIR"

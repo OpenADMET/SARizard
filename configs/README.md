@@ -13,8 +13,8 @@
 ## Generate
 
 ```
-python -m configs.generate                       # all flavors, all endpoints
-python -m configs.generate --flavors ecfp jazzy  # a subset
+python -m sarizard.configs.generate                       # all flavors, all endpoints
+python -m sarizard.configs.generate --flavors ecfp jazzy  # a subset
 ```
 
 Each generated recipe sets `procedure.model.params.from_foundation` to
@@ -26,12 +26,12 @@ finetuning regime is identical across flavors and only the foundation differs.
 
 ## Prescaling ablation recipes
 
-The prescaling triage (see `pretraining/prescaling.py` and `slurm/run_ablations.sh`) reuses
+The prescaling triage (see `sarizard/pretraining/prescaling.py` and `slurm/run_ablations.sh`) reuses
 the same templates against ablation foundations. The ablation mode points one explicit
 foundation at a named output directory:
 
 ```
-python -m configs.generate \
+python -m sarizard.configs.generate \
     --foundation foundations/ablation_order_fix_mp.pt \
     --out-subdir ablation_order_fix
 ```

@@ -24,8 +24,8 @@ for ablation in "${ABLATIONS[@]}"; do
 done
 
 # collect per-(ablation, endpoint) metrics into a dedicated CSV, then compare ablations
-python -m analysis.evaluate --accelerator "$ACCELERATOR" \
+python -m sarizard.analysis.evaluate --accelerator "$ACCELERATOR" \
     --flavors "${LABELS[@]}" --out results/ablation_metrics.csv
-python -m analysis.prescaling_report --metric r2
+python -m sarizard.analysis.prescaling_report --metric r2
 
-echo "ablation triage complete; see analysis/plots/prescaling_report_r2.* and ranking"
+echo "ablation triage complete; see plots/prescaling_report_r2.* and ranking"

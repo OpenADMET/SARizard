@@ -10,7 +10,7 @@ tags: [method, status/blue]
 
 ## How it is built
 
-- `analysis/meta_model.py` reads the cached per-flavor test predictions (the `y_pred.npy`
+- `sarizard/analysis/meta_model.py` reads the cached per-flavor test predictions (the `y_pred.npy`
   files written by [[Report Card]]'s evaluate step) and, per endpoint, builds a feature matrix
   of one column per flavor.
 - The stacker is cross-validated over the test molecules, so its reported score is

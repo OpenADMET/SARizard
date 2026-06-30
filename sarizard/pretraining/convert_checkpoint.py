@@ -25,9 +25,10 @@ from flavors import flavor_names
 
 logger = logging.getLogger(__name__)
 
-# Default on-disk locations relative to the pretraining/ working directory.
+# Default on-disk locations relative to the sarizard/pretraining/ working directory.
+# runs/ sits beside this code; foundations/ lives at the repo root (two levels up).
 RUNS_DIR = Path("runs")
-FOUNDATIONS_DIR = Path("..") / "foundations"
+FOUNDATIONS_DIR = Path("..") / ".." / "foundations"
 
 
 def extract_foundation(mpnn: MPNN) -> dict:

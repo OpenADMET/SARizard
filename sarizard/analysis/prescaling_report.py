@@ -11,7 +11,7 @@ Reads the tidy metrics CSV produced by ``analysis.evaluate`` for the ablation re
 Depends only on pandas, numpy, and matplotlib, so it runs without openadmet or a GPU.
 
 Usage:
-    python -m analysis.prescaling_report --metric r2
+    python -m sarizard.analysis.prescaling_report --metric r2
 """
 
 from __future__ import annotations
@@ -24,13 +24,16 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402 - set backend before importing pyplot
-import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
-from analysis.metrics_spec import HIGHER_IS_BETTER, METRIC_COLUMNS, METRIC_LABELS  # noqa: E402
-from analysis.paths import PLOTS_DIR, RESULTS_DIR, ablation_label  # noqa: E402
-from analysis.report_card import build_matrix, plot_report_card  # noqa: E402
-from pretraining.prescaling import ablation_names  # noqa: E402
+from sarizard.analysis.metrics_spec import (  # noqa: E402
+    HIGHER_IS_BETTER,
+    METRIC_COLUMNS,
+    METRIC_LABELS,
+)
+from sarizard.analysis.paths import PLOTS_DIR, RESULTS_DIR, ablation_label  # noqa: E402
+from sarizard.analysis.report_card import build_matrix, plot_report_card  # noqa: E402
+from sarizard.pretraining.prescaling import ablation_names  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

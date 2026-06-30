@@ -2,7 +2,7 @@
 
 Runs in the main ``sarizard`` environment, where zarr 3.x is available. The storage
 chunking is fixed (``CORPUS_CHUNK_ROWS``) so the chunk-based train/val split is identical
-across flavors and the pretraining batch size is uniform; see ``pretraining/config.py``.
+across flavors and the pretraining batch size is uniform; see ``sarizard/pretraining/config.py``.
 """
 
 from __future__ import annotations

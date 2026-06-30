@@ -10,10 +10,10 @@ tags: [method, status/blue]
 
 ## How it is built
 
-- `analysis/evaluate.py` reloads each finetuned model, predicts on the held-out test split,
+- `sarizard/analysis/evaluate.py` reloads each finetuned model, predicts on the held-out test split,
   and writes per-(flavor, endpoint) metrics to `results/metrics.csv` (caching predictions for
   the [[Meta-Model]]).
-- `analysis/report_card.py --metric r2` pivots that CSV to an endpoints-by-flavors matrix and
+- `sarizard/analysis/report_card.py --metric r2` pivots that CSV to an endpoints-by-flavors matrix and
   renders the heatmap plus a matrix CSV. Swap `--metric` for rmse, mae, spearman, kendall, rae.
 
 ## Reading it

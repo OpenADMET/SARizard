@@ -10,8 +10,8 @@ alongside the figure.
 This step depends only on pandas, numpy, and matplotlib, so it runs without openadmet or a GPU.
 
 Usage:
-    python -m analysis.report_card                 # R-squared
-    python -m analysis.report_card --metric rmse
+    python -m sarizard.analysis.report_card                 # R-squared
+    python -m sarizard.analysis.report_card --metric rmse
 """
 
 from __future__ import annotations
@@ -27,14 +27,14 @@ import matplotlib.pyplot as plt  # noqa: E402 - set backend before importing pyp
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
-from analysis.metrics_spec import (  # noqa: E402
+from sarizard.analysis.metrics_spec import (  # noqa: E402
     DATASETS,
     HIGHER_IS_BETTER,
     METRIC_COLUMNS,
     METRIC_LABELS,
 )
-from analysis.paths import METRICS_CSV, PLOTS_DIR  # noqa: E402
-from pretraining.flavors import flavor_names  # noqa: E402
+from sarizard.analysis.paths import METRICS_CSV, PLOTS_DIR  # noqa: E402
+from sarizard.pretraining.flavors import flavor_names  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

@@ -8,7 +8,7 @@ tags: [flavor, status/planned]
 > MMFF94, seeded), so only approximately reproducible.
 
 - Target: 114 continuous values · Loss: MSE · Source: direct compute, conformers (scikit-fingerprints)
-- Calculator: `pretraining/features/skfp_targets.py`
+- Calculator: `sarizard/pretraining/features/skfp_targets.py`
 
 ## Hypothesis
 

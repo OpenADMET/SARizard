@@ -7,7 +7,7 @@ tags: [flavor, status/planned]
 > pharmacophore target that abstracts the molecule to its feature topology.
 
 - Target: 315 continuous values · Loss: MSE · Source: direct compute (scikit-fingerprints)
-- Calculator: `pretraining/features/skfp_targets.py`
+- Calculator: `sarizard/pretraining/features/skfp_targets.py`
 
 ## Hypothesis
 

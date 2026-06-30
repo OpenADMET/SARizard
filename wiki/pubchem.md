@@ -8,7 +8,7 @@ tags: [flavor, status/planned]
 > graph, so a leaky and likely weak pretext.
 
 - Target: 881 binary bits · Loss: BCE · Source: direct compute (scikit-fingerprints)
-- Calculator: `pretraining/features/skfp_targets.py`
+- Calculator: `sarizard/pretraining/features/skfp_targets.py`
 
 ## Hypothesis
 

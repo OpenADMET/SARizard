@@ -1,15 +1,16 @@
 """Single source of truth for on-disk locations.
 
 Repo-root scripts and the analysis package import these helpers instead of hardcoding
-paths. The vendored ``pretraining/`` scripts run from their own directory and use relative
-paths instead; this module is for code launched from the repo root.
+paths. The vendored ``sarizard/pretraining/`` scripts run from their own directory and use
+relative paths instead; this module is for code launched from the repo root.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+# this file is sarizard/analysis/paths.py, so the repo root is two parents up
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # inputs
 DATA_DIR = REPO_ROOT / "data"
@@ -22,15 +23,15 @@ CACHE_DIR = REPO_ROOT / "cache"
 TARGETS_DIR = CACHE_DIR / "targets"  # cache/targets/<flavor>/target.zarr
 SPLITS_CACHE_DIR = CACHE_DIR / "splits"  # cache/splits/<flavor>/{train,val}_rescaled.zarr
 FOUNDATIONS_DIR = REPO_ROOT / "foundations"  # foundations/<flavor>_mp.pt
-PRETRAIN_RUNS_DIR = REPO_ROOT / "pretraining" / "runs"  # pretraining/runs/<flavor>/<timestamp>/
+PRETRAIN_RUNS_DIR = REPO_ROOT / "sarizard" / "pretraining" / "runs"  # <flavor>/<timestamp>/
 
 # finetuning
 CONFIGS_DIR = REPO_ROOT / "configs"  # configs/<flavor>/<endpoint>.yaml
 RESULTS_DIR = REPO_ROOT / "results"  # results/<flavor>/<endpoint>/
 METRICS_CSV = RESULTS_DIR / "metrics.csv"  # tidy per-(flavor, endpoint) metrics from evaluate.py
 
-# analysis outputs
-PLOTS_DIR = REPO_ROOT / "analysis" / "plots"
+# analysis outputs (repo-root artifact dir, gitignored)
+PLOTS_DIR = REPO_ROOT / "plots"
 
 
 SURROGATE_CORPUS_SMILES = TARGETS_DIR / "surrogate_adme" / "corpus_smiles.parquet"

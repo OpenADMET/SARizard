@@ -23,7 +23,7 @@ SURROGATE_CSV="${SURROGATE_CSV:-EDIT_PATH_TO_protacdb2.0_zinc_chembl_dataset.csv
 mapfile -t FLAVORS < <(flavor_list)
 FLAVOR="${FLAVORS[$SLURM_ARRAY_TASK_ID]}"
 FLAVOR_ENV=$(conda run -n "$MAIN_ENV" python -c \
-    "from pretraining.flavors import get_flavor; print(get_flavor('$FLAVOR').env)")
+    "from sarizard.pretraining.flavors import get_flavor; print(get_flavor('$FLAVOR').env)")
 echo "task=$SLURM_ARRAY_TASK_ID flavor=$FLAVOR env=$FLAVOR_ENV"
 
 if [[ -d "cache/targets/$FLAVOR/target.zarr" ]]; then
@@ -34,15 +34,15 @@ fi
 if [[ "$FLAVOR" == "surrogate_adme" ]]; then
     # surrogate_adme runs in the main env; compute_target writes target.npy + corpus_smiles.parquet
     conda activate "$MAIN_ENV"
-    python -m pretraining.features.compute_target --flavor surrogate_adme \
+    python -m sarizard.pretraining.features.compute_target --flavor surrogate_adme \
         --csv-path "$SURROGATE_CSV"
-    python -m pretraining.features.pack_target --flavor surrogate_adme
+    python -m sarizard.pretraining.features.pack_target --flavor surrogate_adme
 else
     # compute the raw target in the flavor's isolated environment (writes target.npy)
     conda activate "$FLAVOR_ENV"
-    python -m pretraining.features.compute_target --flavor "$FLAVOR"
+    python -m sarizard.pretraining.features.compute_target --flavor "$FLAVOR"
 
     # pack the .npy into the chunked target.zarr the trainer reads, in the main environment
     conda activate "$MAIN_ENV"
-    python -m pretraining.features.pack_target --flavor "$FLAVOR"
+    python -m sarizard.pretraining.features.pack_target --flavor "$FLAVOR"
 fi

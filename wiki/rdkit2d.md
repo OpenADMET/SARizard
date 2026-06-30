@@ -7,7 +7,7 @@ tags: [flavor, status/planned]
 > physchem target, the low-dimensional counterpart to [[osmordred]].
 
 - Target: 200 continuous descriptors · Loss: MSE · Source: direct compute (scikit-fingerprints)
-- Calculator: `pretraining/features/skfp_targets.py`
+- Calculator: `sarizard/pretraining/features/skfp_targets.py`
 
 ## Hypothesis
 

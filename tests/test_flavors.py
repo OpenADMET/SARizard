@@ -2,7 +2,7 @@
 
 import pytest
 
-from pretraining.flavors import flavor_names, get_flavor
+from sarizard.pretraining.flavors import flavor_names, get_flavor
 
 
 def test_flavor_names_are_unique():

@@ -30,7 +30,7 @@ fi
 # the recipes for the finetune array; generation reads only flavor metadata and baseline
 # YAMLs, so it works before pretrain runs and before the foundation files exist
 echo "generating per-flavor finetuning configs..."
-conda run -n "$MAIN_ENV" python -m configs.generate
+conda run -n "$MAIN_ENV" python -m sarizard.configs.generate
 N_RECIPES=$(ls "$REPO_DIR"/configs/*/*.yaml 2>/dev/null | grep -v '/_baseline/' | wc -l | tr -d ' ')
 if [[ "$N_RECIPES" -eq 0 ]]; then
     echo "ERROR: configs.generate produced no recipes; check configs/generate.py" >&2

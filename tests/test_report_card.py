@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from analysis.report_card import _row_relative, build_matrix
+from sarizard.analysis.report_card import _row_relative, build_matrix
 
 
 @pytest.fixture

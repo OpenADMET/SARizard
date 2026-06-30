@@ -9,7 +9,7 @@
 #   conda env create -f envs/osmordred.yml
 #   conda activate sarizard-osmordred
 #   bash envs/build_osmordred.sh
-#   python -m pretraining.features.compute_target --flavor osmordred
+#   python -m sarizard.pretraining.features.compute_target --flavor osmordred
 name: sarizard-osmordred
 channels:
   - conda-forge

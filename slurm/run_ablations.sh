@@ -37,7 +37,7 @@ echo "ablations ($N_ABL): ${ABLATIONS[*]}"
 # reads templates and writes YAML, so it runs now even though the foundations do not exist yet
 echo "generating per-ablation finetuning configs..."
 for ablation in "${ABLATIONS[@]}"; do
-    conda run -n "$MAIN_ENV" python -m configs.generate \
+    conda run -n "$MAIN_ENV" python -m sarizard.configs.generate \
         --foundation "$REPO_DIR/foundations/ablation_${ablation}_mp.pt" \
         --out-subdir "ablation_${ablation}"
 done
@@ -85,4 +85,4 @@ echo ""
 echo "ablation triage submitted; monitor with:"
 echo "  watch squeue -u \$USER"
 echo "  tail -f $REPO_DIR/slurm/logs/abl_analyze_${JOB_ANALYZE}.out"
-echo "when done, read analysis/plots/prescaling_ranking_r2.csv to pick the production recipe"
+echo "when done, read plots/prescaling_ranking_r2.csv to pick the production recipe"

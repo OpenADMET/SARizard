@@ -18,12 +18,12 @@ source "${SLURM_SUBMIT_DIR:-$(pwd)}/slurm/env.sh"
 conda activate "$MAIN_ENV"
 
 # reload test-set predictions and write metrics.csv
-python -m analysis.evaluate --accelerator "$ACCELERATOR"
+python -m sarizard.analysis.evaluate --accelerator "$ACCELERATOR"
 
 # report-card heatmap (endpoints x flavors, R²)
-python -m analysis.report_card --metric r2
+python -m sarizard.analysis.report_card --metric r2
 
 # stacking meta-model vs best single flavor
-python -m analysis.meta_model
+python -m sarizard.analysis.meta_model
 
-echo "analysis complete; results in analysis/plots/ and results/metrics.csv"
+echo "analysis complete; results in plots/ and results/metrics.csv"

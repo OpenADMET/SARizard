@@ -11,8 +11,8 @@ Running them unchanged yields a stock-CheMeleon reference column (a different co
 regime than our flavors, so a reference rather than an apples-to-apples arm).
 
 Usage:
-    python -m configs.generate                      # all flavors, all endpoints
-    python -m configs.generate --flavors ecfp jazzy # a subset of flavors
+    python -m sarizard.configs.generate                      # all flavors, all endpoints
+    python -m sarizard.configs.generate --flavors ecfp jazzy # a subset of flavors
 """
 
 from __future__ import annotations
@@ -23,8 +23,8 @@ from pathlib import Path
 
 import yaml
 
-from analysis.paths import CONFIGS_DIR, REPO_ROOT, foundation_path
-from pretraining.flavors import flavor_names
+from sarizard.analysis.paths import CONFIGS_DIR, REPO_ROOT, foundation_path
+from sarizard.pretraining.flavors import flavor_names
 
 logger = logging.getLogger(__name__)
 

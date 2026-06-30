@@ -8,7 +8,7 @@ tags: [flavor, status/planned]
 > weak self-supervised pretext; its report-card position is itself a result.
 
 - Target: 2048 binary bits · Loss: BCE · Source: direct compute (scikit-fingerprints)
-- Calculator: `pretraining/features/skfp_targets.py`
+- Calculator: `sarizard/pretraining/features/skfp_targets.py`
 
 ## Hypothesis
 

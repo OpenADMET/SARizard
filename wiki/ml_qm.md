@@ -9,7 +9,7 @@ tags: [flavor, status/planned]
 > fixed 24-dim molecule vector.
 
 - Target: 24 continuous values · Loss: MSE · Source: learned model (isolated env, qmdesc)
-- Calculator: `pretraining/features/qmdesc_target.py`
+- Calculator: `sarizard/pretraining/features/qmdesc_target.py`
 
 ## Hypothesis
 

@@ -3,7 +3,7 @@
 # cache/targets/ml_qm/target.npy (numpy only); pack to zarr in the sarizard env.
 #
 #   conda activate sarizard-mlqm
-#   python -m pretraining.features.compute_target --flavor ml_qm
+#   python -m sarizard.pretraining.features.compute_target --flavor ml_qm
 name: sarizard-mlqm
 channels:
   - conda-forge

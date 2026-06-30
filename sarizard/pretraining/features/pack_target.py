@@ -5,7 +5,7 @@ in ``sarizard`` this immediately follows ``compute_target``; for the isolated-en
 is the second step after their calculator has written the ``.npy``.
 
 Usage:
-    python -m pretraining.features.pack_target --flavor ecfp
+    python -m sarizard.pretraining.features.pack_target --flavor ecfp
 """
 
 from __future__ import annotations
@@ -13,10 +13,10 @@ from __future__ import annotations
 import argparse
 import logging
 
-from analysis.paths import target_npy, target_zarr
-from pretraining.config import CORPUS_CHUNK_ROWS
-from pretraining.features._pack import pack_npy_to_zarr
-from pretraining.flavors import get_flavor
+from sarizard.analysis.paths import target_npy, target_zarr
+from sarizard.pretraining.config import CORPUS_CHUNK_ROWS
+from sarizard.pretraining.features._pack import pack_npy_to_zarr
+from sarizard.pretraining.flavors import get_flavor
 
 logger = logging.getLogger(__name__)
 

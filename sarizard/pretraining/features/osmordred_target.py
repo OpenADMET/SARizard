@@ -31,7 +31,7 @@ def build_compute_fn(n_jobs: int = -1) -> Callable[[Sequence[str]], np.ndarray]:
         Maps a block of SMILES to an ``(n, 3585)`` float32 array, NaN rows for failures.
     """
     # imported here so the heavy osmordred extension loads only in its own environment
-    from pretraining.features._osmordred import DESCRIPTOR_COUNT, calculate
+    from sarizard.pretraining.features._osmordred import DESCRIPTOR_COUNT, calculate
 
     max_workers = os.cpu_count() if n_jobs in (-1, 0, None) else n_jobs
     executor = ProcessPoolExecutor(max_workers=max_workers)

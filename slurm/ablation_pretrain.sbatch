@@ -34,8 +34,8 @@ if [[ ! -d "$SPLIT_DIR/train_rescaled.zarr" ]]; then
     echo "missing $SPLIT_DIR; run slurm/ablation_prescale.sbatch first" >&2
     exit 1
 fi
-RUN_DIR="$REPO_DIR/pretraining/runs/ablation_$ABLATION"
+RUN_DIR="$REPO_DIR/sarizard/pretraining/runs/ablation_$ABLATION"
 
-cd "$REPO_DIR/pretraining"
+cd "$REPO_DIR/sarizard/pretraining"
 python train.py --flavor "$FLAVOR" --input-dir "$SPLIT_DIR" --output-dir "$RUN_DIR" \
     --foundation-name "$FOUNDATION"

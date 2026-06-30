@@ -9,8 +9,8 @@ import numpy as np
 import pytest
 import zarr
 
-from pretraining.prescaling import get_ablation, run_prescaling
-from pretraining.splitting import train_val_chunk_indices
+from sarizard.pretraining.prescaling import get_ablation, run_prescaling
+from sarizard.pretraining.splitting import train_val_chunk_indices
 
 CHUNK_ROWS = 128
 N_CHUNKS = 40
