@@ -26,24 +26,28 @@ if [[ -z "${SURROGATE_CSV:-}" || "${SURROGATE_CSV:-}" == EDIT_* ]]; then
     exit 1
 fi
 
-# generate per-flavor finetuning configs from the baseline templates now so we can count
-# the recipes for the finetune array; generation reads only flavor metadata and baseline
+# generate per-(flavor, seed) finetuning configs from the baseline templates now so we can
+# count the recipes for the finetune array; generation reads only flavor metadata and baseline
 # YAMLs, so it works before pretrain runs and before the foundation files exist
-echo "generating per-flavor finetuning configs..."
-conda run -n "$MAIN_ENV" python -m sarizard.configs.generate
+echo "generating per-(flavor, seed) finetuning configs (seeds: $FLAVOR_SEEDS)..."
+conda run -n "$MAIN_ENV" python -m sarizard.configs.generate --seeds $FLAVOR_SEEDS
 N_RECIPES=$(flavor_recipe_list | wc -l | tr -d ' ')
 if [[ "$N_RECIPES" -eq 0 ]]; then
     echo "ERROR: configs.generate produced no recipes; check configs/generate.py" >&2
     exit 1
 fi
-# size the per-flavor arrays (targets, pretrain) from the registry rather than a fixed range,
-# so adding or removing a flavor needs no edits to the sbatch headers
+# size the arrays from the registry and seed set rather than fixed ranges, so adding a flavor
+# or a seed needs no edits to the sbatch headers. Targets and split are per flavor (seed
+# independent); pretrain is per (flavor, seed).
 N_FLAVORS=$(flavor_list | wc -l | tr -d ' ')
 if [[ "$N_FLAVORS" -eq 0 ]]; then
     echo "ERROR: flavor registry is empty; check sarizard/pretraining/flavors.py" >&2
     exit 1
 fi
-echo "  $N_FLAVORS flavors (targets/pretrain array 0-$((N_FLAVORS - 1)))"
+N_SEEDS=$(wc -w <<<"$FLAVOR_SEEDS" | tr -d ' ')
+N_PRETRAIN=$(( N_FLAVORS * N_SEEDS ))
+echo "  $N_FLAVORS flavors (targets/split array 0-$((N_FLAVORS - 1)))"
+echo "  $N_FLAVORS x $N_SEEDS seeds = $N_PRETRAIN pretrain tasks (array 0-$((N_PRETRAIN - 1)))"
 echo "  $N_RECIPES recipes (finetune array 0-$((N_RECIPES - 1)))"
 echo ""
 
@@ -65,20 +69,29 @@ JOB_TARGETS=$(sbatch --parsable \
     "$SCRIPT_DIR/compute_targets.sbatch")
 echo "targets    job=$JOB_TARGETS  (after corpus $JOB_CORPUS)"
 
-JOB_PRETRAIN=$(sbatch --parsable \
+JOB_SPLIT=$(sbatch --parsable \
     --dependency=afterok:"$JOB_TARGETS" \
     --array=0-$((N_FLAVORS - 1)) \
+    "$SCRIPT_DIR/split.sbatch")
+echo "split      job=$JOB_SPLIT  (after targets $JOB_TARGETS)"
+
+JOB_PRETRAIN=$(sbatch --parsable \
+    --dependency=afterok:"$JOB_SPLIT" \
+    --array=0-$((N_PRETRAIN - 1)) \
+    --export=ALL,FLAVOR_SEEDS="$FLAVOR_SEEDS" \
     "$SCRIPT_DIR/pretrain.sbatch")
-echo "pretrain   job=$JOB_PRETRAIN  (after targets $JOB_TARGETS)"
+echo "pretrain   job=$JOB_PRETRAIN  (after split $JOB_SPLIT, $N_PRETRAIN flavor x seed)"
 
 JOB_FINETUNE=$(sbatch --parsable \
     --dependency=afterok:"$JOB_PRETRAIN" \
     --array=0-$((N_RECIPES - 1)) \
+    --export=ALL,FLAVOR_SEEDS="$FLAVOR_SEEDS" \
     "$SCRIPT_DIR/finetune.sbatch")
 echo "finetune   job=$JOB_FINETUNE  (after pretrain $JOB_PRETRAIN)"
 
 JOB_ANALYZE=$(sbatch --parsable \
     --dependency=afterok:"$JOB_FINETUNE" \
+    --export=ALL,FLAVOR_SEEDS="$FLAVOR_SEEDS" \
     "$SCRIPT_DIR/analyze.sbatch")
 echo "analyze    job=$JOB_ANALYZE  (after finetune $JOB_FINETUNE)"
 

@@ -133,9 +133,9 @@ def convert_checkpoint(ckpt_path: Path, out_path: Path) -> Path:
     return save_foundation(mpnn, out_path)
 
 
-def _latest_best_ckpt(flavor: str) -> Path | None:
-    """Return the most recent run's checkpoint for a flavor, or None if absent."""
-    runs = sorted((RUNS_DIR / flavor).glob("*/checkpoints/*.ckpt"))
+def _latest_best_ckpt(label: str) -> Path | None:
+    """Return the most recent run's checkpoint for a run label, or None if absent."""
+    runs = sorted((RUNS_DIR / label).glob("*/checkpoints/*.ckpt"))
     return runs[-1] if runs else None
 
 
@@ -143,20 +143,29 @@ def main() -> None:
     """Convert pretraining checkpoints to foundation files from the command line."""
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--all", action="store_true", help="convert the latest run of every flavor")
+    group.add_argument(
+        "--all", action="store_true", help="convert the latest run of every (flavor, seed)"
+    )
     group.add_argument("--ckpt", type=Path, help="a single checkpoint to convert")
     parser.add_argument("--flavor", help="flavor name (required with --ckpt; names the output)")
-    parser.add_argument("--out", type=Path, help="output path (defaults to foundations/<flavor>_mp.pt)")
+    parser.add_argument(
+        "--seeds", nargs="+", type=int, default=[42],
+        help="seeds to convert with --all, matching the pretraining runs (default 42)",
+    )
+    parser.add_argument("--out", type=Path, help="output path (default foundations/<label>_mp.pt)")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     if args.all:
+        # run dirs and foundations are labelled <flavor>__s<seed>, matching train.py's export
         for flavor in flavor_names():
-            ckpt = _latest_best_ckpt(flavor)
-            if ckpt is None:
-                logger.info("no checkpoint found for %s; skipping", flavor)
-                continue
-            convert_checkpoint(ckpt, FOUNDATIONS_DIR / f"{flavor}_mp.pt")
+            for seed in args.seeds:
+                label = f"{flavor}__s{seed}"
+                ckpt = _latest_best_ckpt(label)
+                if ckpt is None:
+                    logger.info("no checkpoint found for %s; skipping", label)
+                    continue
+                convert_checkpoint(ckpt, FOUNDATIONS_DIR / f"{label}_mp.pt")
         return
 
     if not args.flavor:

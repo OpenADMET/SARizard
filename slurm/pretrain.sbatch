@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Pretrain every flavor's foundation, one GPU array task per flavor. Each task splits the
-# flavor's cached target into train/val, pretrains the D-MPNN under the shared regime, and
-# exports the foundation checkpoint (train.py writes it to foundations/). Resumable: a flavor
-# whose foundation already exists is skipped.
+# Pretrain each flavor's foundation, one GPU array task per (flavor, seed). Each task reads the
+# flavor's pre-built split (from split.sbatch), pretrains the D-MPNN at its seed under the shared
+# regime, and exports the foundation checkpoint (train.py writes it to foundations/). Resumable:
+# a (flavor, seed) whose foundation already exists is skipped.
 #
-# EDIT the resource directives below for your cluster. Prefer submitting through run_all.sh,
-# which sizes the array from the registry. To submit standalone (after compute_targets has
-# produced cache/targets/<flavor>/target.zarr), size the array to the flavor count:
-#   sbatch --array=0-$(($(source slurm/env.sh; flavor_list | wc -l) - 1)) slurm/pretrain.sbatch
+# One task per (flavor, seed): the array spans FLAVORS x FLAVOR_SEEDS, flavor-major. Prefer
+# submitting through run_all.sh, which sizes the array. Standalone (after split.sbatch):
+#   sbatch --array=0-$(($(source slurm/env.sh; flavor_list | wc -l) * \
+#       $(source slurm/env.sh; wc -w <<<"$FLAVOR_SEEDS") - 1)) slurm/pretrain.sbatch
 #SBATCH --job-name=sar-pretrain
 #SBATCH --partition=gpu
 #SBATCH --time=24:00:00
@@ -20,36 +20,34 @@
 source "${SLURM_SUBMIT_DIR:-$(pwd)}/slurm/env.sh"
 conda activate "$MAIN_ENV"
 
+# map the flat array index to a (flavor, seed) pair, flavor-major
 mapfile -t FLAVORS < <(flavor_list)
-if [[ "$SLURM_ARRAY_TASK_ID" -ge ${#FLAVORS[@]} ]]; then
-    echo "task $SLURM_ARRAY_TASK_ID >= ${#FLAVORS[@]} flavors; nothing to do"
+read -ra SEEDS <<<"$FLAVOR_SEEDS"
+N_SEEDS=${#SEEDS[@]}
+N_TASKS=$(( ${#FLAVORS[@]} * N_SEEDS ))
+if [[ "$SLURM_ARRAY_TASK_ID" -ge "$N_TASKS" ]]; then
+    echo "task $SLURM_ARRAY_TASK_ID >= $N_TASKS (flavors x seeds); nothing to do"
     exit 0
 fi
-FLAVOR="${FLAVORS[$SLURM_ARRAY_TASK_ID]}"
-echo "task=$SLURM_ARRAY_TASK_ID flavor=$FLAVOR"
+FLAVOR="${FLAVORS[$((SLURM_ARRAY_TASK_ID / N_SEEDS))]}"
+SEED="${SEEDS[$((SLURM_ARRAY_TASK_ID % N_SEEDS))]}"
+FOUNDATION="${FLAVOR}__s${SEED}_mp.pt"
+echo "task=$SLURM_ARRAY_TASK_ID flavor=$FLAVOR seed=$SEED -> $FOUNDATION"
 
-if [[ -f "foundations/${FLAVOR}_mp.pt" ]]; then
-    echo "foundations/${FLAVOR}_mp.pt exists; skipping"
+if [[ -f "foundations/$FOUNDATION" ]]; then
+    echo "foundations/$FOUNDATION exists; skipping"
     exit 0
 fi
 
-# absolute paths (layout mirrors analysis/paths.py); split.py and train.py run script-style
-# from the pretraining directory, so pass them absolute paths
-TARGET_ZARR="$REPO_DIR/cache/targets/$FLAVOR/target.zarr"
-if [[ ! -d "$TARGET_ZARR" ]]; then
-    echo "missing $TARGET_ZARR; run slurm/compute_targets.sbatch first" >&2
+# the split is seed-independent and built once per flavor by split.sbatch
+SPLIT_DIR="$REPO_DIR/cache/splits/$FLAVOR"
+if [[ ! -d "$SPLIT_DIR/train_rescaled.zarr" ]]; then
+    echo "missing $SPLIT_DIR; run slurm/split.sbatch first" >&2
     exit 1
 fi
-SPLIT_DIR="$REPO_DIR/cache/splits/$FLAVOR"
-# surrogate_adme uses its own corpus written by compute_target; all other flavors share 250K
-if [[ "$FLAVOR" == "surrogate_adme" ]]; then
-    CORPUS="$REPO_DIR/cache/targets/surrogate_adme/corpus_smiles.parquet"
-else
-    CORPUS="$REPO_DIR/corpus/corpus_250k.parquet"
-fi
-RUN_DIR="$REPO_DIR/sarizard/pretraining/runs/$FLAVOR"
+RUN_DIR="$REPO_DIR/sarizard/pretraining/runs/${FLAVOR}__s${SEED}"
 
+# train.py runs script-style from the pretraining directory; pass it absolute paths
 cd "$REPO_DIR/sarizard/pretraining"
-python split.py --input-zarr "$TARGET_ZARR" --input-smiles "$CORPUS" \
-    --outdir "$SPLIT_DIR" --flavor "$FLAVOR" --force
-python train.py --flavor "$FLAVOR" --input-dir "$SPLIT_DIR" --output-dir "$RUN_DIR"
+python train.py --flavor "$FLAVOR" --input-dir "$SPLIT_DIR" --output-dir "$RUN_DIR" \
+    --foundation-name "$FOUNDATION" --seed "$SEED"
