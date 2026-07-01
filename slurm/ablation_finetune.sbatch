@@ -5,7 +5,8 @@
 # already exists is skipped.
 #
 # Generate the ablation recipes first (run_ablations.sh does this), then size --array to the
-# recipe count: ls configs/ablation_*/*.yaml | wc -l  (7 ablations x 24 endpoints = 168).
+# recipe count: ls configs/ablation_*/*.yaml | wc -l  (7 ablations x 24 endpoints = 168 per
+# finetune protocol; the count grows with ABLATION_LR_MODES, e.g. 504 across frozen+reduced+unlocked).
 #SBATCH --job-name=sar-abl-finetune
 #SBATCH --partition=gpu
 #SBATCH --time=06:00:00

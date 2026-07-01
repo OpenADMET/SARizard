@@ -82,7 +82,7 @@ Prescaling triage (driven by `run_ablations.sh`):
 | `ablation_target.sbatch` | 1 (CPU) | corpus |
 | `ablation_prescale.sbatch` | 7 (CPU array) | target |
 | `ablation_pretrain.sbatch` | 7 x seeds (GPU array) | prescale |
-| `ablation_finetune.sbatch` | 168 x seeds (GPU array) | pretrain |
+| `ablation_finetune.sbatch` | 168 x seeds x protocols (GPU array) | pretrain |
 | `ablation_analyze.sbatch` | 1 (GPU) | finetune |
 
 Finetune LR experiments (driven by `run_lr_experiments.sh`, after the flavor sweep):
@@ -94,8 +94,14 @@ Finetune LR experiments (driven by `run_lr_experiments.sh`, after the flavor swe
 
 `ablation_pretrain` and `ablation_finetune` scale with `ABLATION_SEEDS` (default one seed):
 each ablation is pretrained once per seed (`ablation_<name>__s<seed>`), and `ablation_analyze`
-averages the seeds back to one column per ablation. `run_ablations.sh` sizes every array
-automatically; the counts below are only needed to submit a stage standalone.
+averages the seeds back to one column per ablation. `ablation_finetune` additionally scales with
+`ABLATION_LR_MODES` (default `frozen`): set `ABLATION_LR_MODES="frozen reduced unlocked"` to
+finetune each prescaling recipe under all three MPNN-LR protocols off the same foundation
+(`ablation_<name>__s<seed>__{reduced,unlocked}`). `ablation_analyze` collects every protocol's
+result dirs and `prescaling_report` writes a per-protocol report card and ranking plus, when more
+than one protocol is present, `plots/prescaling_mode_comparison_r2.csv` (each recipe's mean metric
+under frozen, reduced, and unlocked). `run_ablations.sh` sizes every array automatically; the
+counts below are only needed to submit a stage standalone.
 
 ```bash
 # flavor count (sets the targets/split array)
