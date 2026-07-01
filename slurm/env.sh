@@ -45,6 +45,14 @@ FLAVOR_SEEDS="${FLAVOR_SEEDS:-42}"
 # foundations (frozen is the flavor sweep itself, so it is not repeated here)
 LR_MODES="${LR_MODES:-reduced unlocked}"
 
+# fall back to a real conda if only micromamba is available (no-op where conda already resolves)
+if ! command -v conda >/dev/null 2>&1; then
+    module load miniforge3/latest 2>/dev/null || true
+fi
+# batch jobs inherit the submitting shell's env; drop any pre-activated conda/micromamba state
+# so the `conda activate`/`conda run` calls below target the requested env, not a stacked one
+unset CONDA_SHLVL CONDA_PREFIX CONDA_DEFAULT_ENV CONDA_PROMPT_MODIFIER
+
 # make `conda activate` work in a non-interactive batch shell
 source "$(conda info --base)/etc/profile.d/conda.sh"
 
