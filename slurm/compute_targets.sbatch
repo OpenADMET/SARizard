@@ -17,8 +17,9 @@
 
 source "${SLURM_SUBMIT_DIR:-$(pwd)}/slurm/env.sh"
 
-# surrogate_adme reads the Novartis released CSV directly; set this path before submitting
-SURROGATE_CSV="${SURROGATE_CSV:-EDIT_PATH_TO_protacdb2.0_zinc_chembl_dataset.csv}"
+# surrogate_adme reads the Novartis released CSV directly; defaults to the cached download
+# under cache/surrogate/ (gitignored). Override SURROGATE_CSV to point elsewhere
+SURROGATE_CSV="${SURROGATE_CSV:-cache/surrogate/protacdb2.0_zinc_chembl_dataset.csv}"
 
 # map this array task to a flavor and look up the environment that computes it
 mapfile -t FLAVORS < <(flavor_list)
