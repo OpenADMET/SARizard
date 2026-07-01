@@ -39,16 +39,21 @@ source "$(conda info --base)/etc/profile.d/conda.sh"
 cd "$REPO_DIR"
 mkdir -p slurm/logs
 
-# print the registry flavor list, one per line, using the main environment
+# print the registry flavor list, one per line, using the main environment. the sed drops
+# blank lines: conda run appends a trailing newline that would otherwise become an empty
+# mapfile element and an off-by-one in every array that sizes itself from this list
 flavor_list() {
     conda run -n "$MAIN_ENV" python -c \
-        "from sarizard.pretraining.flavors import flavor_names; print('\n'.join(flavor_names()))"
+        "from sarizard.pretraining.flavors import flavor_names; print('\n'.join(flavor_names()))" \
+        | sed '/^$/d'
 }
 
-# print the prescaling ablation list, one per line, using the main environment
+# print the prescaling ablation list, one per line, using the main environment. sed drops the
+# trailing blank line conda run adds (see flavor_list) so N_ABL and the array range stay exact
 ablation_list() {
     conda run -n "$MAIN_ENV" python -c \
-        "from sarizard.pretraining.prescaling import ablation_names; print('\n'.join(ablation_names()))"
+        "from sarizard.pretraining.prescaling import ablation_names; print('\n'.join(ablation_names()))" \
+        | sed '/^$/d'
 }
 
 # print the generated finetune recipe paths for the flavor sweep, one per line: registry
