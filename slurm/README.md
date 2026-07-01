@@ -6,7 +6,8 @@ computation and pretraining, one task per (flavor, endpoint) for finetuning.
 ## One-shot run
 
 ```bash
-export SURROGATE_CSV=/path/to/protacdb2.0_zinc_chembl_dataset.csv
+# surrogate_adme defaults to cache/surrogate/protacdb2.0_zinc_chembl_dataset.csv;
+# export SURROGATE_CSV only if the CSV lives elsewhere
 bash slurm/run_all.sh
 ```
 
@@ -105,6 +106,25 @@ conda run -n sarizard python -c \
 # ablation recipe count (sets ablation_finetune array)
 ls configs/ablation_*/*.yaml | wc -l
 ```
+
+## Sharding slow target flavors
+
+The 3D conformer flavors (usrcat, whim, e3fp) and jazzy compute far slower than the rest and a
+whole-corpus run can exceed the target wall time. Split one across array tasks instead of the
+single `compute_targets.sbatch` task:
+
+```bash
+NUM_SHARDS=20
+SH=$(sbatch --parsable --export=ALL,FLAVOR=usrcat,NUM_SHARDS=$NUM_SHARDS \
+    --array=0-$((NUM_SHARDS - 1)) slurm/compute_target_shard.sbatch)
+sbatch --export=ALL,FLAVOR=usrcat,NUM_SHARDS=$NUM_SHARDS \
+    --dependency=afterok:"$SH" slurm/merge_target.sbatch
+```
+
+Each array task computes one contiguous row range into `cache/targets/<flavor>/shards/`. The
+merge job concatenates the shards into `target.npy`, refusing to pack if any shard is missing,
+mis-shaped, or short of the corpus, then packs the zarr. The fast flavors stay on the default
+`compute_targets.sbatch` path.
 
 ## Notes
 

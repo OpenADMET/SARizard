@@ -123,8 +123,10 @@ and requires no isolated env.
 Build the environments first (`bash setup.sh`, see [Setup](#setup)), then:
 
 ```bash
-# set the path to the Novartis surrogate-ADME CSV (download link in surrogate_target.py)
-export SURROGATE_CSV=/path/to/protacdb2.0_zinc_chembl_dataset.csv
+# surrogate_adme needs the Novartis released CSV; the pipeline defaults to
+# cache/surrogate/protacdb2.0_zinc_chembl_dataset.csv (see wiki/surrogate_adme.md to download).
+# Only export SURROGATE_CSV to point somewhere else:
+# export SURROGATE_CSV=/elsewhere/protacdb2.0_zinc_chembl_dataset.csv
 
 # submit the full pipeline as a SLURM dependency chain and walk away
 bash slurm/run_all.sh
