@@ -21,6 +21,14 @@ from sarizard.pretraining.config import CONFORMER_FORCE_FIELD, CONFORMER_NUM, CO
 
 logger = logging.getLogger(__name__)
 
+# Names of the flavors computed here, kept static so membership can be tested without
+# importing skfp. This matters: the isolated target environments (osmordred, minimol, jazzy,
+# ml_qm) have no skfp, and compute_target probes is_skfp_flavor for every flavor before
+# dispatching, so the probe must not drag skfp in. _register_builders asserts the built
+# tables match these sets, so the two cannot drift.
+_2D_FLAVORS = frozenset({"rdkit2d", "erg", "ecfp", "atompair", "pubchem"})
+_3D_FLAVORS = frozenset({"usrcat", "whim", "e3fp"})
+
 # 2D flavors: a builder returning a configured skfp transformer. Every fingerprint
 # parameter that fixes the output is set explicitly (chemoinformatics rule: pin them).
 _2D_BUILDERS: dict[str, Callable[[int], object]] = {}
@@ -69,13 +77,21 @@ def _register_builders() -> None:
             "e3fp": lambda n: E3FPFingerprint(fp_size=1024, n_jobs=n),
         }
     )
+    # guard against the static name sets drifting from the actual builder tables
+    if _2D_BUILDERS.keys() != _2D_FLAVORS or _3D_BUILDERS.keys() != _3D_FLAVORS:
+        raise RuntimeError(
+            "skfp builder tables disagree with the declared flavor sets; "
+            "update _2D_FLAVORS/_3D_FLAVORS to match _register_builders"
+        )
 
 
 def is_skfp_flavor(name: str) -> bool:
-    """Return whether ``name`` is computed by this module."""
-    if not _2D_BUILDERS:
-        _register_builders()
-    return name in _2D_BUILDERS or name in _3D_BUILDERS
+    """Return whether ``name`` is computed by this module.
+
+    Resolved from the static name sets so it never imports skfp; the isolated target
+    environments call this while dispatching and do not have skfp installed.
+    """
+    return name in _2D_FLAVORS or name in _3D_FLAVORS
 
 
 def _parse_valid(smiles: Sequence[str]) -> tuple[list[Chem.Mol], list[int]]:
