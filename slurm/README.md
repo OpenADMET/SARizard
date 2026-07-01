@@ -61,8 +61,8 @@ Target computation, packing, split, and pretraining run in `MAIN_ENV` (`sarizard
 finetune and analyze stages run in `OPENADMET_ENV` (`openadmet`) instead: they drive the
 openadmet-models CLI, whose dependency stack (pandas 2.x, torch 2.7, Python 3.12) conflicts
 with the main training env (pandas 3.x, torch 2.12, Python 3.11), so it keeps its own env like
-the calculator envs do. Build it from openadmet-models' `devtools/conda-envs/openadmet-models.yaml`
-and `pip install -e` both openadmet-models and this repo into it.
+the calculator envs do. `setup.sh` builds it from `envs/openadmet.yml` and installs
+openadmet-models and this repo editable into it.
 
 ## Scripts
 

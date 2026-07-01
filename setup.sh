@@ -6,7 +6,8 @@
 # envs pin conflicting numpy/rdkit/python versions on purpose), so SARizard is installed with
 # --no-deps to avoid clobbering those pins and --ignore-requires-python so the editable install
 # also lands in the py3.8/3.10 isolated envs (the package metadata targets py3.11+). The main
-# env additionally gets pytest and, if the sibling checkout is present, openadmet-models.
+# env additionally gets pytest; the openadmet env (finetune/analyze) additionally gets
+# openadmet-models editable from the sibling checkout.
 #
 # Usage:
 #   bash setup.sh                 # build/install all envs, then test
@@ -25,6 +26,7 @@ REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$REPO_DIR"
 
 MAIN_ENV="sarizard"
+OPENADMET_ENV="openadmet"
 OPENADMET_DIR="${OPENADMET_DIR:-$REPO_DIR/../openadmet-models}"
 FORCE="${FORCE:-0}"
 SKIP_OSMORDRED_BUILD="${SKIP_OSMORDRED_BUILD:-0}"
@@ -85,17 +87,20 @@ install_sarizard() {
         python -m pip install --ignore-requires-python --no-deps -e .
 }
 
-# main-env extras: pytest for the test suite, openadmet-models if the checkout is present
+# main env only needs pytest for the test suite; the openadmet-models CLI lives in OPENADMET_ENV
 install_main_extras() {
-    conda run --no-capture-output -n "$MAIN_ENV" python -m pip install pytest || return 1
-    if [[ -d "$OPENADMET_DIR" ]]; then
-        conda run --no-capture-output -n "$MAIN_ENV" python -m pip install -e "$OPENADMET_DIR" \
-            || return 1
-    else
-        warn "openadmet-models not found at $OPENADMET_DIR; finetune/evaluate need it"
+    conda run --no-capture-output -n "$MAIN_ENV" python -m pip install pytest
+}
+
+# install openadmet-models editable into the finetune/analyze env; its heavy dependency stack
+# comes from envs/openadmet.yml, this adds the package itself from the sibling checkout
+install_openadmet_models() {
+    if [[ ! -d "$OPENADMET_DIR" ]]; then
+        warn "openadmet-models not found at $OPENADMET_DIR; finetune/analyze in $OPENADMET_ENV need it"
         warn "  (the test suite does not, so this does not block 'okay')"
+        return 0
     fi
-    return 0
+    conda run --no-capture-output -n "$OPENADMET_ENV" python -m pip install -e "$OPENADMET_DIR"
 }
 
 # run the test suite in the main env
@@ -152,9 +157,14 @@ for yaml in "${YAMLS[@]}"; do
     # install the SARizard package (editable, no deps) into this env
     run_step "install sarizard into $name" install_sarizard "$name"
 
-    # the main env also needs pytest (and openadmet-models if available)
+    # the main env also needs pytest for the test suite
     if [[ "$name" == "$MAIN_ENV" ]]; then
-        run_step "install main extras (pytest, openadmet-models)" install_main_extras
+        run_step "install main extras (pytest)" install_main_extras
+    fi
+
+    # the openadmet env additionally needs openadmet-models editable (finetune/analyze CLI)
+    if [[ "$name" == "$OPENADMET_ENV" ]]; then
+        run_step "install openadmet-models into $name" install_openadmet_models
     fi
 done
 
