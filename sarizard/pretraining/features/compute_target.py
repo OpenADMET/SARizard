@@ -27,7 +27,7 @@ from pathlib import Path
 import numpy as np
 import pyarrow.parquet as pq
 
-from sarizard.analysis.paths import CORPUS_SMILES, target_npy
+from sarizard.analysis.paths import CORPUS_SMILES, target_npy, target_shard
 from sarizard.pretraining.config import COMPUTE_BLOCK_ROWS
 from sarizard.pretraining.features import _npy
 from sarizard.pretraining.flavors import Flavor, get_flavor
@@ -74,6 +74,59 @@ def _streaming_compute_fn(
     return None
 
 
+# rows copied per block when merging shards, so a wide shard never loads whole into memory
+_MERGE_BLOCK = 8192
+
+
+def _shard_bounds(n_rows: int, num_shards: int, shard_index: int) -> tuple[int, int]:
+    """Return the ``[start, end)`` row range this shard owns of a contiguous split.
+
+    The shards tile ``range(n_rows)`` with no gaps or overlap, so concatenating them in
+    index order reproduces the full corpus order the cache must preserve.
+    """
+    if not 0 <= shard_index < num_shards:
+        raise SystemExit(f"shard-index {shard_index} out of range for {num_shards} shards")
+    per_shard = -(-n_rows // num_shards)  # ceil so the last shard absorbs the remainder
+    start = shard_index * per_shard
+    end = min(start + per_shard, n_rows)
+    if start >= n_rows:
+        raise SystemExit(
+            f"shard {shard_index}/{num_shards} is empty for a {n_rows}-row corpus; "
+            "use fewer shards"
+        )
+    return start, end
+
+
+def _merge_shards(paths: list[Path], out: Path, expected_rows: int, target_dim: int) -> None:
+    """Concatenate row-shards into ``out`` in order, validating completeness first.
+
+    Reads only ``.npy`` headers and copies block by block, so merging never materializes a
+    whole shard. Raises if a shard is missing, mis-shaped, or the totals do not match the
+    corpus, so an incomplete sharded run cannot be packed as a finished target.
+    """
+    missing = [str(p) for p in paths if not p.exists()]
+    if missing:
+        raise SystemExit(f"cannot merge: {len(missing)} shard(s) missing, e.g. {missing[:3]}")
+    shapes = [np.load(p, mmap_mode="r").shape for p in paths]
+    if any(len(s) != 2 or s[1] != target_dim for s in shapes):
+        raise SystemExit(f"shard width mismatch (expected dim {target_dim}): {shapes}")
+    total = sum(s[0] for s in shapes)
+    if total != expected_rows:
+        raise SystemExit(f"merged rows {total} != corpus rows {expected_rows}; shards incomplete")
+
+    memmap = _npy.open_target_memmap(out, total, target_dim)
+    row = 0
+    for path, shape in zip(paths, shapes, strict=True):
+        shard = np.load(path, mmap_mode="r")
+        for start in range(0, shape[0], _MERGE_BLOCK):
+            end = min(start + _MERGE_BLOCK, shape[0])
+            memmap[row + start : row + end] = shard[start:end]
+        row += shape[0]
+        memmap.flush()
+        del shard
+    logger.info("merged %d shards -> %s (%d rows, %d dim)", len(paths), out, total, target_dim)
+
+
 def main() -> None:
     """Compute and cache one flavor's target as ``target.npy``."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -90,6 +143,17 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=100, help="minimol internal batch size")
     parser.add_argument("--block-rows", type=int, default=COMPUTE_BLOCK_ROWS, help="rows/block")
     parser.add_argument("--force", action="store_true", help="overwrite an existing .npy")
+    parser.add_argument(
+        "--num-shards", type=int, default=1, help="split the corpus into this many row-shards"
+    )
+    parser.add_argument(
+        "--shard-index", type=int, default=None, help="which shard this task computes (0-based)"
+    )
+    parser.add_argument(
+        "--merge-shards",
+        action="store_true",
+        help="merge previously computed shards into target.npy (no calculator; main env)",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -97,7 +161,27 @@ def main() -> None:
     if flavor.target_dim is None:
         raise SystemExit(f"flavor {flavor.name} has no known target_dim; set it in flavors.py")
 
-    out = args.out or target_npy(flavor.name)
+    # merge mode runs after a sharded array job, in the main env: concatenate the shards into
+    # target.npy (no calculator needed), which pack_target then turns into the zarr
+    if args.merge_shards:
+        shard_paths = [
+            target_shard(flavor.name, k, args.num_shards) for k in range(args.num_shards)
+        ]
+        expected_rows = pq.read_metadata(args.corpus).num_rows
+        merged_out = args.out or target_npy(flavor.name)
+        _merge_shards(shard_paths, merged_out, expected_rows, flavor.target_dim)
+        return
+
+    # a sharded task writes only its row slice to a shard file; an unsharded run writes target.npy
+    sharded = args.num_shards > 1
+    if sharded:
+        if args.shard_index is None:
+            raise SystemExit("--num-shards > 1 requires --shard-index")
+        if flavor.name == "surrogate_adme":
+            raise SystemExit("surrogate_adme has its own corpus and cannot be sharded")
+        out = target_shard(flavor.name, args.shard_index, args.num_shards)
+    else:
+        out = args.out or target_npy(flavor.name)
     if out.exists() and not args.force:
         # a resumable skip is a success, not a failure: exiting nonzero would break the afterok
         # dependency chain in the slurm pipeline. but only skip a real target, not a crash
@@ -137,8 +221,19 @@ def main() -> None:
         return
 
     smiles = _read_smiles(args.corpus)
+    if sharded:
+        start, end = _shard_bounds(len(smiles), args.num_shards, args.shard_index)
+        logger.info(
+            "shard %d/%d: rows [%d, %d) of %d",
+            args.shard_index,
+            args.num_shards,
+            start,
+            end,
+            len(smiles),
+        )
+        smiles = smiles[start:end]
     logger.info(
-        "flavor=%s kind=%s dim=%d corpus=%d",
+        "flavor=%s kind=%s dim=%d rows=%d",
         flavor.name,
         flavor.kind,
         flavor.target_dim,

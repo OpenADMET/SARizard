@@ -59,6 +59,16 @@ def target_zarr(flavor: str) -> Path:
     return TARGETS_DIR / flavor / "target.zarr"
 
 
+def target_shard(flavor: str, shard_index: int, num_shards: int) -> Path:
+    """Return the path to one contiguous row-shard of a flavor's target.
+
+    Sharding lets a slow calculator (3D conformers, jazzy) split the corpus across array
+    tasks so each finishes within wall time; a merge step concatenates the shards into
+    ``target.npy``. ``num_shards`` is encoded in the name so a merge cannot mix shard sets.
+    """
+    return TARGETS_DIR / flavor / "shards" / f"shard_{shard_index:04d}_of_{num_shards:04d}.npy"
+
+
 def split_dir(flavor: str) -> Path:
     """Return the per-flavor train/val split directory consumed by pretraining."""
     return SPLITS_CACHE_DIR / flavor
