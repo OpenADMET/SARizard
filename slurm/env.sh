@@ -10,8 +10,13 @@ set -eo pipefail
 # repo root; submit from the repo root so SLURM_SUBMIT_DIR points here, or export REPO_DIR
 REPO_DIR="${REPO_DIR:-${SLURM_SUBMIT_DIR:-$(pwd)}}"
 
-# main conda environment: training, target packing, finetuning, and analysis
+# main conda environment: target computation/packing, pretraining, and split
 MAIN_ENV="${MAIN_ENV:-sarizard}"
+
+# environment for the openadmet-models CLI (finetune) and analysis: openadmet-models declares
+# its deps only in its conda-env file, and that stack (pandas 2.x, torch 2.7, py3.12) conflicts
+# with the main training env (pandas 3.x, torch 2.12, py3.11), so it lives in its own env
+OPENADMET_ENV="${OPENADMET_ENV:-openadmet}"
 
 # lightning accelerator for training and prediction
 ACCELERATOR="${ACCELERATOR:-gpu}"

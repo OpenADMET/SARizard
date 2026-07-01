@@ -54,8 +54,15 @@ anvil cannot express; see TODO.md).
 
 Adjust the time, CPU, and memory directives in each `.sbatch` header if your cluster requires
 different limits. Runtime settings live in `env.sh` and can be exported instead of edited
-(`REPO_DIR`, `MAIN_ENV`, `ACCELERATOR`). Create conda environments first (`envs/main.yml`
-and the isolated envs in `envs/`).
+(`REPO_DIR`, `MAIN_ENV`, `OPENADMET_ENV`, `ACCELERATOR`). Create conda environments first
+(`envs/main.yml` and the isolated envs in `envs/`).
+
+Target computation, packing, split, and pretraining run in `MAIN_ENV` (`sarizard`). The
+finetune and analyze stages run in `OPENADMET_ENV` (`openadmet`) instead: they drive the
+openadmet-models CLI, whose dependency stack (pandas 2.x, torch 2.7, Python 3.12) conflicts
+with the main training env (pandas 3.x, torch 2.12, Python 3.11), so it keeps its own env like
+the calculator envs do. Build it from openadmet-models' `devtools/conda-envs/openadmet-models.yaml`
+and `pip install -e` both openadmet-models and this repo into it.
 
 ## Scripts
 

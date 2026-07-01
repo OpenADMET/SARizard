@@ -16,7 +16,7 @@
 #SBATCH --output=slurm/logs/abl_finetune_%A_%a.out
 
 source "${SLURM_SUBMIT_DIR:-$(pwd)}/slurm/env.sh"
-conda activate "$MAIN_ENV"
+conda activate "$OPENADMET_ENV"
 
 # enumerate generated ablation recipes (deterministic sorted order)
 mapfile -t RECIPES < <(ls configs/ablation_*/*.yaml 2>/dev/null)

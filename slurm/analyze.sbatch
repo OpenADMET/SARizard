@@ -15,7 +15,7 @@
 #SBATCH --output=slurm/logs/analyze_%j.out
 
 source "${SLURM_SUBMIT_DIR:-$(pwd)}/slurm/env.sh"
-conda activate "$MAIN_ENV"
+conda activate "$OPENADMET_ENV"
 
 # the per-(flavor, seed) result labels (<flavor>__s<seed>) to collect; report_card and
 # meta_model average the seeds back to one column/feature per flavor
