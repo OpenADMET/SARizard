@@ -22,17 +22,25 @@ CONFORMER_NUM = 1
 CONFORMER_FORCE_FIELD = "MMFF94"
 
 # for training
-DROPOUT_FRACTION = 0.30
+# DROPOUT_FRACTION, PATIENCE, WARMUP_EPOCHS, and FNN_HIDDEN_SIZE below were reconciled against
+# ../foundation-models/pretraining/run_pretraining.py after every prescaling-ablation run
+# diverged mid-pretraining (loss/R2 blowing up 3-10 epochs in). That sibling implementation
+# trains the same MPNN/descriptor-regression task without this instability, so its regime is
+# adopted as canonical here; GRADIENT_CLIP_VAL is added on top since neither implementation
+# had it.
+DROPOUT_FRACTION = 0.85  # keeps 15% of targets/step (matches sibling's MASKING_RATIO=0.15);
+# was 0.30 (keeps 70%), a much denser per-step supervision load on a 3585-dim target block
 EPOCHS = 100
-PATIENCE = 5
+PATIENCE = 50  # was 5; the sibling's patience is 10x more tolerant of a transient bad epoch
 INITIAL_LEARNING_RATE = 0.0001
 MAXIMUM_LEARNING_RATE = 0.001
 FINAL_LEARNING_RATE = 0.0001
-WARMUP_EPOCHS = 5
+WARMUP_EPOCHS = 2  # was 5; chemprop's own MPNN default, and what the sibling implicitly uses
+GRADIENT_CLIP_VAL = 0.5  # new: neither this repo nor the sibling clipped gradients before
 CHUNKS_PER_BATCH = 2
 
 # model hyperparameters
-FNN_HIDDEN_SIZE = 2_048
+FNN_HIDDEN_SIZE = 1_024  # was 2_048; matches the sibling's PREDICTOR_HIDDEN_DIM
 FNN_HIDDEN_LAYERS = 1
 FNN_ACTIVATION = "LEAKYRELU"  # one of: RELU, LEAKYRELU, PRELU, TANH, ELU
 MP_HIDDEN_SIZE = 2_048
