@@ -30,6 +30,14 @@ average the seeds back per flavor. The seed varies only pretraining (the finetun
 held fixed), so the spread it reveals is foundation-initialization variance. See
 [[Finetune Protocols]].
 
+## Screening scale
+
+The 250K corpus is the screening set, not the final training scale. It is large enough to rank
+the flavors cheaply and decide which descriptor targets earn further cost. Any flavor that beats
+the baseline here is the candidate for a full-scale pretrain on the 1M corpus (the scale
+[[Stock CheMeleon]] uses) to produce the release foundation, holding this same regime fixed so
+the 1M foundation is the screened experiment at scale rather than a new one.
+
 ## Why it matters
 
 A fit-to-purpose comparison only means something if the foundations differ in exactly one
