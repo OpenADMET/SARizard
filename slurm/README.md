@@ -35,6 +35,20 @@ pretrain → finetune → analyze) with the `ablation_*.sbatch` scripts. The bac
 and regime are fixed, so the comparison isolates the prescaling. Read
 `plots/prescaling_ranking_r2.csv` to pick the production recipe.
 
+### Finetune LR experiments (run after the flavor sweep)
+
+```bash
+bash slurm/run_lr_experiments.sh
+```
+
+`run_lr_experiments.sh` reuses the flavor-sweep foundations and repeats the finetuning with the
+MPNN backbone partially unfrozen (`reduced`, `mpnn_lr = ffn_lr/10`) or fully unfrozen
+(`unlocked`, `mpnn_lr = ffn_lr`), then compares both against the frozen sweep (`lr_finetune` →
+`lr_analyze`). Set `LR_MODES` to choose protocols and `FLAVOR_SEEDS` to match the sweep that
+produced the foundations. Read `plots/lr_ranking_r2.csv` for each mode's mean R² delta and win
+count versus frozen. The frozen-warmup protocol is not included (it needs a two-phase schedule
+anvil cannot express; see TODO.md).
+
 ## Before submitting
 
 Adjust the time, CPU, and memory directives in each `.sbatch` header if your cluster requires
@@ -62,6 +76,13 @@ Prescaling triage (driven by `run_ablations.sh`):
 | `ablation_pretrain.sbatch` | 7 x seeds (GPU array) | prescale |
 | `ablation_finetune.sbatch` | 168 x seeds (GPU array) | pretrain |
 | `ablation_analyze.sbatch` | 1 (GPU) | finetune |
+
+Finetune LR experiments (driven by `run_lr_experiments.sh`, after the flavor sweep):
+
+| Script | Tasks | Depends on |
+|---|---|---|
+| `lr_finetune.sbatch` | 312 x seeds x modes (GPU array) | flavor-sweep foundations |
+| `lr_analyze.sbatch` | 1 (GPU) | lr_finetune |
 
 `ablation_pretrain` and `ablation_finetune` scale with `ABLATION_SEEDS` (default one seed):
 each ablation is pretrained once per seed (`ablation_<name>__s<seed>`), and `ablation_analyze`

@@ -135,13 +135,22 @@ export SURROGATE_CSV=/path/to/protacdb2.0_zinc_chembl_dataset.csv
 
 # submit the full pipeline as a SLURM dependency chain and walk away
 bash slurm/run_all.sh
+
+# optional: pretrain each flavor at several seeds to average out initialization noise
+FLAVOR_SEEDS="1 2 3" bash slurm/run_all.sh
 ```
 
-`run_all.sh` generates the per-flavor finetuning configs, then submits five stages in order
-(corpus preparation, target computation, pretraining, finetuning, analysis), each gated by
-the previous stage completing without errors. Results land in `results/` and `plots/`
-when the final job finishes. See `slurm/README.md` for the per-stage scripts and how to
-resubmit after a partial failure.
+`run_all.sh` generates the per-(flavor, seed) finetuning configs, then submits six stages in
+order (corpus preparation, target computation, split, pretraining, finetuning, analysis), each
+gated by the previous stage completing without errors. Results land in `results/` and `plots/`
+when the final job finishes. `FLAVOR_SEEDS` (default one seed) pretrains each flavor at several
+seeds, tagged `<flavor>__s<seed>`; the report card and meta-model average them back per flavor,
+and re-running with more seeds fills in only the new ones. See `slurm/README.md` for the
+per-stage scripts and how to resubmit after a partial failure.
+
+After the sweep, `bash slurm/run_lr_experiments.sh` repeats the finetuning from the same
+foundations with the MPNN backbone partially unfrozen (`reduced`) or fully unfrozen
+(`unlocked`) and compares both against the frozen sweep in `plots/lr_ranking_r2.csv`.
 
 ### Prescaling ablation triage (run first)
 

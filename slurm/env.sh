@@ -29,6 +29,10 @@ ABLATION_SEEDS="${ABLATION_SEEDS:-42}"
 # re-run to accumulate: existing (flavor, seed) foundations/results are skipped.
 FLAVOR_SEEDS="${FLAVOR_SEEDS:-42}"
 
+# finetune learning-rate experiments: the backbone protocols to sweep off the flavor-sweep
+# foundations (frozen is the flavor sweep itself, so it is not repeated here)
+LR_MODES="${LR_MODES:-reduced unlocked}"
+
 # make `conda activate` work in a non-interactive batch shell
 source "$(conda info --base)/etc/profile.d/conda.sh"
 
@@ -60,4 +64,10 @@ flavor_recipe_list() {
             ls "$REPO_DIR/configs/${flavor}__s${seed}"/*.yaml 2>/dev/null
         done
     done < <(flavor_list)
+}
+
+# print the generated LR-experiment recipe paths (configs/lr_<mode>__<flavor>__s<seed>/),
+# one per line, for the finetune array in run_lr_experiments.sh
+lr_recipe_list() {
+    ls "$REPO_DIR"/configs/lr_*/*.yaml 2>/dev/null
 }
