@@ -28,6 +28,13 @@ ABLATION_FLAVOR="${ABLATION_FLAVOR:-osmordred}"
 # seed-driven variance the prescaling effect must clear; kept to the single ABLATION_FLAVOR.
 ABLATION_SEEDS="${ABLATION_SEEDS:-42}"
 
+# finetune protocols to run the prescaling triage under (space-separated subset of
+# frozen/reduced/unlocked). Default frozen keeps the single-protocol triage; add reduced and
+# unlocked to check that the winning recipe holds once the MPNN backbone can adapt. Each extra
+# protocol adds a full finetune pass off the same ablation foundations
+# (configs/ablation_<name>__s<seed>[__<mode>]), so the finetune array grows with the count.
+ABLATION_LR_MODES="${ABLATION_LR_MODES:-frozen}"
+
 # training seeds for the flavor sweep (and the LR experiments, which reuse its foundations).
 # Each seed is a separate pretraining run -> its own foundation, recipes, and results, tagged
 # <flavor>__s<seed>; the report averages them back to one column per flavor. Add seeds and
@@ -80,4 +87,17 @@ flavor_recipe_list() {
 # one per line, for the finetune array in run_lr_experiments.sh
 lr_recipe_list() {
     ls "$REPO_DIR"/configs/lr_*/*.yaml 2>/dev/null
+}
+
+# print the generated ablation result labels (config dir basenames), one per line: every
+# (ablation, seed) variant and its finetune-protocol variants (ablation_<name>__s<seed>, plus
+# the __reduced/__unlocked suffixes the MPNN-LR sweep adds). This mirrors ablation_finetune's
+# own recipe glob, so analyze evaluates exactly the protocols that were finetuned; evaluate skips
+# any label without a result dir, and prescaling_report groups the labels back by protocol.
+ablation_label_list() {
+    local dir
+    for dir in "$REPO_DIR"/configs/ablation_*__s*/; do
+        [[ -d "$dir" ]] || continue
+        basename "$dir"
+    done | sort -u
 }

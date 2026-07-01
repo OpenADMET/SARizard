@@ -37,14 +37,23 @@ N_PRETRAIN=$(( N_ABL * N_SEEDS ))
 echo "ablations ($N_ABL): ${ABLATIONS[*]}"
 echo "seeds ($N_SEEDS): ${SEEDS[*]}  (flavor: $ABLATION_FLAVOR)"
 
-# generate finetuning recipes for each (ablation, seed) variant, pointing at that variant's
-# foundation; this only reads templates and writes YAML, so it runs before the foundations exist
-echo "generating per-(ablation, seed) finetuning configs..."
+# generate finetuning recipes for each (ablation, seed, protocol) variant, pointing at that
+# variant's foundation; this only reads templates and writes YAML, so it runs before the
+# foundations exist. Frozen carries no suffix; reduced/unlocked add __<mode> so each protocol
+# gets its own recipes and result dir off the same foundation (ABLATION_LR_MODES selects them).
+read -ra LR_MODE_LIST <<<"$ABLATION_LR_MODES"
+echo "protocols (${#LR_MODE_LIST[@]}): ${LR_MODE_LIST[*]}"
+echo "generating per-(ablation, seed, protocol) finetuning configs..."
 for ablation in "${ABLATIONS[@]}"; do
     for seed in "${SEEDS[@]}"; do
-        conda run -n "$MAIN_ENV" python -m sarizard.configs.generate \
-            --foundation "$REPO_DIR/foundations/ablation_${ablation}__s${seed}_mp.pt" \
-            --out-subdir "ablation_${ablation}__s${seed}"
+        for mode in "${LR_MODE_LIST[@]}"; do
+            suffix=""
+            [[ "$mode" != "frozen" ]] && suffix="__${mode}"
+            conda run -n "$MAIN_ENV" python -m sarizard.configs.generate \
+                --foundation "$REPO_DIR/foundations/ablation_${ablation}__s${seed}_mp.pt" \
+                --out-subdir "ablation_${ablation}__s${seed}${suffix}" \
+                --mpnn-lr-mode "$mode"
+        done
     done
 done
 N_RECIPES=$(ls "$REPO_DIR"/configs/ablation_*/*.yaml 2>/dev/null | wc -l | tr -d ' ')
@@ -92,3 +101,4 @@ echo "ablation triage submitted; monitor with:"
 echo "  watch squeue -u \$USER"
 echo "  tail -f $REPO_DIR/slurm/logs/abl_analyze_${JOB_ANALYZE}.out"
 echo "when done, read plots/prescaling_ranking_r2.csv to pick the production recipe"
+echo "  (with several ABLATION_LR_MODES, also plots/prescaling_mode_comparison_r2.csv)"
