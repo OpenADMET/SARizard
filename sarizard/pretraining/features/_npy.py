@@ -13,19 +13,24 @@ pretraining target without corrupting the rest.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
+    # a calculator maps a list of SMILES to an (n, target_dim) float array, NaN where a
+    # molecule failed; the row order must match the input order so the cache stays aligned
+    # with the shared corpus parquet. defined here (not at module scope) because the ml_qm
+    # env pins Python 3.8, where subscripting collections.abc.Callable at runtime raises
+    # TypeError; annotations are stringized by __future__ so nothing evaluates it at runtime
+    ComputeFn = Callable[[Sequence[str]], np.ndarray]
 
 logger = logging.getLogger(__name__)
 
 DTYPE = np.float32
-
-# a calculator maps a list of SMILES to an (n, target_dim) float array, NaN where a
-# molecule failed; the row order must match the input order so the cache stays aligned
-# with the shared corpus parquet
-ComputeFn = Callable[[Sequence[str]], np.ndarray]
 
 
 def open_target_memmap(path: Path, n_rows: int, target_dim: int) -> np.memmap:
