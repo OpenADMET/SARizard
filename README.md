@@ -163,18 +163,34 @@ production recipe, then bake it into the core workflow before running the flavor
 
 ## Reproducing a single flavor
 
+The scikit-fingerprints flavors (`ecfp`, `rdkit2d`, `erg`, `atompair`, `pubchem`, `usrcat`,
+`whim`, `e3fp`) and `surrogate_adme` compute in the main `sarizard` env; only `osmordred`,
+`jazzy`, `minimol`, and `ml_qm` have isolated envs. Compute the target in the flavor's env
+(`get_flavor(name).env`), pack and train in the main env. Example with `ecfp` (main env
+throughout) at the default seed 42:
+
 ```bash
-# compute target in the flavor's environment, pack in the main env
-conda activate sarizard-ecfp      # or sarizard-osmordred / -jazzy / -minimol / -mlqm
-python -m sarizard.pretraining.features.compute_target --flavor ecfp
 conda activate sarizard
+python -m sarizard.pretraining.features.compute_target --flavor ecfp
 python -m sarizard.pretraining.features.pack_target --flavor ecfp
 
-# pretrain, then finetune one endpoint
-sbatch slurm/pretrain.sbatch      # runs only the flavor if foundation already exists for others
+# split (seed-independent), then pretrain the foundation at seed 42
+cd sarizard/pretraining
+python split.py --input-zarr ../../cache/targets/ecfp/target.zarr \
+    --input-smiles ../../corpus/corpus_250k.parquet --outdir ../../cache/splits/ecfp \
+    --flavor ecfp --force
+python train.py --flavor ecfp --input-dir ../../cache/splits/ecfp \
+    --output-dir runs/ecfp__s42 --foundation-name ecfp__s42_mp.pt --seed 42
+cd ../..
+
+# generate the seeded recipes and finetune one endpoint
 python -m sarizard.configs.generate --flavors ecfp
-openadmet anvil --recipe-path configs/ecfp/cyp_mt.yaml --output-dir results/ecfp/cyp_mt/
+openadmet anvil --recipe-path configs/ecfp__s42/cyp_mt.yaml --output-dir results/ecfp__s42/cyp_mt/
 ```
+
+An isolated flavor differs only in the compute step: `conda activate sarizard-osmordred`
+(after `bash envs/build_osmordred.sh`) for `compute_target --flavor osmordred`, then switch
+back to `sarizard` for pack, split, train, and finetune.
 
 Datasets and the pretraining corpus are not redistributed; regenerate or obtain them
 and place them as described before training.
