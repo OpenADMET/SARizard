@@ -7,7 +7,7 @@
 # The array range must cover the ablation registry (7 ablations -> 0-6); update it if the
 # registry grows. Submit from the repo root (or let run_ablations.sh do it).
 #SBATCH --job-name=sar-abl-prescale
-#SBATCH --partition=gpu
+#SBATCH --partition=cpu
 #SBATCH --time=08:00:00
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=64G

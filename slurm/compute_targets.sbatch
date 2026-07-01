@@ -8,7 +8,7 @@
 # count (the --array header below is a conservative default the command line overrides):
 #   sbatch --array=0-$(($(source slurm/env.sh; flavor_list | wc -l) - 1)) slurm/compute_targets.sbatch
 #SBATCH --job-name=sar-targets
-#SBATCH --partition=gpu
+#SBATCH --partition=cpu
 #SBATCH --time=08:00:00
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=64G

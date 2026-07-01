@@ -7,7 +7,7 @@
 # Submit from the repo root (or let run_ablations.sh do it):
 #   sbatch slurm/ablation_target.sbatch
 #SBATCH --job-name=sar-abl-target
-#SBATCH --partition=gpu
+#SBATCH --partition=cpu
 #SBATCH --time=08:00:00
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=64G
