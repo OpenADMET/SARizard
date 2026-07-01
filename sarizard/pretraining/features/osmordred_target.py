@@ -1,8 +1,11 @@
 """osmordred 2D descriptor target (3585-dim), computed in the isolated osmordred env.
 
 Reuses the vendored ``_osmordred.calculate`` (a performant Mordred reimplementation) over
-a process pool. ``calculate`` returns an all-NaN row for an unparseable or failing
-molecule, so the cached target stays aligned with the corpus and the masked loss skips it.
+a process pool. ``calculate`` usually returns an all-NaN row for an unparseable or failing
+molecule, but for some inputs (odd elements, isotopes) it returns a short, misaligned row;
+``compute`` coerces every row to the fixed width and scatters a full NaN row for any that is
+not exactly ``DESCRIPTOR_COUNT``, so the cached target stays aligned with the corpus and the
+masked loss skips the failures.
 """
 
 from __future__ import annotations
@@ -37,12 +40,31 @@ def build_compute_fn(n_jobs: int = -1) -> Callable[[Sequence[str]], np.ndarray]:
     executor = ProcessPoolExecutor(max_workers=max_workers)
 
     def compute(smiles: Sequence[str]) -> np.ndarray:
+        # calculate() is documented to return an all-NaN row on failure, but for some
+        # inputs (odd elements, isotopes like [1H]Br / [252Cf]) it silently drops descriptor
+        # blocks and returns a short, misaligned row. stacking those ragged rows with a bare
+        # np.asarray crashes, and a short row cannot be aligned to the 3585-column schema, so
+        # coerce per row and scatter a full NaN row for any that is not exactly DESCRIPTOR_COUNT
         rows = list(executor.map(calculate, list(smiles), chunksize=16))
-        out = np.asarray(rows, dtype=np.float32)
-        if out.shape != (len(smiles), DESCRIPTOR_COUNT):
-            raise ValueError(
-                f"osmordred returned {out.shape}, expected {(len(smiles), DESCRIPTOR_COUNT)}"
-            )
+        out = np.full((len(smiles), DESCRIPTOR_COUNT), np.nan, dtype=np.float32)
+        n_malformed = 0
+        for i, (smi, row) in enumerate(zip(smiles, rows)):
+            try:
+                arr = np.asarray(row, dtype=np.float32).ravel()
+            except (ValueError, TypeError):
+                arr = np.empty(0, dtype=np.float32)
+            if arr.size == DESCRIPTOR_COUNT:
+                out[i] = arr
+            else:
+                n_malformed += 1
+                logger.warning(
+                    "osmordred returned width %d (expected %d) for %r; scattering NaN row",
+                    arr.size,
+                    DESCRIPTOR_COUNT,
+                    smi,
+                )
+        if n_malformed:
+            logger.info("osmordred: %d/%d rows malformed and NaN-filled", n_malformed, len(smiles))
         return out
 
     return compute
