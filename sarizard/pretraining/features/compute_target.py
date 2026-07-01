@@ -99,7 +99,10 @@ def main() -> None:
 
     out = args.out or target_npy(flavor.name)
     if out.exists() and not args.force:
-        raise SystemExit(f"{out} exists; pass --force to overwrite")
+        # already computed: a resumable skip is a success, not a failure. exiting nonzero
+        # here would break the afterok dependency chain in the slurm ablation pipeline
+        logger.info("%s exists; skipping (pass --force to overwrite)", out)
+        return
 
     active_env = os.environ.get("CONDA_DEFAULT_ENV")
     if active_env and active_env != flavor.env:
