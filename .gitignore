@@ -228,6 +228,13 @@ corpus/*.smiles
 cache/*
 !cache/.gitkeep
 
+# Archived artifacts from superseded runs (same regenerable categories as cache/configs/
+# results/runs above, just relocated under archive/<label>/ instead of deleted)
+archive/
+
+# Stray SLURM output from interactive `bash` allocations that don't set --output
+/slurm-*.out
+
 # Converted foundation checkpoints (regenerable from pretraining runs)
 foundations/*
 !foundations/.gitkeep
