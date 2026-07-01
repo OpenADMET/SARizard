@@ -16,7 +16,7 @@
 #SBATCH --output=slurm/logs/lr_finetune_%A_%a.out
 
 source "${SLURM_SUBMIT_DIR:-$(pwd)}/slurm/env.sh"
-conda activate "$MAIN_ENV"
+conda activate "$OPENADMET_ENV"
 
 mapfile -t RECIPES < <(lr_recipe_list)
 if [[ ${#RECIPES[@]} -eq 0 ]]; then

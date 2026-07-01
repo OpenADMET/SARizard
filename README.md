@@ -118,6 +118,11 @@ minimol needs the PyG extension wheels declared in its env file's find-links.
 `surrogate_adme` runs in the main environment; it reads the Novartis released CSV directly
 and requires no isolated env.
 
+Finetuning and analysis run in a separate `openadmet` environment (built from openadmet-models'
+`devtools/conda-envs/openadmet-models.yaml`), not the main env: they drive the openadmet-models
+CLI, whose stack (pandas 2.x, torch 2.7, Python 3.12) conflicts with the main training env
+(pandas 3.x, torch 2.12, Python 3.11). Point `OPENADMET_ENV` at it (default `openadmet`).
+
 ## Running the full experiment
 
 Build the environments first (`bash setup.sh`, see [Setup](#setup)), then:

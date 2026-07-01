@@ -19,7 +19,7 @@
 #SBATCH --output=slurm/logs/finetune_%A_%a.out
 
 source "${SLURM_SUBMIT_DIR:-$(pwd)}/slurm/env.sh"
-conda activate "$MAIN_ENV"
+conda activate "$OPENADMET_ENV"
 
 # enumerate generated per-flavor recipes (registry flavors only, deterministic sorted order);
 # flavor_recipe_list excludes the _baseline templates and any ablation_* dirs under configs/

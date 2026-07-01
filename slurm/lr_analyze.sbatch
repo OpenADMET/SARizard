@@ -15,7 +15,7 @@
 #SBATCH --output=slurm/logs/lr_analyze_%j.out
 
 source "${SLURM_SUBMIT_DIR:-$(pwd)}/slurm/env.sh"
-conda activate "$MAIN_ENV"
+conda activate "$OPENADMET_ENV"
 
 # labels to collect: the frozen flavor-sweep variants plus every generated LR variant. The
 # frozen labels (<flavor>__s<seed>) give lr_report its baseline; LR labels come from the dirs.

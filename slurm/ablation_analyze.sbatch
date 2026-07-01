@@ -14,7 +14,7 @@
 #SBATCH --output=slurm/logs/abl_analyze_%j.out
 
 source "${SLURM_SUBMIT_DIR:-$(pwd)}/slurm/env.sh"
-conda activate "$MAIN_ENV"
+conda activate "$OPENADMET_ENV"
 
 # the per-(ablation, seed) result labels (ablation_<name>__s<seed>) evaluate should collect;
 # prescaling_report averages the seeds back to one column per ablation
