@@ -10,10 +10,16 @@ export SURROGATE_CSV=/path/to/protacdb2.0_zinc_chembl_dataset.csv
 bash slurm/run_all.sh
 ```
 
-`run_all.sh` generates the per-flavor finetuning configs, then submits all five stages as a
-SLURM dependency chain (corpus → targets → pretrain → finetune → analyze). Each stage waits
-for every task of the previous stage to succeed before starting. Come back when the analyze
-job finishes; results land in `results/` and `plots/`.
+`run_all.sh` generates the per-(flavor, seed) finetuning configs, then submits all six stages
+as a SLURM dependency chain (corpus → targets → split → pretrain → finetune → analyze). Each
+stage waits for every task of the previous stage to succeed before starting. Come back when the
+analyze job finishes; results land in `results/` and `plots/`.
+
+Set `FLAVOR_SEEDS` (default `42`) to pretrain each flavor at several seeds and average out
+initialization noise, e.g. `FLAVOR_SEEDS="1 2 3" bash slurm/run_all.sh`. Each seed is its own
+foundation/recipes/results (`<flavor>__s<seed>`); the report card and meta-model average the
+seeds back to one column per flavor. Re-running with more seeds skips the ones already done and
+fills in the rest (see the notes below).
 
 ### Prescaling ablation triage (run before the flavor sweep)
 
@@ -42,8 +48,9 @@ and the isolated envs in `envs/`).
 |---|---|---|
 | `prepare_corpus.sbatch` | 1 (CPU) | — |
 | `compute_targets.sbatch` | 13 (CPU array) | corpus |
-| `pretrain.sbatch` | 13 (GPU array) | targets |
-| `finetune.sbatch` | 312 (GPU array) | pretrain |
+| `split.sbatch` | 13 (CPU array) | targets |
+| `pretrain.sbatch` | 13 x seeds (GPU array) | split |
+| `finetune.sbatch` | 312 x seeds (GPU array) | pretrain |
 | `analyze.sbatch` | 1 (GPU) | finetune |
 
 Prescaling triage (driven by `run_ablations.sh`):
@@ -62,10 +69,12 @@ averages the seeds back to one column per ablation. `run_ablations.sh` sizes eve
 automatically; the counts below are only needed to submit a stage standalone.
 
 ```bash
-# flavor count
+# flavor count (sets the targets/split array)
 conda run -n sarizard python -c \
     "from sarizard.pretraining.flavors import flavor_names; print(len(flavor_names()))"
-# recipe count (after configs.generate); registry flavors only, excludes ablation dirs
+# flavor x seed count (sets the pretrain array)
+(source slurm/env.sh; echo $(( $(flavor_list | wc -l) * $(wc -w <<<"$FLAVOR_SEEDS") )))
+# recipe count (after configs.generate --seeds); registry flavors x seeds, excludes ablation/lr dirs
 (source slurm/env.sh; flavor_recipe_list | wc -l)
 # ablation count (sets the ablation_prescale array)
 conda run -n sarizard python -c \
@@ -79,7 +88,10 @@ ls configs/ablation_*/*.yaml | wc -l
 ## Notes
 
 - Every stage is resumable: a flavor or recipe whose output already exists is skipped, so a
-  re-submission only fills gaps.
+  re-submission only fills gaps. This extends to seeds: run with `FLAVOR_SEEDS="1"`, then later
+  `FLAVOR_SEEDS="1 2 3"`, and seed 1's foundations and results are skipped while 2 and 3 run.
+  Pass the full cumulative seed set (not just the new seeds), since `analyze` averages exactly
+  the seeds you name.
 - The chain is wired with `afterok`, so a stage is released only if every array task of the
   prior stage succeeds. If one task fails, the dependent stage is cancelled
   (`DependencyNeverSatisfied`) and the chain stops there. Recover by fixing the cause and
