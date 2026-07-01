@@ -1,5 +1,7 @@
 """Tests for the on-disk path helpers (flavor corpus and ablation namespacing)."""
 
+import pytest
+
 from sarizard.analysis import paths
 
 
@@ -65,3 +67,28 @@ def test_ablation_prescaled_zarr_under_ablations_cache():
 
 def test_foundation_path_for_flavor():
     assert paths.foundation_path("ecfp") == paths.FOUNDATIONS_DIR / "ecfp_mp.pt"
+
+
+def test_lr_mode_variant_label_frozen_carries_no_suffix():
+    # frozen is the default protocol and must leave the label untouched for backward compatibility
+    assert paths.lr_mode_variant_label("ablation_full__s42", "frozen") == "ablation_full__s42"
+
+
+def test_lr_mode_variant_label_appends_non_frozen_mode():
+    label = paths.lr_mode_variant_label("ablation_full__s42", "reduced")
+    assert label == "ablation_full__s42__reduced"
+
+
+def test_lr_mode_variant_label_rejects_unknown_mode():
+    with pytest.raises(ValueError, match="unknown LR mode"):
+        paths.lr_mode_variant_label("ablation_full__s42", "warmup")
+
+
+def test_parse_lr_mode_reads_suffix_and_leaves_frozen_base_intact():
+    assert paths.parse_lr_mode("ablation_full__s42__reduced") == ("ablation_full__s42", "reduced")
+    assert paths.parse_lr_mode("abl__s42__unlocked") == ("abl__s42", "unlocked")
+
+
+def test_parse_lr_mode_without_suffix_is_frozen():
+    # a plain seeded ablation label carries no protocol suffix and reads as the frozen default
+    assert paths.parse_lr_mode("ablation_full__s42") == ("ablation_full__s42", "frozen")

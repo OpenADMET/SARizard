@@ -150,6 +150,46 @@ def parse_ablation_variant(label: str) -> tuple[str, int | None]:
     return name, seed
 
 
+# finetune LR protocols (mirrors sarizard.configs.generate.MPNN_LR_MODES): frozen holds the MPNN
+# backbone fixed and is the default protocol (no suffix); reduced and unlocked let it adapt and
+# append a __<mode> suffix so each protocol gets its own recipes and result dir off one foundation
+LR_MODES = ("frozen", "reduced", "unlocked")
+BASELINE_LR_MODE = "frozen"
+
+
+def lr_mode_variant_label(base: str, mode: str) -> str:
+    """Append a finetune LR-protocol suffix to a variant label; frozen carries none.
+
+    Parameters
+    ----------
+    base : str
+        The variant label to suffix (e.g. ``ablation_full__s42``).
+    mode : str
+        One of :data:`LR_MODES`. ``frozen`` returns ``base`` unchanged; ``reduced`` and
+        ``unlocked`` append ``__<mode>``.
+    """
+    if mode not in LR_MODES:
+        raise ValueError(f"unknown LR mode {mode!r}; choose from {LR_MODES}")
+    return base if mode == BASELINE_LR_MODE else f"{base}__{mode}"
+
+
+def parse_lr_mode(label: str) -> tuple[str, str]:
+    """Split a trailing finetune LR-protocol suffix off a label into ``(base, mode)``.
+
+    Labels with no ``__reduced``/``__unlocked`` suffix are the frozen protocol and round-trip to
+    ``(label, "frozen")``, so a report can tag frozen and LR variants of a label uniformly. The
+    suffix is unambiguous because ablation and flavor names never end in a mode token and the
+    seed tag (``__s<seed>``) always sits between the base name and any mode suffix.
+    """
+    for mode in LR_MODES:
+        if mode == BASELINE_LR_MODE:
+            continue
+        suffix = f"__{mode}"
+        if label.endswith(suffix):
+            return label[: -len(suffix)], mode
+    return label, BASELINE_LR_MODE
+
+
 def ablation_prescaled_zarr(ablation: str) -> Path:
     """Return the prescaled target store for an ablation."""
     return ABLATIONS_CACHE_DIR / ablation / "prescaled.zarr"

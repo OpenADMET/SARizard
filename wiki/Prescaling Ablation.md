@@ -63,9 +63,13 @@ recipe that wins frozen but loses once the MPNN moves is caught before it is bak
 
 The recipes are generated with `sarizard/configs/generate.py --mpnn-lr-mode {reduced,unlocked}`
 into `configs/ablation_<name>__s42__{reduced,unlocked}/` and finetuned through
-`ablation_finetune.sbatch` in the `openadmet` env, alongside the
-frozen `configs/ablation_<name>__s42/`. Reading the three-way comparison needs a mode-aware
-report: `prescaling_report` currently aggregates the frozen results only.
+`ablation_finetune.sbatch` in the `openadmet` env, alongside the frozen
+`configs/ablation_<name>__s42/`. `prescaling_report` is protocol-aware: it builds a report card
+and ranking per protocol (frozen keeps the unsuffixed filenames, the others add a `_<mode>`
+suffix) and, when more than one protocol is present, writes
+`plots/prescaling_mode_comparison_<metric>.csv` (each recipe's mean metric under frozen,
+reduced, and unlocked side by side). If a recipe wins frozen but loses once the backbone can
+move, that comparison catches it before the recipe is baked in.
 
 ## Related
 
