@@ -158,6 +158,19 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   custom Lightning callback or a sequential two-recipe approach. This is the one LR experiment
   `run_lr_experiments.sh` does not cover (it only sweeps single-rate protocols: reduced,
   unlocked); wiring it needs that anvil feature first.
+- [ ] PCA-compressed osmordred target (not yet started): osmordred only, backbone/corpus/regime
+  held fixed as usual. Run the descriptor matrix through the full prescaling pipeline (the
+  `full` recipe: order-fixed winsorize/z-score plus correlation drop, low-variance drop, and
+  Yeo-Johnson), then fit PCA on the resulting matrix and pretrain against the component scores
+  instead of the prescaled descriptors themselves. Three iterations, one per explained-variance
+  threshold: 80%, 90%, and 95% (each threshold picks its own component count). Tests whether a
+  smaller, decorrelated target trains a better, or just cheaper, foundation than the full
+  3585-dim block. Also bears on the target-dropout blocker above: a PCA target has far fewer,
+  already-decorrelated dimensions, which changes the keep-count-per-step math that motivates
+  that ablation. Needs new wiring: an `osmordred_pca<threshold>` target variant computed after
+  prescaling (fit PCA on the train split only, apply the same transform to val, cache the
+  component count each threshold picks), plus the corresponding prescale/pretrain/finetune/
+  analyze plumbing. Plan only; do not execute yet.
 
 ## Methodology watch-items
 
