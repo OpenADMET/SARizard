@@ -44,6 +44,12 @@ against the frozen sweep per (flavor, endpoint) in `plots/lr_ranking_r2.csv` (me
 win count). A frozen warmup then coadaptation protocol is planned but not scripted: it needs a
 two-phase training schedule the anvil config cannot express yet.
 
+The same three protocols also drive the [[Prescaling Ablation]] triage. `generate.py
+--mpnn-lr-mode` threads the protocol through ablation mode, so each prescaling recipe can be
+finetuned frozen, `reduced`, and `unlocked` from its own foundation
+(`configs/ablation_<name>__s42__{reduced,unlocked}/`). This checks that the preprocessing choice
+holds under a moving backbone, not just a frozen one.
+
 ## Related
 
 - Produces the columns of the [[Report Card]] and the features of the [[Meta-Model]].

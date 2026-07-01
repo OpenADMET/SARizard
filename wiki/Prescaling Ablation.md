@@ -52,6 +52,21 @@ Each `plus_*` isolates one step's marginal effect over `order_fix`; `full` stack
 finetune → analyze). Read `plots/prescaling_ranking_r2.csv` and the ablation report
 card to pick the recipe, then harden it into the core workflow (TODO milestone 5).
 
+## MPNN learning-rate sweep
+
+The triage originally finetuned every prescaling recipe frozen only (`mpnn_lr=0`), which ranks
+the preprocessing by representation quality alone. To check that the ranking survives once the
+backbone can adapt, the same ablation foundations are also finetuned under the two
+[[Finetune Protocols#Learning-rate experiments|LR protocols]]: `reduced` (`mpnn_lr=1e-4`) and
+`unlocked` (`mpnn_lr=1e-3`). This crosses the prescaling axis with the finetune axis, so a
+recipe that wins frozen but loses once the MPNN moves is caught before it is baked in.
+
+The recipes are generated with `sarizard/configs/generate.py --mpnn-lr-mode {reduced,unlocked}`
+into `configs/ablation_<name>__s42__{reduced,unlocked}/` and finetuned through
+`ablation_finetune.sbatch` in the `openadmet` env, alongside the
+frozen `configs/ablation_<name>__s42/`. Reading the three-way comparison needs a mode-aware
+report: `prescaling_report` currently aggregates the frozen results only.
+
 ## Related
 
 - Feeds [[Shared Corpus and Regime]] (the prescaling becomes part of the fixed regime)

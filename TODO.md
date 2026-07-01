@@ -76,6 +76,15 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   upper bound on what full finetuning can achieve and quantifies how much signal the frozen
   protocol sacrifices; the gap between frozen and unlocked is the cost of the clean ablation.
   Scripted alongside reduced (mode `unlocked`) in `slurm/run_lr_experiments.sh`.
+- [ ] Prescaling ablation MPNN LR sweep (in progress): cross the milestone-4 prescaling triage with the
+  finetune LR modes. The triage originally finetuned every prescaling recipe frozen only
+  (`mpnn_lr=0`); this repeats it at `reduced` (`mpnn_lr=1e-4`) and `unlocked` (`mpnn_lr=1e-3`)
+  so the preprocessing decision is judged under all three protocols rather than assuming the
+  frozen ranking holds once the backbone can move. `sarizard/configs/generate.py` now threads
+  `--mpnn-lr-mode` through ablation mode; recipes land in
+  `configs/ablation_<name>__s42__{reduced,unlocked}/` and finetune via `ablation_finetune.sbatch`
+  (in progress). Comparing across modes still needs work: `prescaling_report` is frozen-only, so
+  add a mode axis (or a per-(ablation, mode) R² table) before reading the three-way result.
 - [x] Multi-seed foundations: pretrain each flavor at several seeds to separate the foundation
   effect from initialization variance. Set `FLAVOR_SEEDS` for `run_all.sh` (and
   `ABLATION_SEEDS` for the triage); the report card and meta-model average the seeds per
