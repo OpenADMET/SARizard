@@ -65,13 +65,48 @@ def split_dir(flavor: str) -> Path:
 
 
 def foundation_path(flavor: str) -> Path:
-    """Return the converted foundation checkpoint path for a flavor."""
+    """Return the converted foundation checkpoint path for a flavor (unseeded label)."""
     return FOUNDATIONS_DIR / f"{flavor}_mp.pt"
 
 
 def results_dir(flavor: str, endpoint: str) -> Path:
     """Return the finetuning result directory for a flavor and endpoint."""
     return RESULTS_DIR / flavor / endpoint
+
+
+# ── seed variants ────────────────────────────────────────────────────────────
+# Every experiment (flavor sweep, prescaling triage, LR experiments) can run a base unit at
+# several training seeds to separate its effect from seed-driven variance. The seed is tagged
+# onto the base label as ``<base>__s<seed>``, so each variant gets its own foundation, recipes,
+# and result dir, and the reports collapse the variants back to one column per base unit.
+SEED_TAG = "__s"
+
+
+def seed_variant_label(base: str, seed: int) -> str:
+    """Tag a base experiment label with a seed (``<base>__s<seed>``)."""
+    return f"{base}{SEED_TAG}{seed}"
+
+
+def parse_seed_variant(label: str) -> tuple[str, int | None]:
+    """Split ``<base>__s<seed>`` into ``(base, seed)``; seed is ``None`` when absent.
+
+    Plain labels (no ``__s<seed>`` suffix) round-trip to ``(label, None)``, so a report can
+    collapse seeded and unseeded labels uniformly.
+    """
+    base, sep, seed = label.rpartition(SEED_TAG)
+    if sep and seed.isdigit():
+        return base, int(seed)
+    return label, None
+
+
+def flavor_variant_label(flavor: str, seed: int) -> str:
+    """Return the label for one ``(flavor, seed)`` variant of the flavor sweep."""
+    return seed_variant_label(flavor, seed)
+
+
+def foundation_variant_path(flavor: str, seed: int) -> Path:
+    """Return the foundation checkpoint path for one ``(flavor, seed)`` sweep variant."""
+    return FOUNDATIONS_DIR / f"{flavor_variant_label(flavor, seed)}_mp.pt"
 
 
 # prescaling ablation triage (run before the flavor sweep to fix the production recipe)
@@ -91,7 +126,7 @@ def ablation_variant_label(ablation: str, seed: int) -> str:
     Each variant gets its own foundation, recipes, and result dir; the report aggregates the
     seeds back to one column per ablation.
     """
-    return f"{ablation_label(ablation)}__s{seed}"
+    return seed_variant_label(ablation_label(ablation), seed)
 
 
 def parse_ablation_variant(label: str) -> tuple[str, int | None]:
@@ -100,11 +135,9 @@ def parse_ablation_variant(label: str) -> tuple[str, int | None]:
     Accepts both seeded variant labels (``ablation_<name>__s<seed>``) and plain ablation
     labels (``ablation_<name>``), so the report can collapse either form to its ablation.
     """
-    base = label[len("ablation_"):] if label.startswith("ablation_") else label
-    name, sep, seed = base.rpartition("__s")
-    if sep and seed.isdigit():
-        return name, int(seed)
-    return base, None
+    base, seed = parse_seed_variant(label)
+    name = base[len("ablation_"):] if base.startswith("ablation_") else base
+    return name, seed
 
 
 def ablation_prescaled_zarr(ablation: str) -> Path:

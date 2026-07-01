@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from sarizard.analysis.report_card import _row_relative, build_matrix
+from sarizard.analysis.report_card import _row_relative, build_matrix, collapse_seed_variants
 
 
 @pytest.fixture
@@ -74,3 +74,26 @@ def test_row_relative_all_nan_row_stays_nan():
     normed = _row_relative(np.array([[np.nan, np.nan]]), higher_better=True)
 
     assert np.isnan(normed).all()
+
+
+def test_collapse_seed_variants_maps_to_base_flavor():
+    frame = pd.DataFrame({"flavor": ["ecfp__s1", "ecfp__s2", "osmordred__s1"]})
+
+    collapsed = collapse_seed_variants(frame)
+
+    assert list(collapsed["flavor"]) == ["ecfp", "ecfp", "osmordred"]
+
+
+def test_seed_variants_average_into_one_flavor_column():
+    # two seeds of ecfp on one endpoint must average to a single matrix cell
+    frame = pd.DataFrame(
+        [
+            {"flavor": "ecfp__s1", "dataset": "herg", "endpoint": "herg", "r2": 0.4},
+            {"flavor": "ecfp__s2", "dataset": "herg", "endpoint": "herg", "r2": 0.6},
+        ]
+    )
+
+    pivot = build_matrix(collapse_seed_variants(frame), "r2", columns=["ecfp"])
+
+    assert pivot.shape == (1, 1)
+    assert pivot.loc["herg · herg", "ecfp"] == pytest.approx(0.5)

@@ -39,7 +39,7 @@ from sklearn.metrics import mean_squared_error, r2_score  # noqa: E402
 from sklearn.model_selection import KFold  # noqa: E402
 
 from sarizard.analysis.metrics_spec import dataset_of  # noqa: E402
-from sarizard.analysis.paths import PLOTS_DIR, RESULTS_DIR  # noqa: E402
+from sarizard.analysis.paths import PLOTS_DIR, RESULTS_DIR, parse_seed_variant  # noqa: E402
 from sarizard.pretraining.flavors import flavor_names  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -72,10 +72,14 @@ def collect_predictions(results_root: Path, flavors: list[str]) -> dict:
     dict
         ``{(dataset, recipe, endpoint): {"y": ndarray, "preds": {flavor: ndarray}}}``. The
         test split is identical across flavors of the same recipe (only the foundation
-        differs), so the per-flavor vectors for an endpoint are molecule-aligned.
+        differs), so the per-flavor vectors for an endpoint are molecule-aligned. Seed variants
+        (``<flavor>__s<seed>``) of one flavor are averaged into a single per-flavor vector, so
+        the stacker sees one feature per flavor rather than one per (flavor, seed).
     """
+    # accumulate seed replicates per base flavor, then average them below
     store: dict[tuple[str, str, str], dict] = {}
     for flavor in flavors:
+        base = parse_seed_variant(flavor)[0]
         flavor_dir = results_root / flavor
         if not flavor_dir.is_dir():
             continue
@@ -100,7 +104,14 @@ def collect_predictions(results_root: Path, flavors: list[str]) -> dict:
                     continue
                 key = (dataset_of(result_dir.name), result_dir.name, col)
                 entry = store.setdefault(key, {"y": y_test[col].to_numpy()[mask], "preds": {}})
-                entry["preds"][flavor] = preds[mask, i]
+                entry["preds"].setdefault(base, []).append(preds[mask, i])
+
+    # collapse each base flavor's seed replicates to their molecule-wise mean prediction
+    for entry in store.values():
+        entry["preds"] = {
+            base: np.mean(np.stack(arrays, axis=0), axis=0)
+            for base, arrays in entry["preds"].items()
+        }
     return store
 
 

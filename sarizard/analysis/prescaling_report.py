@@ -37,32 +37,26 @@ from sarizard.analysis.paths import (  # noqa: E402
     ablation_label,
     parse_ablation_variant,
 )
-from sarizard.analysis.report_card import build_matrix, plot_report_card  # noqa: E402
+from sarizard.analysis.report_card import (  # noqa: E402
+    build_matrix,
+    collapse_seed_variants,
+    plot_report_card,
+)
 from sarizard.pretraining.prescaling import ablation_names  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 ABLATION_METRICS_CSV = RESULTS_DIR / "ablation_metrics.csv"
 
+# collapse_seed_variants is the shared helper (report_card); imported here so callers importing
+# it from this module keep working, and it maps ablation_<name>__s<seed> -> ablation_<name>
+__all__ = ["collapse_seed_variants", "rank_ablations"]
+
 
 def _strip(label: str) -> str:
     """Map an ``ablation_<name>`` result label back to the plain ablation name."""
     prefix = "ablation_"
     return label[len(prefix):] if label.startswith(prefix) else label
-
-
-def collapse_seed_variants(frame: pd.DataFrame) -> pd.DataFrame:
-    """Map seeded variant labels in ``flavor`` back to their plain ablation label.
-
-    The triage may run each ablation at several seeds, tagged ``ablation_<name>__s<seed>``.
-    Rewriting those to ``ablation_<name>`` lets ``build_matrix`` average the seeds per
-    (endpoint, ablation) cell, so the report shows one column per ablation over the seed mean.
-    """
-    frame = frame.copy()
-    frame["flavor"] = frame["flavor"].map(
-        lambda label: ablation_label(parse_ablation_variant(label)[0])
-    )
-    return frame
 
 
 def rank_ablations(pivot: pd.DataFrame, metric: str) -> pd.DataFrame:
