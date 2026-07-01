@@ -145,7 +145,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--mpnn-lr-mode", default="frozen", choices=MPNN_LR_MODES,
-        help="flavor mode: backbone finetune protocol (frozen sweep, or an LR experiment)",
+        help="backbone finetune protocol (frozen, or reduced/unlocked for an LR experiment); "
+        "applies to both flavor and ablation modes",
     )
     parser.add_argument(
         "--label-prefix", default="",
@@ -165,9 +166,15 @@ def main() -> None:
         foundation_rel = str(args.foundation.resolve().relative_to(REPO_ROOT))
         n = _generate_one(
             templates, CONFIGS_DIR / args.out_subdir, foundation_rel, args.out_subdir,
-            args.accelerator,
+            args.accelerator, mpnn_lr_mode=args.mpnn_lr_mode,
         )
-        logger.info("ablation %s: %d recipes -> %s", args.out_subdir, n, args.out_subdir)
+        logger.info(
+            "ablation %s (%s): %d recipes -> %s",
+            args.out_subdir,
+            args.mpnn_lr_mode,
+            n,
+            args.out_subdir,
+        )
         return
 
     # flavor mode: one recipe set per (flavor, seed). With --label-prefix and --mpnn-lr-mode
