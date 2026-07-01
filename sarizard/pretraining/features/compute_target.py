@@ -99,10 +99,19 @@ def main() -> None:
 
     out = args.out or target_npy(flavor.name)
     if out.exists() and not args.force:
-        # already computed: a resumable skip is a success, not a failure. exiting nonzero
-        # here would break the afterok dependency chain in the slurm ablation pipeline
-        logger.info("%s exists; skipping (pass --force to overwrite)", out)
-        return
+        # a resumable skip is a success, not a failure: exiting nonzero would break the afterok
+        # dependency chain in the slurm pipeline. but only skip a real target, not a crash
+        # orphan: a prior run that died mid-block leaves an all-NaN memmap on disk, and blindly
+        # skipping would pack that garbage. sample ~1000 rows to tell a real target from an orphan
+        existing = np.load(out, mmap_mode="r")
+        stride = max(1, existing.shape[0] // 1000)
+        has_data = bool(np.isfinite(np.asarray(existing[::stride])).any())
+        del existing
+        if has_data:
+            logger.info("%s exists; skipping (pass --force to overwrite)", out)
+            return
+        logger.warning("%s exists but is entirely NaN (crash orphan); recomputing", out)
+        out.unlink()
 
     active_env = os.environ.get("CONDA_DEFAULT_ENV")
     if active_env and active_env != flavor.env:
