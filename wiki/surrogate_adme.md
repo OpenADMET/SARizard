@@ -21,12 +21,14 @@ Download the released dataset (not redistributed here):
 https://static-content.springer.com/esm/art%3A10.1038%2Fs41467-024-49979-3/MediaObjects/41467_2024_49979_MOESM4_ESM.zip
 ```
 
-Unzip to get `protacdb2.0_zinc_chembl_dataset.csv`, then:
+Unzip to get `protacdb2.0_zinc_chembl_dataset.csv` and place it at
+`cache/surrogate/protacdb2.0_zinc_chembl_dataset.csv` (the default the SLURM pipeline reads;
+`cache/` is gitignored). Then:
 
 ```
 conda activate sarizard
 python -m sarizard.pretraining.features.compute_target --flavor surrogate_adme \
-    --csv-path /path/to/protacdb2.0_zinc_chembl_dataset.csv
+    --csv-path cache/surrogate/protacdb2.0_zinc_chembl_dataset.csv
 python -m sarizard.pretraining.features.pack_target --flavor surrogate_adme
 ```
 

@@ -48,17 +48,21 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   24-dim molecule target. Open design choice: a richer alternative is to regress the
   per-atom/per-bond descriptors directly as node/edge targets (chemprop supports this),
   which keeps the resolution that pooling discards; revisit if the pooled target underperforms.
-- [ ] SLURM specifics: partition and account names, GPU type, per-job time limits, whether
-  the conda envs exist on the cluster, and whether the cluster shares this filesystem.
-- [ ] Surrogate-ADME data: download the Novartis Nat Commun 2024 released CSV
-  (DOI 10.1038/s41467-024-49979-3, Supplementary Data 1, CC BY 4.0) and run
-  `compute_target --flavor surrogate_adme --csv-path <path>`. The CSV is the pretraining
-  corpus for this flavor; no model training step is needed.
+- [x] SLURM specifics: partitions are set in the sbatch headers (cpu for corpus/target/split/
+  prescale, gpu with `--gres=gpu:1` for pretrain/finetune/analyze), per-job time limits live in
+  each header, `setup.sh` builds the conda envs on the cluster, and the repo sits on the shared
+  filesystem. No `--account` is required on this cluster; add one to the headers if yours needs it.
+- [x] Surrogate-ADME data: download the Novartis Nat Commun 2024 released CSV
+  (DOI 10.1038/s41467-024-49979-3, Supplementary Data 1, CC BY 4.0) to
+  `cache/surrogate/protacdb2.0_zinc_chembl_dataset.csv` (the default `SURROGATE_CSV`). The CSV is
+  the pretraining corpus for this flavor; no model training step is needed.
 - [ ] MLIP conformer backend for the 3D flavors (usrcat, whim, e3fp): the calculators
   currently use RDKit ETKDG + MMFF94 (seeded, in `features/skfp_targets.py`). Once the
   pipeline runs end to end, add an ML-potential backend (candidates: Auto3D with
   ANI2x/AIMNet2, or MACE-OFF23 via ASE/openmm-ml) in an isolated GPU env and make it the
-  pluggable conformer source; compare descriptor stability against MMFF94.
+  pluggable conformer source; compare descriptor stability against MMFF94. Until then, the 3D
+  flavors and jazzy are the slowest targets; shard them across array tasks
+  (`slurm/compute_target_shard.sbatch` + `merge_target.sbatch`) to fit the wall clock.
 
 ## Future experiments
 
