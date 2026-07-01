@@ -39,6 +39,15 @@ Headline results and the read on each flavor: `FINDINGS.md`.
 - [ ] 8. Report card: heatmap of endpoints by flavors with a selectable metric (default R-squared).
 - [ ] 9. Meta-model: stack per-flavor finetuned predictions per endpoint, fit LGBM/RF/MLP
   on out-of-fold predictions, compare to the best single flavor.
+- [ ] 10. (GATED on 8, and only if any flavor beats baseline) Scale the flavors that show
+  utility up to the full 1M-molecule corpus to produce the final foundation-model artifacts.
+  The 250K corpus is the screening set that decides which descriptor targets are worth the
+  cost; the sweep is descriptive, not the deliverable. If no flavor clears the baseline on
+  250K, there is nothing to scale and this milestone is void. Otherwise, recompute the winning
+  flavors' targets over the 1M set, pretrain at full scale, and ship those foundations as the
+  release artifacts. Hold the pretraining regime (backbone, prescaling from milestone 5,
+  target-dropout) identical to the sweep so the 1M foundation is the same experiment at scale,
+  not a new one.
 
 ## Open items (need input or external data)
 
