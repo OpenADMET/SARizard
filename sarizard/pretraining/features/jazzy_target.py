@@ -5,8 +5,9 @@ donor/acceptor strengths. ``molecular_vector_from_smiles`` returns six continuou
 (sdc, sdx, sa, dga, dgp, dgtot) from an embedded, minimised conformer, deterministic for a
 fixed embedding seed. Jazzy pins ``rdkit==2024.3.1`` exactly, so it gets its own environment.
 
-A molecule jazzy cannot process raises ``JazzyError``; those rows become all-NaN and the
-masked pretraining loss skips them. Conformer minimisation reuses the shared force field and
+A molecule jazzy cannot process raises ``JazzyError``, and jazzy also leaks bare exceptions
+(e.g. ``IndexError`` on exotic atoms during UFF typing); either way the row becomes all-NaN
+and the masked pretraining loss skips it. Conformer minimisation reuses the shared force field and
 seed from ``config`` so the target is reproducible alongside the other 3D-dependent flavors.
 """
 
@@ -19,7 +20,6 @@ from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 from jazzy.api import molecular_vector_from_smiles
-from jazzy.exception import JazzyError
 
 from sarizard.pretraining.config import CONFORMER_FORCE_FIELD, CONFORMER_SEED
 
@@ -38,7 +38,11 @@ def _calculate(smiles: str) -> np.ndarray:
             minimisation_method=CONFORMER_FORCE_FIELD,
             embedding_seed=CONFORMER_SEED,
         )
-    except JazzyError:
+    # jazzy raises JazzyError for molecules it rejects, but also leaks bare exceptions
+    # (e.g. IndexError on exotic atoms like Pb/La during UFF typing); any failure scatters
+    # a NaN row rather than crashing the whole block, per this module's contract
+    except Exception as err:  # noqa: BLE001 - isolate per-molecule calculator failures
+        logger.debug("jazzy failed for %s: %s", smiles, err)
         return np.full(TARGET_DIM, np.nan, dtype=np.float32)
     return np.array([vector[key] for key in JAZZY_KEYS], dtype=np.float32)
 
