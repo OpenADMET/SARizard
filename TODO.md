@@ -83,8 +83,10 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   frozen ranking holds once the backbone can move. `sarizard/configs/generate.py` now threads
   `--mpnn-lr-mode` through ablation mode; recipes land in
   `configs/ablation_<name>__s42__{reduced,unlocked}/` and finetune via `ablation_finetune.sbatch`
-  (in progress). Comparing across modes still needs work: `prescaling_report` is frozen-only, so
-  add a mode axis (or a per-(ablation, mode) R² table) before reading the three-way result.
+  (in progress). `prescaling_report` is now protocol-aware: it emits a report card and ranking
+  per protocol plus `plots/prescaling_mode_comparison_<metric>.csv` (each recipe's mean metric
+  under frozen, reduced, and unlocked) so the ranking's stability is read directly once the runs
+  land.
 - [x] Multi-seed foundations: pretrain each flavor at several seeds to separate the foundation
   effect from initialization variance. Set `FLAVOR_SEEDS` for `run_all.sh` (and
   `ABLATION_SEEDS` for the triage); the report card and meta-model average the seeds per
