@@ -143,6 +143,17 @@ def main() -> None:
     else:
         raise SystemExit(f"no calculator registered for flavor {flavor.name}")
 
+    # every row all-NaN means the calculator never produced a value (wrong env, broken
+    # extension, unreadable corpus); caching that garbage would silently poison prescaling
+    # downstream, so delete the useless output and fail loudly here at the source
+    if n_failed == len(smiles):
+        del memmap
+        out.unlink(missing_ok=True)
+        raise SystemExit(
+            f"flavor {flavor.name}: all {len(smiles)} rows failed (target is entirely NaN); "
+            "check the calculator environment, not a resumable skip"
+        )
+
     logger.info(
         "wrote %s (%d rows, %d failed); now pack with sarizard.pretraining.features.pack_target",
         out,
