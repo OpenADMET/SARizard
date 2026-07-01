@@ -10,7 +10,7 @@
 #       $(source slurm/env.sh; wc -w <<<"$ABLATION_SEEDS") - 1)) slurm/ablation_pretrain.sbatch
 #SBATCH --job-name=sar-abl-pretrain
 #SBATCH --partition=gpu
-#SBATCH --time=24:00:00
+#SBATCH --time=48:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G

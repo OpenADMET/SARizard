@@ -52,6 +52,34 @@ Each `plus_*` isolates one step's marginal effect over `order_fix`; `full` stack
 finetune → analyze). Read `plots/prescaling_ranking_r2.csv` and the ablation report
 card to pick the recipe, then harden it into the core workflow (TODO milestone 5).
 
+## 250K training collapse and the corpus/regime redo
+
+The first full triage (250K corpus, single seed, all three MPNN-LR protocols) completed 504
+finetune runs, but every one of the 7 pretraining runs behind them had already diverged:
+val/R2 and val_loss blew up by 2-6 orders of magnitude within a single epoch (`minimal` at
+epoch 4, `chemeleon_baseline` at epoch 10; the rest in between), and the "best checkpoint"
+saved by early stopping was whatever existed right before the blowup. The apparent recipe
+ranking from that run was therefore dominated by which recipe's trajectory happened to
+survive longest before collapsing, not by prescaling quality.
+
+Auditing `../foundation-models/pretraining/run_pretraining.py`, which trains the same
+MPNN/descriptor-regression task without this instability, found no gradient clipping in
+either implementation, but three real regime departures: `PATIENCE` 5 vs. the sibling's 50,
+`FNN_HIDDEN_SIZE`/predictor width 2048 vs. 1024, and the masked-pretext keep fraction 70%
+(`DROPOUT_FRACTION=0.30`) vs. the sibling's 15% (`MASKING_RATIO=0.15`), a much denser
+per-step supervision load on a 3585-dim target block. The sibling also trains bf16-mixed
+precision where this repo trained full fp32.
+
+The sibling's regime is now adopted as canonical in `sarizard/pretraining/config.py`
+(`PATIENCE=50`, `FNN_HIDDEN_SIZE=1024`, `WARMUP_EPOCHS=2`, `DROPOUT_FRACTION=0.85`), with
+`GRADIENT_CLIP_VAL=0.5` and bf16/16-mixed precision added on top, since neither
+implementation had those. The triage is being rerun on the full corpus
+(`corpus/corpus_full.parquet`, ~900K molecules vs. the 250K screening subset) with this
+fixed regime, one recipe (`chemeleon_baseline`) first to confirm stability before firing the
+other six. The original 250K runs (targets, splits, foundations, configs, results, plots) are
+archived at `archive/ablation_250k_pre_gradclip/` for reference; see `FINDINGS.md` for the
+numbers, which are superseded and should not be used to pick the production recipe.
+
 ## MPNN learning-rate sweep
 
 The triage originally finetuned every prescaling recipe frozen only (`mpnn_lr=0`), which ranks
