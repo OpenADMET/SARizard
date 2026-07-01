@@ -32,6 +32,8 @@ dependencies:
   - pip:
       - "chemprop>=2.2.3"
       - "scikit-fingerprints>=2.0"
+      # lightning's TensorBoardLogger (train.py) needs tensorboard; lightning does not pull it in
+      - "tensorboard>=2.15"
       # install the local checkouts editable after the env is created:
       #   pip install -e ../openadmet-models
       #   pip install -e .
