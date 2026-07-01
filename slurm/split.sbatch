@@ -8,7 +8,7 @@
 # (after compute_targets has produced cache/targets/<flavor>/target.zarr):
 #   sbatch --array=0-$(($(source slurm/env.sh; flavor_list | wc -l) - 1)) slurm/split.sbatch
 #SBATCH --job-name=sar-split
-#SBATCH --partition=gpu
+#SBATCH --partition=cpu
 #SBATCH --time=04:00:00
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G

@@ -5,7 +5,7 @@
 # Submit from the repo root:
 #   sbatch slurm/prepare_corpus.sbatch
 #SBATCH --job-name=sar-corpus
-#SBATCH --partition=gpu
+#SBATCH --partition=cpu
 #SBATCH --time=02:00:00
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
