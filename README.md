@@ -80,7 +80,7 @@ recipes, and regenerable artifacts.
   - `sarizard/analysis/` is the report card and meta-model; `sarizard/analysis/paths.py` is the
     single source of truth for on-disk locations.
 - `configs/_baseline/` holds the committed stock-CheMeleon recipe templates; generated per-flavor
-  recipes land in `configs/<flavor>/` (gitignored).
+  recipes land in `configs/<flavor>__s<seed>/` (gitignored).
 - `corpus/`, `data/` hold inputs; `cache/`, `foundations/`, `results/`, `plots/` hold regenerable
   artifacts (all gitignored; `data/` is committed, see `data/README.md`).
 - `slurm/` holds the sbatch job-array scripts for parallel pretraining and finetuning.
@@ -120,16 +120,9 @@ and requires no isolated env.
 
 ## Running the full experiment
 
-Create the conda environments, then:
+Build the environments first (`bash setup.sh`, see [Setup](#setup)), then:
 
 ```bash
-# one-time: create isolated envs for the four conflicting target generators
-conda env create -f envs/osmordred.yml
-conda activate sarizard-osmordred && bash envs/build_osmordred.sh && conda deactivate
-conda env create -f envs/jazzy.yml
-conda env create -f envs/minimol.yml
-conda env create -f envs/mlqm.yml
-
 # set the path to the Novartis surrogate-ADME CSV (download link in surrogate_target.py)
 export SURROGATE_CSV=/path/to/protacdb2.0_zinc_chembl_dataset.csv
 

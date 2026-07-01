@@ -21,6 +21,15 @@ tags: [method, status/blue]
 - Descriptor prescaling: one recipe, chosen once by the [[Prescaling Ablation]] triage and
   applied identically to every continuous flavor.
 
+## Seeds
+
+The regime pins a single training seed by default, so each flavor is one foundation. To
+separate a flavor's effect from initialization noise, the sweep can pretrain it at several
+seeds (`FLAVOR_SEEDS`), tagged `<flavor>__s<seed>`; the [[Report Card]] and [[Meta-Model]]
+average the seeds back per flavor. The seed varies only pretraining (the finetune seed is
+held fixed), so the spread it reveals is foundation-initialization variance. See
+[[Finetune Protocols]].
+
 ## Why it matters
 
 A fit-to-purpose comparison only means something if the foundations differ in exactly one

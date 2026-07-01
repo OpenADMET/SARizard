@@ -15,6 +15,9 @@ tags: [method, status/blue]
   the [[Meta-Model]]).
 - `sarizard/analysis/report_card.py --metric r2` pivots that CSV to an endpoints-by-flavors matrix and
   renders the heatmap plus a matrix CSV. Swap `--metric` for rmse, mae, spearman, kendall, rae.
+- When a flavor is pretrained at several seeds (see [[Finetune Protocols]]), its
+  `<flavor>__s<seed>` variants are averaged into a single column, so each flavor stays one
+  column regardless of seed count.
 
 ## Reading it
 
