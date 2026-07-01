@@ -36,6 +36,27 @@ def test_parse_ablation_variant_without_seed_returns_none():
     assert paths.parse_ablation_variant("ablation_full") == ("full", None)
 
 
+def test_seed_variant_label_and_parse_round_trip():
+    label = paths.seed_variant_label("ecfp", 3)
+
+    assert label == "ecfp__s3"
+    assert paths.parse_seed_variant(label) == ("ecfp", 3)
+
+
+def test_parse_seed_variant_without_seed_returns_none():
+    assert paths.parse_seed_variant("ecfp") == ("ecfp", None)
+
+
+def test_flavor_variant_label_and_foundation_path():
+    assert paths.flavor_variant_label("ecfp", 42) == "ecfp__s42"
+    assert paths.foundation_variant_path("ecfp", 42) == paths.FOUNDATIONS_DIR / "ecfp__s42_mp.pt"
+
+
+def test_parse_seed_variant_collapses_prefixed_bases():
+    # an LR-experiment label keeps its prefixed base intact, just stripping the seed
+    assert paths.parse_seed_variant("lr_reduced__ecfp__s2") == ("lr_reduced__ecfp", 2)
+
+
 def test_ablation_prescaled_zarr_under_ablations_cache():
     path = paths.ablation_prescaled_zarr("full")
 

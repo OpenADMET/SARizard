@@ -11,7 +11,9 @@ def _baseline_recipe() -> dict:
     """A minimal recipe with the fields _retarget rewrites."""
     return {
         "procedure": {
-            "model": {"params": {"from_foundation": "chemeleon", "mpnn_lr": 1.0e-3}},
+            "model": {
+                "params": {"from_foundation": "chemeleon", "mpnn_lr": 1.0e-3, "ffn_lr": 1.0e-3}
+            },
             "train": {"params": {"accelerator": "mps"}},
         },
         "metadata": {
@@ -28,6 +30,25 @@ def test_retarget_points_at_foundation_and_freezes_mpnn():
     params = out["procedure"]["model"]["params"]
     assert params["from_foundation"] == "foundations/ecfp_mp.pt"
     assert params["mpnn_lr"] == 0
+
+
+def test_retarget_reduced_mode_sets_fraction_of_ffn_lr():
+    out = _retarget(
+        _baseline_recipe(), "foundations/ecfp__s1_mp.pt", "ecfp__s1", "auto",
+        mpnn_lr_mode="reduced",
+    )
+
+    # reduced backbone LR is one tenth of the recipe's ffn_lr (1e-3 -> 1e-4)
+    assert out["procedure"]["model"]["params"]["mpnn_lr"] == 1.0e-4
+
+
+def test_retarget_unlocked_mode_matches_ffn_lr():
+    out = _retarget(
+        _baseline_recipe(), "foundations/ecfp__s1_mp.pt", "ecfp__s1", "auto",
+        mpnn_lr_mode="unlocked",
+    )
+
+    assert out["procedure"]["model"]["params"]["mpnn_lr"] == 1.0e-3
 
 
 def test_retarget_normalizes_accelerator():

@@ -23,7 +23,12 @@ from pathlib import Path
 
 import yaml
 
-from sarizard.analysis.paths import CONFIGS_DIR, REPO_ROOT, foundation_path
+from sarizard.analysis.paths import (
+    CONFIGS_DIR,
+    REPO_ROOT,
+    foundation_variant_path,
+    seed_variant_label,
+)
 from sarizard.pretraining.flavors import flavor_names
 
 logger = logging.getLogger(__name__)
@@ -31,8 +36,32 @@ logger = logging.getLogger(__name__)
 BACKBONE = "chemeleon"  # token the baseline recipes use in names, tags, and from_foundation
 BASELINE_DIR = CONFIGS_DIR / "_baseline"
 
+# finetune protocols for the MPNN backbone, set as a multiple of the recipe's ffn_lr:
+# frozen (the default sweep) holds the backbone fixed; reduced and unlocked are the LR
+# experiments that let it adapt (see TODO.md and run_lr_experiments.sh)
+MPNN_LR_MODES = ("frozen", "reduced", "unlocked")
+REDUCED_MPNN_LR_FACTOR = 0.1
 
-def _retarget(recipe: dict, foundation_rel: str, label: str, accelerator: str) -> dict:
+
+def _mpnn_lr(ffn_lr: float, mode: str) -> float:
+    """Return the MPNN learning rate for a finetune protocol, relative to ``ffn_lr``."""
+    if mode == "frozen":
+        return 0
+    if mode == "reduced":
+        return ffn_lr * REDUCED_MPNN_LR_FACTOR
+    if mode == "unlocked":
+        return ffn_lr
+    raise ValueError(f"unknown mpnn_lr_mode {mode!r}; choose from {MPNN_LR_MODES}")
+
+
+def _retarget(
+    recipe: dict,
+    foundation_rel: str,
+    label: str,
+    accelerator: str,
+    *,
+    mpnn_lr_mode: str = "frozen",
+) -> dict:
     """Point a baseline recipe at a foundation and relabel it for provenance.
 
     Parameters
@@ -45,14 +74,18 @@ def _retarget(recipe: dict, foundation_rel: str, label: str, accelerator: str) -
         Identifier (flavor name or ablation label) substituted into the recipe metadata.
     accelerator : str
         Lightning accelerator to normalize the recipe's train block to.
+    mpnn_lr_mode : {"frozen", "reduced", "unlocked"}, optional
+        The backbone finetune protocol. ``frozen`` (default) holds the MPNN fixed
+        (``mpnn_lr=0``); ``reduced`` and ``unlocked`` set it to a fraction of, or equal to,
+        the recipe's ``ffn_lr`` for the learning-rate experiments.
     """
     # initialize from this foundation (repo-relative; anvil runs from root)
     params = recipe["procedure"]["model"]["params"]
     params["from_foundation"] = foundation_rel
 
-    # freeze the MPNN so finetuning measures representation quality, not initialization luck;
-    # the FFN head (ffn_lr) still trains freely
-    params["mpnn_lr"] = 0
+    # set the backbone learning rate by protocol; frozen (default) measures representation
+    # quality without initialization luck, the others let the MPNN coadapt with the FFN head
+    params["mpnn_lr"] = _mpnn_lr(params.get("ffn_lr", 0.0), mpnn_lr_mode)
 
     # normalize the accelerator: baselines pin a laptop device, cluster nodes resolve "auto"
     train_params = recipe.get("procedure", {}).get("train", {}).get("params")
@@ -77,12 +110,12 @@ def _endpoint_name(template: Path) -> str:
 
 
 def _generate_one(templates: list[Path], out_dir: Path, foundation_rel: str,
-                  label: str, accelerator: str) -> int:
+                  label: str, accelerator: str, *, mpnn_lr_mode: str = "frozen") -> int:
     """Write one retargeted recipe per template into ``out_dir``; return the count."""
     out_dir.mkdir(parents=True, exist_ok=True)
     for template in templates:
         recipe = yaml.safe_load(template.read_text())
-        recipe = _retarget(recipe, foundation_rel, label, accelerator)
+        recipe = _retarget(recipe, foundation_rel, label, accelerator, mpnn_lr_mode=mpnn_lr_mode)
         (out_dir / f"{_endpoint_name(template)}.yaml").write_text(
             yaml.safe_dump(recipe, sort_keys=False)
         )
@@ -106,6 +139,18 @@ def main() -> None:
         default=None,
         help="ablation mode: output dir name under configs/ and the recipe label",
     )
+    parser.add_argument(
+        "--seeds", nargs="+", type=int, default=[42],
+        help="flavor mode: training seeds; one recipe set per (flavor, seed) variant",
+    )
+    parser.add_argument(
+        "--mpnn-lr-mode", default="frozen", choices=MPNN_LR_MODES,
+        help="flavor mode: backbone finetune protocol (frozen sweep, or an LR experiment)",
+    )
+    parser.add_argument(
+        "--label-prefix", default="",
+        help="flavor mode: namespace prefix for the recipe label/dir (e.g. lr_reduced)",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -125,17 +170,24 @@ def main() -> None:
         logger.info("ablation %s: %d recipes -> %s", args.out_subdir, n, args.out_subdir)
         return
 
-    # flavor mode: one recipe set per registry flavor
+    # flavor mode: one recipe set per (flavor, seed). With --label-prefix and --mpnn-lr-mode
+    # this also drives the LR experiments off the same flavor foundations (lr_<mode>__<flavor>).
     flavors = args.flavors or flavor_names()
     n_written = 0
     for flavor in flavors:
-        foundation_rel = str(foundation_path(flavor).relative_to(REPO_ROOT))
-        n = _generate_one(
-            templates, CONFIGS_DIR / flavor, foundation_rel, flavor, args.accelerator
-        )
-        n_written += n
-        logger.info("flavor %s: %d recipes", flavor, n)
-    logger.info("wrote %d recipes across %d flavors", n_written, len(flavors))
+        base = f"{args.label_prefix}__{flavor}" if args.label_prefix else flavor
+        for seed in args.seeds:
+            label = seed_variant_label(base, seed)
+            foundation_rel = str(foundation_variant_path(flavor, seed).relative_to(REPO_ROOT))
+            n = _generate_one(
+                templates, CONFIGS_DIR / label, foundation_rel, label, args.accelerator,
+                mpnn_lr_mode=args.mpnn_lr_mode,
+            )
+            n_written += n
+            logger.info("flavor %s seed %d (%s): %d recipes", flavor, seed, args.mpnn_lr_mode, n)
+    logger.info(
+        "wrote %d recipes across %d flavors x %d seeds", n_written, len(flavors), len(args.seeds)
+    )
 
 
 if __name__ == "__main__":

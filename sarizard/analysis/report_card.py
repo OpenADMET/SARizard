@@ -33,10 +33,23 @@ from sarizard.analysis.metrics_spec import (  # noqa: E402
     METRIC_COLUMNS,
     METRIC_LABELS,
 )
-from sarizard.analysis.paths import METRICS_CSV, PLOTS_DIR  # noqa: E402
+from sarizard.analysis.paths import METRICS_CSV, PLOTS_DIR, parse_seed_variant  # noqa: E402
 from sarizard.pretraining.flavors import flavor_names  # noqa: E402
 
 logger = logging.getLogger(__name__)
+
+
+def collapse_seed_variants(frame: pd.DataFrame, column: str = "flavor") -> pd.DataFrame:
+    """Map ``<base>__s<seed>`` labels in ``column`` back to their base label.
+
+    Seeds are run as separate variants (own foundation, recipes, results); collapsing the
+    labels lets ``build_matrix`` average the seed replicates into one cell per (endpoint, base)
+    via its ``aggfunc="mean"`` pivot. Plain labels (no seed suffix) pass through unchanged. The
+    base may itself carry a namespace prefix (``ablation_<name>``, ``lr_<mode>__<flavor>``).
+    """
+    frame = frame.copy()
+    frame[column] = frame[column].map(lambda label: parse_seed_variant(label)[0])
+    return frame
 
 
 def build_matrix(
@@ -150,6 +163,8 @@ def main() -> None:
     if not args.metrics_csv.exists():
         raise SystemExit(f"{args.metrics_csv} not found; run analysis.evaluate first")
     frame = pd.read_csv(args.metrics_csv)
+    # average any per-seed variants back to one column per flavor before pivoting
+    frame = collapse_seed_variants(frame)
     pivot = build_matrix(frame, args.metric)
     out_png = args.out or (PLOTS_DIR / f"report_card_{args.metric}.png")
     out_csv = out_png.with_suffix(".csv")
