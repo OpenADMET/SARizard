@@ -62,13 +62,20 @@ Headline results and the read on each flavor: `FINDINGS.md`.
 
 ## Future experiments
 
-- [ ] Reduced MPNN LR: repeat the full finetuning sweep with `mpnn_lr` set to a fraction of
-  `ffn_lr` (e.g. 1e-4 vs 1e-3) rather than 0. Tests whether partial unfreezing recovers
+- [x] Reduced MPNN LR: repeat the full finetuning sweep with `mpnn_lr` set to a fraction of
+  `ffn_lr` (1e-4 vs 1e-3) rather than 0. Tests whether partial unfreezing recovers
   performance on endpoints where the frozen backbone underperforms random init, or whether
-  it simply reintroduces the initialization-washing problem.
-- [ ] Fully unlocked MPNN: repeat with `mpnn_lr` equal to `ffn_lr` (1e-3). Establishes the
+  it simply reintroduces the initialization-washing problem. Scripted: `bash
+  slurm/run_lr_experiments.sh` (mode `reduced`), reusing the flavor foundations; compare in
+  `plots/lr_ranking_r2.csv`.
+- [x] Fully unlocked MPNN: repeat with `mpnn_lr` equal to `ffn_lr` (1e-3). Establishes the
   upper bound on what full finetuning can achieve and quantifies how much signal the frozen
   protocol sacrifices; the gap between frozen and unlocked is the cost of the clean ablation.
+  Scripted alongside reduced (mode `unlocked`) in `slurm/run_lr_experiments.sh`.
+- [x] Multi-seed foundations: pretrain each flavor at several seeds to separate the foundation
+  effect from initialization variance. Set `FLAVOR_SEEDS` for `run_all.sh` (and
+  `ABLATION_SEEDS` for the triage); the report card and meta-model average the seeds per
+  flavor, and re-running with more seeds fills in only the new ones.
 - [ ] Target-dropout fraction for small flavors: the masked-pretext dropout in `losses.py`
   (`DROPOUT_FRACTION=0.30`, applied per target element to every flavor) keeps a fixed
   fraction, not a fixed count. Its rationale (stop the head co-adapting across a wide
@@ -85,7 +92,9 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   when a randomly initialized head immediately backpropagates into a pretrained backbone,
   while still allowing the MPNN and FFN to coadapt once the head has stabilized. Requires
   a two-phase training schedule not currently supported by the anvil config; likely needs a
-  custom Lightning callback or a sequential two-recipe approach.
+  custom Lightning callback or a sequential two-recipe approach. This is the one LR experiment
+  `run_lr_experiments.sh` does not cover (it only sweeps single-rate protocols: reduced,
+  unlocked); wiring it needs that anvil feature first.
 
 ## Methodology watch-items
 
