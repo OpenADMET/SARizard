@@ -27,6 +27,39 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   `bash slurm/run_ablations.sh`; read `plots/prescaling_ranking_r2.csv` and the
   ablation report card to pick the production recipe. The backbone, corpus, and regime are
   fixed across ablations, so the difference is the prescaling alone.
+  **Redo in progress (250K numbers invalid):** all 7 first-pass pretraining runs diverged
+  mid-training (unclipped gradients + a too-dense masked-pretext keep fraction); regime
+  reconciled against `../foundation-models/pretraining` and fixed (`config.py`:
+  `GRADIENT_CLIP_VAL=0.5`, `PATIENCE=50`, `FNN_HIDDEN_SIZE=1024`, `WARMUP_EPOCHS=2`,
+  `DROPOUT_FRACTION=0.85`, bf16/16-mixed precision). Triage is being rerun on the full corpus
+  (`corpus/corpus_full.parquet`, 944296 molecules, generated via `CORPUS_FILE`/`CORPUS_N` in
+  `slurm/env.sh`) instead of the 250K screening subset, scoped to this triage only, not a
+  change to milestones 6-9's corpus plan. `chemeleon_baseline` runs alone first to confirm
+  stability before the other six recipes fire. Original 250K artifacts archived at
+  `archive/ablation_250k_pre_gradclip/`; see `FINDINGS.md` and `wiki/Prescaling Ablation.md`
+  for the full account.
+  **Status:** corpus built (job 18097840). The first full-corpus target job (18097911) failed
+  on a torn `sarizard-osmordred` env (conda-meta claimed `libparquet` installed but its `.so`
+  files were missing and the env was unregistered with `conda env list`, from an interrupted
+  prior `setup.sh` run); rebuilt clean with `FORCE=1 bash setup.sh osmordred`. Osmordred target
+  computation resubmitted and completed (job 18106135). `chemeleon_baseline`'s first
+  prescale/pretrain attempt (jobs 18106233, 18106234) was submitted without `CORPUS_FILE` set,
+  so `split.py` paired the full-corpus target against the 250K corpus's SMILES (row-count
+  mismatch caught before training started, no bad checkpoint produced); stale split deleted and
+  resubmitted with `CORPUS_FILE=corpus/corpus_full.parquet CORPUS_N=1000000` exported (jobs
+  18108226, 18108227). Prescale (18108226) succeeded; pretrain (18108227) then failed on a
+  second, pre-existing gap: `sarizard` was missing `tensorboard` despite `envs/main.yml`
+  declaring it. Fixed with `conda env update -n sarizard -f envs/main.yml`; pretrain resubmitted
+  as job 18108864, and started training, but on CPU: a third, pre-existing gap, `sarizard`'s
+  PyTorch was the CPU-only conda-forge build (`envs/main.yml` intentionally leaves PyTorch's
+  CUDA build to a manual per-cluster install, which was never done). Cancelled 18108864,
+  installed `pytorch=2.12.0=cuda129_mkl_py311*` matching the node driver, confirmed
+  `torch.cuda.is_available()`, and resubmitted (job 18109452, confirmed running on an A100 GPU).
+  `chemeleon_baseline` ran clean through 15 epochs (`val/r2` 0.773 to 0.952, monotonic loss
+  decrease, well past the epoch 4-10 collapse window from the 250K runs), confirming the regime
+  fix. The other six recipes are now submitted: prescale job 18111455, pretrain job 18111456
+  (dependent), covering `minimal`, `order_fix`, `plus_drop_corr`, `plus_drop_low_var`,
+  `plus_yeo_johnson`, `full`.
 - [ ] 5. (GATED on 4) Harden the chosen prescaling into the core flavor-sweep workflow. Wire
   the winning `PrescalingConfig` into the default `split.py` path (or insert a prescale step
   ahead of it) so every flavor pretrains on the same, vetted preprocessing. Until this lands,
@@ -102,16 +135,20 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   effect from initialization variance. Set `FLAVOR_SEEDS` for `run_all.sh` (and
   `ABLATION_SEEDS` for the triage); the report card and meta-model average the seeds per
   flavor, and re-running with more seeds fills in only the new ones.
-- [ ] Target-dropout fraction for small flavors: the masked-pretext dropout in `losses.py`
-  (`DROPOUT_FRACTION=0.30`, applied per target element to every flavor) keeps a fixed
-  fraction, not a fixed count. Its rationale (stop the head co-adapting across a wide
-  descriptor block) is strong at 3585 dims (osmordred) but weak at low dims: jazzy (6) keeps
-  ~4 of 6 targets per step with high variance (Binomial(6, 0.7), std ≈ 1.1), so the dropout
-  mostly injects gradient noise. Mechanically safe (loss aggregates over all kept elements in
-  the batch, not per-row, so no divide-by-zero). If jazzy/ml_qm/surrogate_adme underperform,
-  ablate the fraction (e.g. 0.0, 0.15, 0.30) the same way as the prescaling triage, holding
-  the backbone and target fixed. Keep it fixed across the main sweep until then; varying it
-  per flavor would confound the report card.
+- [ ] **Blocker for Milestone 6, raised in urgency:** target-dropout fraction for small
+  flavors. The masked-pretext dropout in `losses.py` (`DROPOUT_FRACTION`, applied per target
+  element to every flavor) keeps a fixed fraction, not a fixed count. Its rationale (stop the
+  head co-adapting across a wide descriptor block) is strong at 3585 dims (osmordred) but
+  breaks down at low dims. Since the training-collapse regime fix, `DROPOUT_FRACTION=0.85`
+  (keeps 15%, matching `../foundation-models/pretraining`'s `MASKING_RATIO`), so jazzy (6
+  dims) now keeps under 1 target/step on average, worse than the previous 0.30 (~4 of 6
+  kept) that this item originally flagged as merely noisy. Mechanically safe (loss aggregates
+  over all kept elements in the batch, not per-row, so no divide-by-zero), but likely
+  unusably sparse. Ablate the fraction (e.g. 0.0, 0.15, 0.85) per small flavor, holding the
+  backbone and target fixed, the same way as the prescaling triage, **before** Milestone 6
+  fans out jazzy/ml_qm/surrogate_adme, not only "if they underperform" as originally scoped.
+  Keep it fixed across the main sweep once decided; varying it per flavor mid-sweep would
+  confound the report card.
 - [ ] Frozen warmup then coadaptation: train for N epochs with `mpnn_lr=0` so the FFN head
   finds a reasonable operating point against the fixed representations, then unfreeze the
   MPNN and continue training at a reduced rate. Avoids the large gradient shock that occurs
@@ -137,8 +174,16 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   mid-sweep confounds the report card the same way changing the backbone would. The triage
   itself varies prescaling only because the backbone, corpus, and target (osmordred) are held
   fixed there.
-- The masked-pretext target dropout (`losses.py`, `DROPOUT_FRACTION=0.30`) is a fixed
-  fraction applied to every flavor, so its effect scales with target width: near-uniform 70%
-  supervision at high dims, noisy and high-variance at low dims (jazzy 6, ml_qm 24). It is
-  part of the fixed regime; do not special-case small flavors mid-sweep. See the dropout
-  ablation in Future experiments.
+- The masked-pretext target dropout (`losses.py`, `DROPOUT_FRACTION=0.85` as of the
+  training-collapse regime fix, keeps 15%) is a fixed fraction applied to every flavor, so
+  its effect scales with target width: reasonable supervision density at high dims
+  (osmordred, 3585), likely unusably sparse at low dims (jazzy 6, ml_qm 24, under 1
+  target/step on average). It is part of the fixed regime; do not special-case small flavors
+  mid-sweep, but see the now-urgent dropout ablation in Future experiments, which must land
+  before Milestone 6.
+- Pretraining regime constants (`sarizard/pretraining/config.py`) are reconciled against the
+  sibling `../foundation-models/pretraining` implementation as of the training-collapse fix
+  (`PATIENCE`, `FNN_HIDDEN_SIZE`, `WARMUP_EPOCHS`, `DROPOUT_FRACTION`, `GRADIENT_CLIP_VAL`,
+  precision). Treat that sibling as the reference for any future regime question; a
+  divergence from it is now a deliberate choice, not an oversight, and should be commented
+  as such.

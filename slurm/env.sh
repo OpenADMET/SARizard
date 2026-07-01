@@ -21,6 +21,12 @@ OPENADMET_ENV="${OPENADMET_ENV:-openadmet}"
 # lightning accelerator for training and prediction
 ACCELERATOR="${ACCELERATOR:-gpu}"
 
+# corpus parquet (repo-relative) every flavor computes its target on, and its size when
+# prepare_corpus.sbatch builds it fresh. Default is the 250K screening corpus; override both
+# to run against the full corpus (e.g. CORPUS_FILE=corpus/corpus_full.parquet CORPUS_N=1000000)
+CORPUS_FILE="${CORPUS_FILE:-corpus/corpus_250k.parquet}"
+CORPUS_N="${CORPUS_N:-250000}"
+
 # the representative continuous flavor driven through the prescaling ablation triage
 ABLATION_FLAVOR="${ABLATION_FLAVOR:-osmordred}"
 

@@ -8,7 +8,7 @@
 # registry grows. Submit from the repo root (or let run_ablations.sh do it).
 #SBATCH --job-name=sar-abl-prescale
 #SBATCH --partition=cpu
-#SBATCH --time=08:00:00
+#SBATCH --time=16:00:00
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=64G
 #SBATCH --array=0-6
@@ -35,7 +35,7 @@ if [[ ! -d "$TARGET_ZARR" ]]; then
 fi
 PRESCALED="$REPO_DIR/cache/ablations/$ABLATION/prescaled.zarr"
 SUMMARY="$REPO_DIR/cache/ablations/$ABLATION/prescaling_summary.json"
-CORPUS="$REPO_DIR/corpus/corpus_250k.parquet"
+CORPUS="$REPO_DIR/$CORPUS_FILE"
 
 # prescaling.py and split.py run script-style from the pretraining directory
 cd "$REPO_DIR/sarizard/pretraining"
