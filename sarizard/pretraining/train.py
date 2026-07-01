@@ -8,6 +8,8 @@ SARizard compatibility invariants and the per-flavor loss:
 - continuous targets train with masked MSE and a RegressionFFN; binary fingerprint targets
   train with masked BCE and a BinaryClassificationFFN
 - the trained message-passing block is exported to the openadmet foundation format inline
+- gradient clipping and mixed precision (bf16/16, matching ../foundation-models/pretraining),
+  added after every prescaling-ablation run diverged mid-training on the unclipped fp32 regime
 
 Usage:
     python train.py --flavor osmordred --input-dir <split_dir> --output-dir runs/osmordred
@@ -20,6 +22,7 @@ from datetime import datetime
 from pathlib import Path
 
 import polars
+import torch
 import zarr
 from chemprop.featurizers import (
     MultiHotAtomFeaturizer,
@@ -47,6 +50,7 @@ from config import (
     FNN_ACTIVATION,
     FNN_HIDDEN_LAYERS,
     FNN_HIDDEN_SIZE,
+    GRADIENT_CLIP_VAL,
     INITIAL_LEARNING_RATE,
     MAXIMUM_LEARNING_RATE,
     MP_ACTIVATION,
@@ -64,6 +68,15 @@ logger = logging.getLogger(__name__)
 
 # seed shared across flavors so the only intended difference is the target block
 SEED = 42
+
+
+def default_precision() -> str:
+    """Return the fastest stable mixed-precision mode for the current GPU.
+
+    Matches ../foundation-models/pretraining/run_pretraining.py: bf16 avoids the fp16
+    overflow risk on descriptor targets that still have heavy tails after prescaling.
+    """
+    return "bf16-mixed" if torch.cuda.is_bf16_supported() else "16-mixed"
 
 
 def _build_featurizer() -> SimpleMoleculeMolGraphFeaturizer:
@@ -208,6 +221,8 @@ def main() -> None:
 
     trainer = Trainer(
         max_epochs=EPOCHS,
+        precision=default_precision(),
+        gradient_clip_val=GRADIENT_CLIP_VAL,
         logger=TensorBoardLogger(run_dir, name="tensorboard_logs", default_hp_metric=False),
         log_every_n_steps=1,
         callbacks=[
@@ -243,6 +258,8 @@ def main() -> None:
                     "patience": PATIENCE,
                     "mp_hidden": MP_HIDDEN_SIZE,
                     "mp_depth": MP_DEPTH,
+                    "gradient_clip_val": GRADIENT_CLIP_VAL,
+                    "precision": default_precision(),
                 },
             },
             indent=2,
