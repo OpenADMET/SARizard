@@ -33,8 +33,8 @@ root holds inputs, recipes, and regenerable artifacts. Run modules from the repo
   `prescaling.py` the toggleable descriptor preprocessing and ablation registry,
   `convert_checkpoint.py` exports foundations); `sarizard/configs/` the recipe generator;
   `sarizard/analysis/` the report card and meta-model.
-- `configs/_baseline/` committed stock-CheMeleon templates; generated `configs/<flavor>/` and
-  `configs/ablation_<name>/` recipes are gitignored.
+- `configs/_baseline/` committed stock-CheMeleon templates; generated `configs/<flavor>__s<seed>/`,
+  `configs/ablation_<name>__s<seed>/`, and `configs/lr_<mode>__<flavor>__s<seed>/` recipes are gitignored.
 - `corpus/`, `data/` inputs; `cache/`, `foundations/`, `results/`, `plots/`,
   `sarizard/pretraining/runs/` regenerable artifacts (gitignored; `data/` is committed,
   provenance in `data/README.md`).
