@@ -15,8 +15,12 @@ Prescaling ablation triage complete on the full corpus with the regime fix, incl
 cross-protocol check (frozen/reduced/unlocked; see below): `chemeleon_baseline` wins under
 frozen, the protocol the flavor sweep uses, though by a close margin over `order_fix`, which
 wins under the other two protocols. Since `chemeleon_baseline` is already what `split.py`
-produces today, Milestone 5 needs no code change, just the recorded decision below. No
-flavor-sweep results yet; the report card follows once the sweep (Milestone 6) runs.
+produces today, Milestone 5 needs no code change, just the recorded decision below. A
+follow-up 250K corpus-size check (same 7 recipes x 3 protocols) found a different ranking
+entirely at the smaller scale, confirming corpus size itself shapes which recipe wins; see
+below. This does not change the Milestone-5 decision, since the flavor sweep runs on the
+full corpus. No flavor-sweep results yet; the report card follows once the sweep
+(Milestone 6) runs.
 
 ## Prescaling
 
@@ -113,8 +117,69 @@ below and in `TODO.md`) stands because it is the frozen-protocol winner and froz
 the sweep runs, but it should be read as "the better of two very similar recipes," not a
 decisive win; `order_fix` is the natural second read if the sweep protocol ever changes.
 
-### 250K numbers (historical, superseded, do not use for the Milestone-5 decision)
+### 250K corpus-size check (regime-fixed, valid)
 
+Repeats the same 7 recipes x 3 protocols triage on the original 250K screening corpus
+(`corpus/corpus_250k.parquet`), now that the regime fix makes a 250K run valid (unlike the
+pre-fix numbers below). Tests whether the full-corpus ranking holds at 1/4 the corpus size,
+or whether corpus size itself changes which recipe wins. Full-corpus artifacts were archived
+to `archive/ablation_full_corpus/` first so this run does not overwrite them (mirroring the
+`archive/ablation_250k_pre_gradclip/` precedent). All 504 finetunes and the chained analyze
+completed clean; `results/ablation_metrics.csv` (672 rows) and
+`plots/prescaling_mode_comparison_r2.csv` hold the numbers.
+
+| recipe | frozen | reduced | unlocked |
+|---|---|---|---|
+| minimal | 0.2729 | 0.3624 | **0.3244** |
+| chemeleon_baseline | 0.2951 | 0.3607 | 0.3233 |
+| order_fix | **0.3407** | 0.3378 | 0.3188 |
+| plus_drop_corr | 0.3219 | 0.3355 | 0.2865 |
+| plus_drop_low_var | **0.3465** | 0.3746 | 0.3041 |
+| plus_yeo_johnson | 0.3222 | **0.3808** | 0.2735 |
+| full | 0.3223 | 0.3173 | 0.2764 |
+
+**Result: the 250K ranking does not match the full-corpus ranking.** Winners are
+`plus_drop_low_var` (frozen), `plus_yeo_johnson` (reduced), `minimal` (unlocked); none match
+their full-corpus counterparts (`chemeleon_baseline`, `order_fix`, `plus_drop_corr`).
+`chemeleon_baseline`, the full-corpus frozen winner and the Milestone-5 decision, drops to
+5th of 7 under frozen at 250K.
+
+Comparing mean R-squared (averaged across the three protocols) side by side:
+
+| recipe | 250K mean | full mean | delta (full − 250K) |
+|---|---|---|---|
+| minimal | 0.3199 | 0.3164 | -0.0035 |
+| chemeleon_baseline | 0.3264 | 0.3445 | +0.0182 |
+| order_fix | 0.3324 | 0.3473 | +0.0148 |
+| plus_drop_corr | 0.3146 | 0.3388 | +0.0241 |
+| plus_drop_low_var | 0.3417 | 0.3224 | -0.0194 |
+| plus_yeo_johnson | 0.3255 | 0.3414 | +0.0159 |
+| full | 0.3053 | 0.3363 | +0.0310 |
+
+Most recipes score higher on the full corpus, as expected ("more data helps"), led by `full`
+(+0.031) and `plus_drop_corr` (+0.024). But `plus_drop_low_var` and `minimal` score *lower*
+on the full corpus (-0.019, -0.004), which isn't the "more data always helps" direction.
+`chemeleon_baseline` gains a real +0.018 on the full corpus but starts from a mediocre 250K
+position (4th of 7), meaning it is not a strong recipe at small scale, just one that scales
+unusually well.
+
+A pooled ranked-choice election (all three 250K protocols, 87 ballots) is far more decisive
+here than the full-corpus equivalent: `chemeleon_baseline` leads every single round and wins
+the final round 48 to 39 over `plus_yeo_johnson`, a clean margin (compare the full-corpus
+pooled election, a 44-43 squeaker for `order_fix`). Per-protocol IRV winners are
+`plus_drop_low_var` (frozen), `plus_drop_low_var` (reduced, despite `plus_yeo_johnson`
+winning on mean R-squared, the same win-count-vs-mean divergence seen on the full corpus),
+and `chemeleon_baseline` (unlocked).
+
+Read: corpus size is doing real work in which prescaling recipe wins, not just adding
+statistical power to the same ranking. Does not change the Milestone-5 decision as recorded
+(the flavor sweep runs on the full corpus, so the full-corpus frozen ranking is the relevant
+one), but the recipe ranking should not be assumed to generalize to a different corpus size,
+e.g. if the full 1M corpus is ever substituted in for milestone 10.
+
+### 250K numbers, pre-regime-fix (historical, superseded, do not use)
+
+Not to be confused with the valid 250K corpus-size check above, run after the regime fix.
 Every pretraining run behind the numbers below diverged mid-training (val/R2 and val_loss
 blowing up by 2-6 orders of magnitude within a single epoch, 4-10 epochs in depending on
 recipe); the "winner" in each protocol is confounded by which recipe's trajectory happened
