@@ -20,7 +20,7 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   (MeanAggregation, DEFAULT featurizer), convert checkpoint, finetune one endpoint,
   confirm the foundation loads and a sane R-squared lands. This validates the checkpoint
   bridge and the featurizer-dim match before any fan-out.
-- [ ] 4. Prescaling ablation triage (runs BEFORE the flavor sweep). Drive osmordred through
+- [x] 4. Prescaling ablation triage (runs BEFORE the flavor sweep). Drive osmordred through
   every prescaling recipe in `sarizard/pretraining/prescaling.py` (`chemeleon_baseline`, `order_fix`,
   `plus_drop_corr`, `plus_drop_low_var`, `plus_yeo_johnson`, `full`, and the `minimal` floor),
   pretrain and finetune from each, and compare downstream endpoint performance. Submit with
@@ -60,11 +60,29 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   fix. The other six recipes are now submitted: prescale job 18111455, pretrain job 18111456
   (dependent), covering `minimal`, `order_fix`, `plus_drop_corr`, `plus_drop_low_var`,
   `plus_yeo_johnson`, `full`.
-- [ ] 5. (GATED on 4) Harden the chosen prescaling into the core flavor-sweep workflow. Wire
+  All 7 pretrain runs (18109452, 18111456 array 0/2-6) completed clean overnight: full 100
+  epochs each, stable losses, no collapse; all 7 `foundations/ablation_<name>__s42_mp.pt`
+  checkpoints on disk. Generated the 168 finetune recipes (7 recipes x 24 endpoints,
+  `configs/ablation_<name>__s42/`) and submitted the finetune array (job 18410392,
+  `--array=0-167`). All 168 tasks failed identically on an unrelated `openadmet` env gap
+  (mismatched `boto3`/`botocore` breaking `openadmet anvil`'s CLI import); fixed with
+  `pip install --upgrade --force-reinstall boto3` in the `openadmet` env, verified with a
+  direct run, then resubmitted (finetune job 18420137, analyze job 18420145 chained
+  `afterok`). Both completed clean. **Triage complete: `chemeleon_baseline` wins** by mean
+  R-squared under the frozen protocol (0.352 vs. 0.307-0.342 for the other six recipes); see
+  `FINDINGS.md` for the full ranking and `results/ablation_metrics.csv` /
+  `plots/prescaling_report_r2.csv` for the numbers.
+- [x] 5. (GATED on 4) Harden the chosen prescaling into the core flavor-sweep workflow. Wire
   the winning `PrescalingConfig` into the default `split.py` path (or insert a prescale step
   ahead of it) so every flavor pretrains on the same, vetted preprocessing. Until this lands,
   the flavor sweep keeps the current `chemeleon_baseline` behavior. Record the decision and
   the margin over baseline in `FINDINGS.md`.
+  **Decision: `chemeleon_baseline`, no code change needed.** `split.py` already reproduces
+  `chemeleon_baseline` (mean/std on the raw target reused for both winsorization and
+  z-scoring), and that recipe won the triage, so the default path is already the vetted one.
+  The flavor sweep (Milestone 6) can proceed unmodified. The subsequent cross-protocol LR
+  sweep (Future experiments, below) confirmed the frozen-protocol win but found the margin
+  over `order_fix` narrow, not decisive; see `FINDINGS.md` for the full picture.
 - [ ] 6. Fan out the direct-compute flavors on the cluster: rdkit2d, erg, ecfp, atompair,
   pubchem, the 3D set (usrcat, whim, e3fp), and jazzy (isolated env for its RDKit pin).
 - [ ] 7. Add the learned-model flavors: minimol, surrogate_adme, ml_qm. Each runs its
@@ -118,19 +136,26 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   upper bound on what full finetuning can achieve and quantifies how much signal the frozen
   protocol sacrifices; the gap between frozen and unlocked is the cost of the clean ablation.
   Scripted alongside reduced (mode `unlocked`) in `slurm/run_lr_experiments.sh`.
-- [ ] Prescaling ablation MPNN LR sweep (in progress): cross the milestone-4 prescaling triage with the
+- [x] Prescaling ablation MPNN LR sweep: cross the milestone-4 prescaling triage with the
   finetune LR modes. The triage originally finetuned every prescaling recipe frozen only
   (`mpnn_lr=0`); this repeats it at `reduced` (`mpnn_lr=1e-4`) and `unlocked` (`mpnn_lr=1e-3`)
   so the preprocessing decision is judged under all three protocols rather than assuming the
-  frozen ranking holds once the backbone can move. `sarizard/configs/generate.py` now threads
+  frozen ranking holds once the backbone can move. `sarizard/configs/generate.py` threads
   `--mpnn-lr-mode` through ablation mode; recipes land in
   `configs/ablation_<name>__s42__{reduced,unlocked}/` and finetune via `ablation_finetune.sbatch`.
-  All 504 finetune runs are complete (7 recipes x 3 protocols x 24 endpoints, all result dirs
-  present); the remaining step is `ablation_analyze.sbatch`, which collects
-  `results/ablation_metrics.csv` and drives the protocol-aware `prescaling_report`. That report
-  emits a report card and ranking per protocol plus `plots/prescaling_mode_comparison_<metric>.csv`
-  (each recipe's mean metric under frozen, reduced, and unlocked) so the ranking's stability is
-  read directly. Analyze is not yet submitted, so those artifacts do not exist yet.
+  All 504 finetune runs completed (7 recipes x 3 protocols x 24 endpoints, job 18443536, no
+  failures), and the chained analyze job (18443537) collected `results/ablation_metrics.csv`
+  (672 rows) and wrote `plots/prescaling_mode_comparison_r2.csv`.
+  **Result: the winning recipe shifts by protocol** (`chemeleon_baseline` wins frozen,
+  `order_fix` wins reduced, `plus_drop_corr` wins unlocked), and `chemeleon_baseline` vs.
+  `order_fix` (the two closest recipes) are close enough that a ranked-choice election pooling
+  all three protocols came down to 44-43 in `order_fix`'s favor, despite `chemeleon_baseline`
+  leading every round but the last. `reduced` is uniformly the best protocol for every recipe;
+  `unlocked` compresses the spread between recipes, so prescaling matters less once the
+  backbone can fully adapt. `plus_drop_low_var` is the clear bottom performer across every
+  protocol and every read. Does not overturn the Milestone-5 decision (`chemeleon_baseline`
+  wins frozen, the sweep's protocol) but downgrades it from "clear winner" to "narrow winner
+  over `order_fix`"; see `FINDINGS.md` for the full cross-protocol tables.
 - [x] Multi-seed foundations: pretrain each flavor at several seeds to separate the foundation
   effect from initialization variance. Set `FLAVOR_SEEDS` for `run_all.sh` (and
   `ABLATION_SEEDS` for the triage); the report card and meta-model average the seeds per

@@ -11,24 +11,117 @@ per-flavor finetuned predictions into a meta-model beat the best single foundati
 
 ## Status
 
-Prescaling ablation triage complete (see below): the winning recipe differs by finetune
-protocol, so the Milestone-5 recipe pick is the open decision blocking the flavor sweep.
-No flavor-sweep results yet; the report card follows once that decision lands and the
-sweep (Milestone 6) runs.
+Prescaling ablation triage complete on the full corpus with the regime fix, including the
+cross-protocol check (frozen/reduced/unlocked; see below): `chemeleon_baseline` wins under
+frozen, the protocol the flavor sweep uses, though by a close margin over `order_fix`, which
+wins under the other two protocols. Since `chemeleon_baseline` is already what `split.py`
+produces today, Milestone 5 needs no code change, just the recorded decision below. No
+flavor-sweep results yet; the report card follows once the sweep (Milestone 6) runs.
 
 ## Prescaling
 
-**Superseded.** Every pretraining run behind the 250K numbers below diverged mid-training
-(val/R2 and val_loss blowing up by 2-6 orders of magnitude within a single epoch, 4-10
-epochs in depending on recipe); the "winner" in each protocol below is confounded by which
-recipe's trajectory happened to survive longest before collapsing, not by prescaling
-quality. Root cause and fix: see "Training collapse and regime fix" below. The 250K
-artifacts (targets, splits, foundations, configs, results, plots) are archived at
-`archive/ablation_250k_pre_gradclip/`; do not use the numbers below to pick the production
-recipe. A rerun on the full corpus with the fixed regime is in progress; its numbers will
-replace this section once complete.
+**Milestone-5 decision: `chemeleon_baseline`, no code change needed.** The full-corpus
+rerun under the regime fix (below) ranks `chemeleon_baseline` first by mean R-squared under
+the frozen protocol, the protocol the core flavor sweep uses. `split.py` already reproduces
+`chemeleon_baseline` today (mean/std computed on the raw target, reused for both
+winsorization and z-scoring), so Milestone 5 (bake the winning recipe into `split.py`) is
+satisfied as-is; the flavor sweep (Milestone 6) can proceed on the current `split.py` path
+unmodified. The margin over the runner-up (`order_fix`) is close, not decisive; see the
+cross-protocol check below for the full picture.
 
-### 250K numbers (historical, do not use for the Milestone-5 decision)
+### Full-corpus numbers (regime-fixed, decision basis)
+
+`osmordred`, 7 recipes, seed 42, full corpus (`corpus/corpus_full.parquet`, 944296
+molecules), frozen protocol only (`mpnn_lr=0`, the flavor sweep's protocol).
+`results/ablation_metrics.csv` (224 rows) and `plots/prescaling_report_r2.csv` hold the full
+numbers. Mean R-squared across the 24 endpoints:
+
+| recipe | mean R-squared |
+|---|---|
+| `chemeleon_baseline` | 0.352 |
+| `order_fix` | 0.342 |
+| `plus_yeo_johnson` | 0.340 |
+| `plus_drop_low_var` | 0.327 |
+| `full` | 0.326 |
+| `plus_drop_corr` | 0.324 |
+| `minimal` | 0.307 |
+
+Read: today's entangled winsorize/z-score order (`chemeleon_baseline`) is not a bug worth
+fixing, at least not under the frozen protocol. Every attempted correction or addition
+(`order_fix` through `full`) trails it by 1-3 points of R-squared, and `minimal` (no
+winsorization) is clearly worst, so winsorizing before z-scoring matters, but the specific
+order/stat-sharing quirk in the production path does not hurt downstream transfer enough to
+justify the extra pipeline steps. This reverses the historical 250K read below
+(`plus_yeo_johnson` winning under frozen), which is expected since that run was confounded
+by the training collapse, not a real signal.
+
+### Cross-protocol check (reduced/unlocked, full corpus, regime-fixed)
+
+The frozen-only result above was later crossed with the two other finetune protocols
+(`reduced`, `mpnn_lr=1e-4`; `unlocked`, `mpnn_lr=1e-3`) on the same seven full-corpus
+foundations, closing the gap this section used to flag. 504 finetune runs total (7 recipes
+x 3 protocols x 24 endpoints); `results/ablation_metrics.csv` (672 rows) and
+`plots/prescaling_mode_comparison_r2.csv` hold the numbers.
+
+| recipe | frozen | reduced | unlocked |
+|---|---|---|---|
+| minimal | 0.3073 | 0.3341 | 0.3077 |
+| chemeleon_baseline | **0.3523** | 0.3772 | 0.3041 |
+| order_fix | 0.3415 | **0.3884** | 0.3119 |
+| plus_drop_corr | 0.3236 | 0.3709 | **0.3218** |
+| plus_drop_low_var | 0.3269 | 0.3582 | 0.2820 |
+| plus_yeo_johnson | 0.3404 | 0.3666 | 0.3171 |
+| full | 0.3263 | 0.3813 | 0.3013 |
+
+The winning recipe shifts by protocol: `chemeleon_baseline` wins frozen, `order_fix` wins
+reduced, `plus_drop_corr` wins unlocked. `reduced` is uniformly the best protocol for every
+recipe, so a little backbone movement helps regardless of prescaling; `unlocked` compresses
+the spread between recipes (0.28-0.32) and is the only protocol where `minimal` (no
+winsorization) is competitive rather than clearly worst, consistent with the 250K-era read
+that prescaling matters less once the backbone can fully adapt.
+
+Per-endpoint win counts (best recipe per endpoint, 29 endpoints per protocol, ablation
+recipes only) tell a similar but not identical story:
+
+| recipe | frozen | reduced | unlocked | total |
+|---|---|---|---|---|
+| chemeleon_baseline | 3 | 6 | 6 | 15 |
+| order_fix | 2 | 7 | 5 | 14 |
+| plus_drop_corr | 4 | 4 | 6 | 14 |
+| minimal | 4 | 2 | 5 | 11 |
+| plus_yeo_johnson | 1 | 6 | 4 | 11 |
+| full | 2 | 3 | 1 | 6 |
+| plus_drop_low_var | 2 | 1 | 2 | 5 |
+
+Treating each endpoint's full R-squared ranking as a ranked-choice ballot and running
+instant-runoff (eliminate the recipe with fewest first-place endpoints each round,
+redistribute to those endpoints' next-best recipe) gives a third view that rewards
+consistent strength over occasional spikes: `order_fix` wins frozen, `chemeleon_baseline`
+wins reduced, `minimal` wins unlocked. Pooling all three protocols into one 87-ballot
+election, `order_fix` wins, but by a single vote in the final round (44 to 43 over
+`chemeleon_baseline`); `chemeleon_baseline` actually led every round from round 1 through
+round 5, and only fell behind once `plus_yeo_johnson`'s 27 eliminated ballots redistributed
+in `order_fix`'s favor. `plus_drop_low_var` is eliminated first in every protocol and in the
+pooled election, confirming it as the clear bottom performer across every read.
+
+Read: `chemeleon_baseline` and `order_fix` are statistically close, not a clean margin.
+`chemeleon_baseline` wins the mean-R-squared and win-count tallies under frozen (the only
+protocol the flavor sweep actually uses) and led the pooled ranked-choice election for most
+of its rounds; `order_fix` wins the pooled ranked-choice election outright and the mean-R-
+squared ranking under reduced. The Milestone-5 decision (`chemeleon_baseline`, recorded
+below and in `TODO.md`) stands because it is the frozen-protocol winner and frozen is what
+the sweep runs, but it should be read as "the better of two very similar recipes," not a
+decisive win; `order_fix` is the natural second read if the sweep protocol ever changes.
+
+### 250K numbers (historical, superseded, do not use for the Milestone-5 decision)
+
+Every pretraining run behind the numbers below diverged mid-training (val/R2 and val_loss
+blowing up by 2-6 orders of magnitude within a single epoch, 4-10 epochs in depending on
+recipe); the "winner" in each protocol is confounded by which recipe's trajectory happened
+to survive longest before collapsing, not by prescaling quality. Root cause and fix: see
+"Training collapse and regime fix" below. The 250K artifacts (targets, splits, foundations,
+configs, results, plots) are archived at `archive/ablation_250k_pre_gradclip/`; kept for
+reference only.
 
 The ablation triage (osmordred, 7 recipes, seed 42) is finetuned and evaluated under all
 three MPNN-LR protocols (frozen, reduced, unlocked); `archive/ablation_250k_pre_gradclip/results/ablation_metrics.csv`
@@ -53,8 +146,8 @@ mainly compensating for what a frozen backbone/FFN head cannot fix on its own. `
 most consistent performer, never worse than 2nd-3rd in any protocol, while `plus_yeo_johnson`
 wins outright under frozen, the protocol the core flavor sweep actually uses.
 
-Milestone-5 decision (recipe to bake into `split.py`): pending, and now moot until the
-rerun lands, since these numbers are confounded by the training collapse (above).
+Milestone-5 decision (recipe to bake into `split.py`): superseded by the full-corpus rerun
+above (`chemeleon_baseline`); these numbers were confounded by the training collapse.
 
 ### Training collapse and regime fix
 
@@ -118,7 +211,18 @@ dip to 0.852 at epoch 6, recovered the next epoch, ordinary noise, not a collaps
 and `train_loss` both monotonic down throughout, well past the epoch 4-10 window where all
 seven 250K runs previously diverged. Regime fix confirmed stable; submitted the remaining six
 prescaling recipes (`minimal`, `order_fix`, `plus_drop_corr`, `plus_drop_low_var`,
-`plus_yeo_johnson`, `full`; prescale job 18111455, pretrain job 18111456 dependent on it).
+`plus_yeo_johnson`, `full`; prescale job 18111455, pretrain job 18111456 dependent on it). All
+seven pretraining runs completed clean (full 100 epochs, stable losses, no collapse).
+
+Finetuning hit one unrelated infrastructure gap: the `openadmet` conda env had `boto3`
+1.43.37 paired with a mismatched `botocore` 1.43.0, so every `openadmet anvil` invocation
+failed at CLI import time (`ImportError: cannot import name 'DocumentModifiedShape' from
+'botocore.docs.utils'`) before any recipe logic ran, killing all 168 finetune tasks (job
+18410392). Fixed with `pip install --upgrade --force-reinstall boto3` in the `openadmet` env
+(resolved both packages to 1.43.39), verified with a direct `openadmet anvil` run before
+resubmitting. Rerun (job 18420137) completed all 168 finetunes clean; the chained analyze
+job (18420145) produced `results/ablation_metrics.csv` and `plots/prescaling_report_r2.csv`,
+the full-corpus numbers above.
 
 One consequence to flag: `DROPOUT_FRACTION=0.85` (keep 15%) is a fixed-regime constant
 applied to every future flavor. For osmordred (3585 dims) that is ~537 supervised dims/step,
