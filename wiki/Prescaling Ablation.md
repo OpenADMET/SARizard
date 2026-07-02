@@ -1,5 +1,5 @@
 ---
-tags: [method, status/blue]
+tags: [method, status/green]
 ---
 # Prescaling Ablation
 
@@ -8,6 +8,13 @@ tags: [method, status/blue]
 > through several prescaling recipes with the backbone, corpus, and regime held fixed; the
 > recipe that transfers best downstream is baked into [[Shared Corpus and Regime]] and applied
 > identically to every continuous flavor.
+>
+> **Result:** complete, including the frozen/reduced/unlocked cross-protocol check.
+> `chemeleon_baseline` wins by mean R-squared under the frozen protocol (the one the flavor
+> sweep uses) on the full corpus with the regime fix, and since `split.py` already reproduces
+> `chemeleon_baseline`, no code change was needed to bake it in. The margin over the
+> runner-up, `order_fix`, is narrow, not decisive, once all three protocols are considered.
+> See `FINDINGS.md` for the full ranking.
 
 ## Why first
 
@@ -73,31 +80,59 @@ precision where this repo trained full fp32.
 The sibling's regime is now adopted as canonical in `sarizard/pretraining/config.py`
 (`PATIENCE=50`, `FNN_HIDDEN_SIZE=1024`, `WARMUP_EPOCHS=2`, `DROPOUT_FRACTION=0.85`), with
 `GRADIENT_CLIP_VAL=0.5` and bf16/16-mixed precision added on top, since neither
-implementation had those. The triage is being rerun on the full corpus
-(`corpus/corpus_full.parquet`, ~900K molecules vs. the 250K screening subset) with this
-fixed regime, one recipe (`chemeleon_baseline`) first to confirm stability before firing the
-other six. The original 250K runs (targets, splits, foundations, configs, results, plots) are
-archived at `archive/ablation_250k_pre_gradclip/` for reference; see `FINDINGS.md` for the
-numbers, which are superseded and should not be used to pick the production recipe.
+implementation had those. The triage was rerun on the full corpus
+(`corpus/corpus_full.parquet`, 944296 molecules vs. the 250K screening subset) with this
+fixed regime: `chemeleon_baseline` first, alone, to confirm stability (clean through 15
+epochs, `val/r2` 0.773 to 0.952), then the other six recipes, all of which also completed
+clean (full 100 epochs, stable losses, no collapse). The original 250K runs (targets,
+splits, foundations, configs, results, plots) are archived at
+`archive/ablation_250k_pre_gradclip/` for reference; see `FINDINGS.md` for those numbers,
+which are superseded and were not used to pick the production recipe.
+
+Finetuning (168 runs: 7 recipes x 24 endpoints) hit one unrelated infrastructure gap: the
+`openadmet` env's `boto3`/`botocore` versions were mismatched, breaking `openadmet anvil`'s
+CLI import before any recipe ran. Fixed by reinstalling matching versions; the rerun
+completed all 168 finetunes and the chained analyze step clean.
+
+**Full-corpus result:** `chemeleon_baseline` wins by mean R-squared under the frozen
+protocol (0.352), ahead of `order_fix` (0.342), `plus_yeo_johnson` (0.340),
+`plus_drop_low_var` (0.327), `full` (0.326), `plus_drop_corr` (0.324), and `minimal` (0.307,
+worst). Since `split.py` already reproduces `chemeleon_baseline`, Milestone 5 (bake the
+winning recipe into the core workflow) needed no code change. See `FINDINGS.md` for the full
+read.
 
 ## MPNN learning-rate sweep
 
 The triage originally finetuned every prescaling recipe frozen only (`mpnn_lr=0`), which ranks
 the preprocessing by representation quality alone. To check that the ranking survives once the
-backbone can adapt, the same ablation foundations are also finetuned under the two
+backbone can adapt, the same ablation foundations were also finetuned under the two
 [[Finetune Protocols#Learning-rate experiments|LR protocols]]: `reduced` (`mpnn_lr=1e-4`) and
 `unlocked` (`mpnn_lr=1e-3`). This crosses the prescaling axis with the finetune axis, so a
 recipe that wins frozen but loses once the MPNN moves is caught before it is baked in.
 
-The recipes are generated with `sarizard/configs/generate.py --mpnn-lr-mode {reduced,unlocked}`
+The recipes were generated with `sarizard/configs/generate.py --mpnn-lr-mode {reduced,unlocked}`
 into `configs/ablation_<name>__s42__{reduced,unlocked}/` and finetuned through
-`ablation_finetune.sbatch` in the `openadmet` env, alongside the frozen
-`configs/ablation_<name>__s42/`. `prescaling_report` is protocol-aware: it builds a report card
-and ranking per protocol (frozen keeps the unsuffixed filenames, the others add a `_<mode>`
-suffix) and, when more than one protocol is present, writes
-`plots/prescaling_mode_comparison_<metric>.csv` (each recipe's mean metric under frozen,
-reduced, and unlocked side by side). If a recipe wins frozen but loses once the backbone can
-move, that comparison catches it before the recipe is baked in.
+`ablation_finetune.sbatch` in the `openadmet` env (job 18443536, 504 runs, all completed),
+alongside the frozen `configs/ablation_<name>__s42/`. `prescaling_report` is protocol-aware: it
+builds a report card and ranking per protocol (frozen keeps the unsuffixed filenames, the
+others add a `_<mode>` suffix) and, since more than one protocol is present, wrote
+`plots/prescaling_mode_comparison_r2.csv` (each recipe's mean metric under frozen, reduced, and
+unlocked side by side).
+
+**Result: the winning recipe shifts by protocol.** `chemeleon_baseline` wins frozen (mean
+R-squared 0.352), `order_fix` wins reduced (0.388), `plus_drop_corr` wins unlocked (0.322).
+`reduced` is uniformly the strongest protocol for every recipe; `unlocked` compresses the
+spread between recipes (0.28-0.32), so prescaling choice matters less once the backbone can
+fully adapt, echoing the pre-fix 250K-era read even though those numbers were invalid.
+`plus_drop_low_var` is the clear bottom performer in every protocol.
+
+`chemeleon_baseline` and `order_fix` are close enough that a ranked-choice election (each
+endpoint's R-squared ranking treated as a ballot, instant-runoff across all three protocols
+pooled) came down to 44 votes to 43 in `order_fix`'s favor in the final round, despite
+`chemeleon_baseline` leading every earlier round. This does not overturn the Milestone-5
+decision (`chemeleon_baseline`, since frozen is the only protocol the flavor sweep actually
+uses), but downgrades it from a clear win to a narrow one; see `FINDINGS.md` for the full
+tables.
 
 ## Related
 

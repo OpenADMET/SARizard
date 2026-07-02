@@ -45,10 +45,12 @@ win count). A frozen warmup then coadaptation protocol is planned but not script
 two-phase training schedule the anvil config cannot express yet.
 
 The same three protocols also drive the [[Prescaling Ablation]] triage. `generate.py
---mpnn-lr-mode` threads the protocol through ablation mode, so each prescaling recipe can be
+--mpnn-lr-mode` threads the protocol through ablation mode, so each prescaling recipe was
 finetuned frozen, `reduced`, and `unlocked` from its own foundation
-(`configs/ablation_<name>__s42__{reduced,unlocked}/`). This checks that the preprocessing choice
-holds under a moving backbone, not just a frozen one.
+(`configs/ablation_<name>__s42__{reduced,unlocked}/`). This checked whether the preprocessing
+choice holds under a moving backbone, not just a frozen one; it does not fully hold (the
+winning recipe shifts by protocol, though the margin between the top two is narrow), see
+[[Prescaling Ablation]] and `FINDINGS.md`.
 
 ## Related
 
