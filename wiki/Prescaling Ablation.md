@@ -14,7 +14,10 @@ tags: [method, status/green]
 > sweep uses) on the full corpus with the regime fix, and since `split.py` already reproduces
 > `chemeleon_baseline`, no code change was needed to bake it in. The margin over the
 > runner-up, `order_fix`, is narrow, not decisive, once all three protocols are considered.
-> See `FINDINGS.md` for the full ranking.
+> A follow-up check on the 250K screening corpus found a *different* ranking altogether
+> (`chemeleon_baseline` drops to 5th of 7 under frozen there), so the recipe ranking is
+> corpus-size sensitive; see the 250K section below and [[Shared Corpus and Regime]] for why
+> that matters. See `FINDINGS.md` for the full ranking.
 
 ## Why first
 
@@ -134,8 +137,38 @@ decision (`chemeleon_baseline`, since frozen is the only protocol the flavor swe
 uses), but downgrades it from a clear win to a narrow one; see `FINDINGS.md` for the full
 tables.
 
+## 250K corpus-size check
+
+The full-corpus triage above settled Milestone 5, but the flavor sweep it feeds
+([[Shared Corpus and Regime]]) runs on the smaller 250K screening corpus, not the full
+corpus the triage itself used. To check whether that matters, the same 7 recipes x 3
+protocols triage was repeated on `corpus/corpus_250k.parquet`, with the regime fix in place
+(unlike the original pre-fix 250K run, which is invalid and archived separately). The
+full-corpus artifacts were archived to `archive/ablation_full_corpus/` first so the rerun
+did not overwrite them, mirroring the existing archive precedent. All 504 finetunes and the
+chained analyze completed clean.
+
+**Result: the 250K ranking does not match the full-corpus ranking.** Winners are
+`plus_drop_low_var` (frozen, mean R-squared 0.347), `plus_yeo_johnson` (reduced, 0.381), and
+`minimal` (unlocked, 0.324), none of which match the full-corpus winners
+(`chemeleon_baseline`, `order_fix`, `plus_drop_corr`). Most strikingly, `chemeleon_baseline`
+(the full-corpus frozen winner and the Milestone-5 decision) drops to 5th of 7 under frozen
+at 250K (0.295). Averaged across protocols, most recipes score higher on the full corpus as
+expected, but `plus_drop_low_var` and `minimal` score lower, so it isn't simply "more data
+helps everyone." `chemeleon_baseline` starts mediocre at 250K (4th of 7) and gains the most
+of any near-top recipe going to the full corpus, so it reads as a recipe that scales well
+rather than one that is intrinsically strong.
+
+Does not change the Milestone-5 decision (the flavor sweep's protocol is frozen, and the
+full-corpus frozen ranking is what that decision is based on), but it does mean the recipe
+ranking should not be assumed to transfer to a different corpus size, including the 250K
+corpus the flavor sweep itself uses. See `FINDINGS.md` for the full tables and the pooled
+ranked-choice comparison.
+
 ## Related
 
-- Feeds [[Shared Corpus and Regime]] (the prescaling becomes part of the fixed regime)
+- Feeds [[Shared Corpus and Regime]] (the prescaling becomes part of the fixed regime); note
+  the corpus-size mismatch flagged there (the triage decision comes from the full corpus, the
+  flavor sweep runs on 250K)
 - Uses the [[osmordred]] target as the representative continuous flavor
 - Read against the [[Report Card]] format (endpoints by ablation instead of by flavor)

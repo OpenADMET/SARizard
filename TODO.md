@@ -83,6 +83,36 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   The flavor sweep (Milestone 6) can proceed unmodified. The subsequent cross-protocol LR
   sweep (Future experiments, below) confirmed the frozen-protocol win but found the margin
   over `order_fix` narrow, not decisive; see `FINDINGS.md` for the full picture.
+  **250K corpus-size check (in progress):** repeats the same 7 recipes x 3 protocols triage
+  on the original 250K screening corpus (`corpus/corpus_250k.parquet`, the milestone-2
+  default) instead of the full corpus, now that the regime fix makes the run valid there too
+  (the original 250K triage predates the fix and is archived, invalid). Tests whether the
+  full-corpus ranking (`chemeleon_baseline` narrowly over `order_fix`) holds at 1/4 the
+  corpus size, or whether corpus size itself was doing some of the work. Before submitting,
+  archived the full-corpus run's artifacts to `archive/ablation_full_corpus/` (targets,
+  `cache/ablations/`, foundations, configs, results, plots, tensorboard runs), mirroring the
+  existing `archive/ablation_250k_pre_gradclip/` precedent, so the 250K rerun does not
+  overwrite the full-corpus foundations `FINDINGS.md` already cites. Submitted in one chain
+  via `bash slurm/run_ablations.sh` with `ABLATION_LR_MODES="frozen reduced unlocked"` set
+  upfront (corpus job 18455150, target 18455151, prescale 18455152, pretrain 18455153,
+  finetune 18455154 array 0-503, analyze 18455155, each `afterok` the last). Hit one
+  submission-time snag: running `run_ablations.sh` interactively inherited a stale
+  `SLURM_SUBMIT_DIR` from the enclosing interactive SLURM allocation (`/home/westd1`, not the
+  repo), which `slurm/env.sh` prefers over `pwd` for `REPO_DIR`; fixed by exporting
+  `REPO_DIR=/scratch/choderaj/westd/SARizard` explicitly before invoking the script.
+  **Result: the 250K ranking does not match the full-corpus ranking.** All 504 finetunes and
+  the chained analyze completed clean (no failures). Mean R-squared per recipe per protocol
+  (`plots/prescaling_mode_comparison_r2.csv`): frozen winner is `plus_drop_low_var` (0.347,
+  vs. 0.352 for `chemeleon_baseline` on the full corpus), reduced winner is
+  `plus_yeo_johnson` (0.381), unlocked winner is `minimal` (0.324). None of the three match
+  their full-corpus counterparts (`chemeleon_baseline`, `order_fix`, `plus_drop_corr`); most
+  strikingly, `chemeleon_baseline` (the full-corpus frozen winner and the current Milestone-5
+  decision) drops to 5th of 7 under frozen at 250K (0.295). Corpus size is doing real work in
+  which prescaling recipe wins, not just adding statistical power to the same ranking. Does
+  not change the Milestone-5 decision as recorded (the flavor sweep runs on the full corpus,
+  so the full-corpus frozen ranking is the relevant one), but it means the ranking should not
+  be assumed to generalize to a different corpus size, e.g. if the full 1M corpus is ever
+  substituted in milestone 10. See `FINDINGS.md` for the full tables.
 - [ ] 6. Fan out the direct-compute flavors on the cluster: rdkit2d, erg, ecfp, atompair,
   pubchem, the 3D set (usrcat, whim, e3fp), and jazzy (isolated env for its RDKit pin).
 - [ ] 7. Add the learned-model flavors: minimol, surrogate_adme, ml_qm. Each runs its
