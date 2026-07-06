@@ -113,8 +113,48 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   so the full-corpus frozen ranking is the relevant one), but it means the ranking should not
   be assumed to generalize to a different corpus size, e.g. if the full 1M corpus is ever
   substituted in milestone 10. See `FINDINGS.md` for the full tables.
-- [ ] 6. Fan out the direct-compute flavors on the cluster: rdkit2d, erg, ecfp, atompair,
+- [x] 6. Fan out the direct-compute flavors on the cluster: rdkit2d, erg, ecfp, atompair,
   pubchem, the 3D set (usrcat, whim, e3fp), and jazzy (isolated env for its RDKit pin).
+  Fired without the target-dropout-fraction ablation below (explicit call:
+  ship milestone 6 now, revisit jazzy's dropout fraction later if it underperforms rather than
+  gating on it). All 9 flavors use `order_fix` prescaling (not `chemeleon_baseline`) for their
+  continuous targets, on explicit instruction, overriding the Milestone-5 recipe for this
+  sweep; binary/fingerprint flavors (ecfp, atompair, pubchem, e3fp) are unaffected (they skip
+  rescaling regardless). All three finetune protocols (frozen, reduced, unlocked) run from the
+  start rather than frozen-only-then-follow-up.
+  All 9 flavors' targets were already cached on the 250K corpus from earlier scaffolding
+  work, so `compute_targets` skipped straight through. Two small code changes were needed to
+  fire this off: (1) `slurm/env.sh`'s `flavor_list()` gained an optional `FLAVOR_SUBSET`
+  filter (space-separated flavor names; unset keeps the full registry) so the array-sized
+  stages (targets/split/pretrain/finetune/analyze) can be scoped to just these 9 flavors
+  without dragging in `osmordred` (already done) or the milestone-7 model flavors
+  (`minimol`/`surrogate_adme`/`ml_qm`, not yet started); scoping matters because `analyze`'s
+  `afterok` dependency needs every array task to succeed, and running unbuilt milestone-7
+  flavors alongside would risk cancelling the whole chain on an unrelated failure.
+  (2) `slurm/split.sbatch` now runs `prescaling.py --ablation order_fix` ahead of `split.py
+  --prescaled` for continuous flavors (checked via `get_flavor(flavor).kind`), instead of
+  calling `split.py` directly; binary flavors keep the old direct path unchanged. This is now
+  the default prescaling for every future continuous-flavor split through this script, not
+  just milestone 6's.
+  Submitted as one dependency chain: corpus (job 18564905, skipped, already exists) → targets
+  (18564906, array 0-8, skipped, already cached) → split (18564907, array 0-8, confirmed
+  `order_fix` running clean on the 5 continuous flavors and binary skip-rescaling on the other
+  4) → pretrain (18564908, array 0-8) → finetune (18565234, frozen, array 0-215, 216 recipes)
+  and lr-finetune (18565235, reduced+unlocked, array 0-431, 432 recipes) in parallel off the
+  same foundations → analyze (18565236, after finetune) and lr-analyze (18565237, after both
+  finetune jobs). 648 finetune recipes total (9 flavors x 24 endpoints x 3 protocols).
+  **Complete: every stage of the chain finished clean (exit code 0), no failures.**
+  `results/metrics.csv` (frozen, 288 rows) and `results/lr_metrics.csv` (reduced +
+  unlocked, 864 rows) cover all 9 flavors x 32 endpoint-columns. `rdkit2d` is the
+  strongest flavor overall (mean R-squared 0.350 frozen, 0.371 reduced), winning 6 of 8
+  endpoint families; `usrcat` is the specialization result, winning potency and hERG
+  specifically despite mid-table overall performance. `reduced` is again the best
+  protocol on average, and `unlocked` again compresses the spread between flavors,
+  matching the prescaling-triage LR-mode pattern. Full report card and per-flavor read in
+  `FINDINGS.md`. This flavor sweep ran on the 250K corpus per Milestone 2's scope (not the
+  full corpus used for the Milestone-4/5 osmordred triage), so osmordred is not yet
+  directly comparable on this table; a controlled comparison needs osmordred rerun under
+  this same protocol (250K corpus, `order_fix`).
 - [ ] 7. Add the learned-model flavors: minimol, surrogate_adme, ml_qm. Each runs its
   source model over the shared corpus in an isolated environment and caches the target.
 - [ ] 8. Report card: heatmap of endpoints by flavors with a selectable metric (default R-squared).
