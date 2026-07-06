@@ -9,6 +9,11 @@
 # portable (linux and macOS arm64). For cluster GPU, switch it to the matching CUDA index,
 # e.g. https://data.pyg.org/whl/torch-2.3.0+cu124.html, and let torch resolve to the cu build.
 #
+# scipy is pinned <1.13: graphium's featurizer builds a float16 scipy.sparse.coo_matrix, and
+# scipy 1.13 dropped float16 support from sparse matrices, so an unpinned pip resolve (which
+# picks the latest scipy, currently 1.15) makes every mol_to_pyggraph call raise ValueError
+# and the whole target come back all-NaN with no per-row error surfaced.
+#
 #   conda env create -f envs/minimol.yml
 #   conda activate sarizard-minimol
 #   python -m sarizard.pretraining.features.compute_target --flavor minimol
@@ -29,3 +34,4 @@ dependencies:
       - torch-sparse
       - torch-cluster
       - minimol==1.3.5
+      - "scipy<1.13"  # float16 sparse support graphium's featurizer needs
