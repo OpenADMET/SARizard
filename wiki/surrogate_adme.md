@@ -36,6 +36,15 @@ This writes `cache/targets/surrogate_adme/target.npy` (25-dim targets) and
 `cache/targets/surrogate_adme/corpus_smiles.parquet` (the 273K canonical SMILES).
 The pretrain step uses `corpus_smiles.parquet` in place of the shared 250K corpus.
 
+## Status
+
+Held out of Milestone 7's fan-out (unlike its sibling [[minimol]], which is running). The
+target-dropout-fraction blocker in `TODO.md` (Future experiments) names this flavor directly:
+at 25 dims, the fixed `DROPOUT_FRACTION=0.85` masked-pretext dropout keeps under 1 target
+element per step on average, and the item calls for ablating that fraction before fan-out
+rather than only "if it underperforms." Pending that ablation, or an explicit decision to
+defer it the way Milestone 6 deferred it for [[jazzy]].
+
 ## Hypothesis
 
 Because the target is itself ADME prediction, this should transfer strongly to the matching

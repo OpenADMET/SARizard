@@ -22,7 +22,10 @@ below. This does not change the Milestone-5 decision, since the flavor sweep run
 full corpus. Milestone 6's direct-compute flavor sweep (rdkit2d, erg, ecfp, atompair,
 pubchem, usrcat, whim, e3fp, jazzy; 250K corpus, `order_fix` prescaling, all three
 finetune protocols) completed with no failures; see the report card below. Milestone 7
-(learned-model flavors: minimol, surrogate_adme, ml_qm) has not started.
+(learned-model flavors: minimol, surrogate_adme, ml_qm) is in progress, scoped to `minimol`
+only: `ml_qm` and `surrogate_adme` are held out pending the open target-dropout-fraction
+ablation (`TODO.md`, Future experiments), which names both directly as needing that
+ablation before fan-out.
 
 ## Prescaling
 
@@ -381,7 +384,12 @@ binding-site geometry) than for the ADMET properties `rdkit2d` otherwise dominat
   differ in corpus size and prescaling recipe, so this is context, not a controlled
   comparison. A controlled osmordred-vs-Milestone-6 comparison needs osmordred rerun under
   the Milestone-6 protocol (250K corpus, `order_fix`).
-- **minimol, surrogate_adme, ml_qm**: not started (Milestone 7).
+- **minimol**: Milestone 7, in progress (see Status above); results to follow once the
+  finetune/analyze stages complete.
+- **surrogate_adme, ml_qm**: not started. Held out of Milestone 7 pending the open
+  target-dropout-fraction ablation (`TODO.md`, Future experiments), which names both
+  directly (24- and 25-dim targets) as needing that ablation before fan-out, unlike
+  `jazzy`'s narrower, already-recorded deferral in Milestone 6.
 
 ## Meta-model
 
