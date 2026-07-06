@@ -44,6 +44,7 @@ from rdkit.rdBase import BlockLogs
 from torch.utils.data import DataLoader
 
 from config import (
+    DROPOUT_FRACTION,
     EPOCHS,
     FEATURIZER,
     FINAL_LEARNING_RATE,
@@ -92,7 +93,12 @@ def _build_featurizer() -> SimpleMoleculeMolGraphFeaturizer:
     )
 
 
-def _build_model(kind: str, n_features: int, featurizer: SimpleMoleculeMolGraphFeaturizer) -> MPNN:
+def _build_model(
+    kind: str,
+    n_features: int,
+    featurizer: SimpleMoleculeMolGraphFeaturizer,
+    dropout_fraction: float = DROPOUT_FRACTION,
+) -> MPNN:
     """Assemble the MPNN with a kind-appropriate head, loss, and validation metrics.
 
     Parameters
@@ -103,6 +109,10 @@ def _build_model(kind: str, n_features: int, featurizer: SimpleMoleculeMolGraphF
         Number of target columns, read from the cached target store.
     featurizer : SimpleMoleculeMolGraphFeaturizer
         The graph featurizer, used for the message-passing input dimensions.
+    dropout_fraction : float, optional
+        Masked-pretext target-dropout fraction (default the shared ``DROPOUT_FRACTION``
+        regime constant). Override per flavor when the regime default keeps too few
+        targets per step for a narrow target block.
 
     Returns
     -------
@@ -125,11 +135,15 @@ def _build_model(kind: str, n_features: int, featurizer: SimpleMoleculeMolGraphF
         "activation": FNN_ACTIVATION,
     }
     if kind == "continuous":
-        predictor = RegressionFFN(criterion=RandomDropoutMSE(), **ffn_kwargs)
+        predictor = RegressionFFN(
+            criterion=RandomDropoutMSE(dropout_fraction=dropout_fraction), **ffn_kwargs
+        )
         # last metric is a deterministic MSE -> val_loss for early stopping
         metric_list = [metrics.MAE(), metrics.R2Score(), metrics.RMSE(), metrics.MSE()]
     elif kind == "binary":
-        predictor = BinaryClassificationFFN(criterion=RandomDropoutBCE(), **ffn_kwargs)
+        predictor = BinaryClassificationFFN(
+            criterion=RandomDropoutBCE(dropout_fraction=dropout_fraction), **ffn_kwargs
+        )
         # last metric is a deterministic BCE (on logits) -> val_loss for early stopping
         metric_list = [metrics.BinaryAUROC(), metrics.BCELoss()]
     else:
@@ -178,6 +192,17 @@ def main() -> None:
             "triage to estimate seed-driven variance"
         ),
     )
+    parser.add_argument(
+        "--dropout-fraction",
+        type=float,
+        default=DROPOUT_FRACTION,
+        help=(
+            "masked-pretext target-dropout fraction (default the shared DROPOUT_FRACTION "
+            "regime constant, 0.85); override only for a narrow target block where the "
+            "default keeps too few targets per step (e.g. ml_qm, surrogate_adme), as a "
+            "recorded per-flavor deviation, not a change to the regime for every flavor"
+        ),
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     BlockLogs()
@@ -210,7 +235,7 @@ def main() -> None:
         persistent_workers=True,
     )
 
-    model = _build_model(flavor.kind, n_features, featurizer)
+    model = _build_model(flavor.kind, n_features, featurizer, dropout_fraction=args.dropout_fraction)
 
     # monitor a deterministic validation metric. chemprop appends a clone of the
     # random-dropout criterion as metrics[-1] and logs it as val_loss, so continuous
@@ -260,6 +285,7 @@ def main() -> None:
                     "mp_depth": MP_DEPTH,
                     "gradient_clip_val": GRADIENT_CLIP_VAL,
                     "precision": default_precision(),
+                    "dropout_fraction": args.dropout_fraction,
                 },
             },
             indent=2,

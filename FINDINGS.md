@@ -398,10 +398,14 @@ binding-site geometry) than for the ADMET properties `rdkit2d` otherwise dominat
   merged table. A learned 512-dim embedding transferring at least as well as the strongest
   direct-compute descriptor is a positive early signal for the learned-flavor family,
   worth confirming once `ml_qm` and `surrogate_adme` land and a merged comparison is run.
-- **surrogate_adme, ml_qm**: not started. Held out of Milestone 7 pending the open
-  target-dropout-fraction ablation (`TODO.md`, Future experiments), which names both
-  directly (24- and 25-dim targets) as needing that ablation before fan-out, unlike
-  `jazzy`'s narrower, already-recorded deferral in Milestone 6.
+- **surrogate_adme, ml_qm**: not started. Were held out of Milestone 7 pending the open
+  target-dropout-fraction ablation (24- and 25-dim targets, where the regime-default 0.85
+  keeps under one target per step); the ablation itself was not run. Decision: override
+  `DROPOUT_FRACTION` to 0.0 for these two flavors only, on the reasoning that near-zero
+  supervision density is unlikely to beat no masking, and proceed. `TODO.md`'s Future
+  experiments entry has the full account, including the code wired to make the override
+  per-flavor rather than global (`losses.py`, `train.py`, `slurm/env.sh`'s
+  `DROPOUT_FRACTION_OVERRIDES`).
 
 ## Meta-model
 
