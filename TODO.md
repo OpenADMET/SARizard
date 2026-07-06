@@ -197,9 +197,21 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   full flavor list) will regenerate a complete `results/metrics.csv` from the cached
   predictions; do that before the next report-card or meta-model pass so it is not
   scoped to whichever flavor last ran the analyze stage.
-- [ ] 8. Report card: heatmap of endpoints by flavors with a selectable metric (default R-squared).
-- [ ] 9. Meta-model: stack per-flavor finetuned predictions per endpoint, fit LGBM/RF/MLP
+- [x] 8. Report card: heatmap of endpoints by flavors with a selectable metric (default R-squared).
+  Regenerated across all 10 completed flavors (the 9 Milestone-6 flavors plus `minimol`) by
+  resubmitting `analyze.sbatch` with no `FLAVOR_SUBSET` (job 19230968, completed clean);
+  `results/metrics.csv` (320 rows) and `plots/report_card_r2.png`/`.csv` are the current
+  merged report card. `osmordred`, `ml_qm`, and `surrogate_adme` are still absent (osmordred
+  ran under a different corpus/naming convention, the other two haven't fanned out yet).
+- [x] 9. Meta-model: stack per-flavor finetuned predictions per endpoint, fit LGBM/RF/MLP
   on out-of-fold predictions, compare to the best single flavor.
+  First real result, produced by the same job 19230968 now that ≥2 flavors have results:
+  the LGBM meta-model beats the best single flavor on 23 of 32 endpoint-columns, mean
+  R-squared 0.481 vs. 0.390 for the best single flavor per endpoint (mean delta +0.091).
+  `rdkit2d` (11 endpoints) and `minimol` (9) are the most frequent single-flavor winners the
+  meta-model has to beat; `usrcat` (4), `atompair`/`jazzy`/`e3fp` (2 each), `whim`/`ecfp` (1
+  each) round out the rest. See `results/meta_model_lgbm.csv` for the per-endpoint table and
+  `FINDINGS.md` for the read.
 - [ ] 10. (GATED on 8, and only if any flavor beats baseline) Scale the flavors that show
   utility up to the full 1M-molecule corpus to produce the final foundation-model artifacts.
   The 250K corpus is the screening set that decides which descriptor targets are worth the
