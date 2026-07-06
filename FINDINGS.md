@@ -409,5 +409,15 @@ binding-site geometry) than for the ADMET properties `rdkit2d` otherwise dominat
 
 ## Meta-model
 
-To be filled. Whether the stacked ensemble of foundations beats the best single flavor
-per endpoint, and which flavors carry the ensemble.
+First result, across the 10 flavors with finetuned results (the 9 Milestone-6 flavors plus
+`minimol`; `osmordred`, `ml_qm`, `surrogate_adme` not yet in this table). Stacking with LGBM
+on out-of-fold per-flavor predictions beats the best single flavor on 23 of 32
+endpoint-columns: mean R-squared 0.481 for the meta-model vs. 0.390 for the best single
+flavor per endpoint (mean delta +0.091). `rdkit2d` and `minimol` are the two flavors the
+meta-model most often has to beat (11 and 9 endpoint-columns respectively where one of them
+is the single-flavor winner), consistent with both being the strongest general-purpose
+flavors in the per-flavor read above. The ensemble does not win everywhere: it loses on 9 of
+32 endpoints, mostly where one flavor already specializes strongly (e.g. `usrcat` on potency,
+where stacking in weaker flavors dilutes rather than helps). See `results/meta_model_lgbm.csv`
+for the per-endpoint table. Not yet run: RF/MLP alternative estimators, and osmordred/ml_qm/
+surrogate_adme once they join the merged table.
