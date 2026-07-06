@@ -19,9 +19,18 @@ except ImportError:
 class _RandomDropoutMixin:
     """Mask a random subset of the finite targets out of the loss each step.
 
-    ``DROPOUT_FRACTION`` is the fraction dropped, so a fraction ``1 - DROPOUT_FRACTION``
-    of the finite targets is kept and contributes to the loss.
+    ``dropout_fraction`` is the fraction dropped, so a fraction ``1 - dropout_fraction``
+    of the finite targets is kept and contributes to the loss. Defaults to the shared
+    regime constant ``DROPOUT_FRACTION``; pass an explicit value to override it for a
+    single flavor (e.g. narrow targets where the regime default keeps under one target
+    per step) without touching the constant every other flavor relies on. ``clone()``
+    (``torchmetrics.Metric.clone``, used by chemprop to snapshot the criterion as a
+    validation metric) is a ``deepcopy``, so this instance attribute survives cloning.
     """
+
+    def __init__(self, *args, dropout_fraction: float = DROPOUT_FRACTION, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.dropout_fraction = dropout_fraction
 
     def update(
         self,
@@ -41,7 +50,7 @@ class _RandomDropoutMixin:
         # these, which both defeats the dropout on finite targets and re-admits non-finite ones;
         # AND is the correct masked-pretext semantics.
         if self.training:
-            keep = torch.rand_like(targets) > DROPOUT_FRACTION
+            keep = torch.rand_like(targets) > self.dropout_fraction
             mask = keep if mask is None else torch.logical_and(keep, mask)
         super().update(preds, targets, mask, weights, lt_mask, gt_mask)
 

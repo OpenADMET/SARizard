@@ -289,6 +289,23 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   one flavor); Milestone 7 does not repeat that deferral for `ml_qm`/`surrogate_adme` since
   this item names them directly. `minimol` (512 dims) is unaffected by this blocker and
   proceeds on its own.
+  **Decision: override to 0.0 for these two flavors, skipping the ablation, not running it
+  later.** Explicit call, not a default: the ablation (0.0 vs. 0.15 vs. 0.85) is not being run;
+  0.0 is picked directly on the reasoning that under-1-target/step supervision is unlikely to
+  beat no masking at all for a 24-25 dim block, and confirmed post hoc rather than compared
+  against alternatives. `DROPOUT_FRACTION` was hardcoded and applied identically to every
+  flavor with no per-flavor override path, so wired one rather than changing the global
+  constant (which would silently change the regime for every already-run flavor):
+  `losses.py`'s `_RandomDropoutMixin` now takes a `dropout_fraction` constructor arg
+  (default the shared constant; survives `torchmetrics.Metric.clone()`, which is a
+  `deepcopy`, so the override is preserved on the cloned validation-metric instance),
+  `train.py`'s `_build_model` and `main` thread a new `--dropout-fraction` CLI flag through
+  to it and record the value in `foundation.json`, and `slurm/env.sh` gained
+  `DROPOUT_FRACTION_OVERRIDES` (space-separated `flavor=value` pairs) plus a
+  `dropout_fraction_for` lookup that `pretrain.sbatch` consults per flavor. Every flavor
+  without an entry (everything run so far) still pretrains at the regime default, so this
+  does not touch anything already on disk. To fan out `ml_qm`/`surrogate_adme` at 0.0,
+  export `DROPOUT_FRACTION_OVERRIDES="ml_qm=0.0 surrogate_adme=0.0"` before submitting.
 - [ ] Frozen warmup then coadaptation: train for N epochs with `mpnn_lr=0` so the FFN head
   finds a reasonable operating point against the fixed representations, then unfreeze the
   MPNN and continue training at a reduced rate. Avoids the large gradient shock that occurs

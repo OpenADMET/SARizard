@@ -47,7 +47,16 @@ if [[ ! -d "$SPLIT_DIR/train_rescaled.zarr" ]]; then
 fi
 RUN_DIR="$REPO_DIR/sarizard/pretraining/runs/${FLAVOR}__s${SEED}"
 
+# per-flavor dropout-fraction override (see DROPOUT_FRACTION_OVERRIDES in env.sh); empty
+# for every flavor by default, in which case train.py falls back to the regime constant
+DROPOUT_ARGS=()
+DROPOUT_OVERRIDE="$(dropout_fraction_for "$FLAVOR")"
+if [[ -n "$DROPOUT_OVERRIDE" ]]; then
+    echo "dropout-fraction override for $FLAVOR: $DROPOUT_OVERRIDE"
+    DROPOUT_ARGS=(--dropout-fraction "$DROPOUT_OVERRIDE")
+fi
+
 # train.py runs script-style from the pretraining directory; pass it absolute paths
 cd "$REPO_DIR/sarizard/pretraining"
 python train.py --flavor "$FLAVOR" --input-dir "$SPLIT_DIR" --output-dir "$RUN_DIR" \
-    --foundation-name "$FOUNDATION" --seed "$SEED"
+    --foundation-name "$FOUNDATION" --seed "$SEED" "${DROPOUT_ARGS[@]}"

@@ -51,6 +51,24 @@ FLAVOR_SEEDS="${FLAVOR_SEEDS:-42}"
 # foundations (frozen is the flavor sweep itself, so it is not repeated here)
 LR_MODES="${LR_MODES:-reduced unlocked}"
 
+# Optional per-flavor override of the masked-pretext target-dropout fraction (config.py's
+# DROPOUT_FRACTION, 0.85 for every flavor by default). Space-separated flavor=value pairs;
+# a flavor absent from this list pretrains at the regime default. This is a recorded, explicit
+# deviation for narrow target blocks where the regime default keeps under one target per step
+# (e.g. ml_qm at 24 dims, surrogate_adme at 25), not a change to the regime for every flavor.
+DROPOUT_FRACTION_OVERRIDES="${DROPOUT_FRACTION_OVERRIDES:-}"
+
+# print the --dropout-fraction value for $1 (a flavor name): its DROPOUT_FRACTION_OVERRIDES
+# entry if present, else empty (train.py's own default, the regime constant, applies)
+dropout_fraction_for() {
+    local flavor="$1" pair name value
+    for pair in $DROPOUT_FRACTION_OVERRIDES; do
+        name="${pair%%=*}"
+        value="${pair#*=}"
+        [[ "$name" == "$flavor" ]] && echo "$value" && return 0
+    done
+}
+
 # fall back to a real conda if only micromamba is available (no-op where conda already resolves)
 if ! command -v conda >/dev/null 2>&1; then
     module load miniforge3/latest 2>/dev/null || true
