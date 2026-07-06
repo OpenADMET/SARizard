@@ -19,8 +19,10 @@ produces today, Milestone 5 needs no code change, just the recorded decision bel
 follow-up 250K corpus-size check (same 7 recipes x 3 protocols) found a different ranking
 entirely at the smaller scale, confirming corpus size itself shapes which recipe wins; see
 below. This does not change the Milestone-5 decision, since the flavor sweep runs on the
-full corpus. No flavor-sweep results yet; the report card follows once the sweep
-(Milestone 6) runs.
+full corpus. Milestone 6's direct-compute flavor sweep (rdkit2d, erg, ecfp, atompair,
+pubchem, usrcat, whim, e3fp, jazzy; 250K corpus, `order_fix` prescaling, all three
+finetune protocols) completed with no failures; see the report card below. Milestone 7
+(learned-model flavors: minimol, surrogate_adme, ml_qm) has not started.
 
 ## Prescaling
 
@@ -298,22 +300,88 @@ special-case flavors mid-sweep).
 
 ## Report card
 
-To be filled. The artifact is `sarizard/analysis/report_card.py`: rows are endpoints across all
-benchmark sets, columns are foundation flavors, each cell is one selectable metric
-(default R-squared). The read to capture here: which flavor wins each endpoint family,
-and whether any flavor dominates or is dominated overall.
+**Milestone 6 (partial): 9 direct-compute flavors, 250K corpus, `order_fix` prescaling, 24
+finetune recipes / 32 endpoint columns (multi-target recipes split into one column per
+endpoint), all 3 finetune protocols.** Does not yet include osmordred (pretrained
+separately under the milestone-4/5 triage, on the full corpus with `chemeleon_baseline`
+prescaling, so not directly comparable on this table) or the milestone-7 learned-model
+flavors (not started). Numbers are mean R-squared from `results/metrics.csv` (frozen) and
+`results/lr_metrics.csv` (reduced/unlocked); full detail in `plots/report_card_r2.csv`.
+
+Mean R-squared by flavor, frozen protocol (the sweep's primary protocol):
+
+| Flavor | Frozen | Reduced | Unlocked |
+|---|---|---|---|
+| rdkit2d | 0.350 | 0.371 | 0.309 |
+| jazzy | 0.314 | 0.332 | 0.333 |
+| pubchem | 0.285 | 0.327 | 0.295 |
+| usrcat | 0.280 | 0.310 | 0.316 |
+| erg | 0.273 | 0.336 | 0.317 |
+| ecfp | 0.259 | 0.277 | 0.268 |
+| atompair | 0.259 | 0.299 | 0.301 |
+| whim | 0.221 | 0.282 | 0.324 |
+| e3fp | 0.211 | 0.244 | 0.265 |
+
+`rdkit2d` wins frozen and reduced by a clear margin (16 of 32 endpoint-columns, out of 32,
+have `rdkit2d` as the single best flavor). Under unlocked, the ranking compresses and
+reorders: `jazzy` edges out `whim` (0.333 vs. 0.324) while `rdkit2d` drops to 4th (0.309),
+the same "unlocked compresses the spread, prescaling/target matters less once the
+backbone can move" pattern seen in the prescaling LR sweep. `reduced` is again the best
+protocol on average across flavors (mean 0.309 vs. 0.272 frozen, 0.303 unlocked), also
+matching the prescaling sweep's finding.
+
+Endpoint-family read (mean R-squared pooled across all 9 flavors, family assigned by
+recipe/endpoint name keyword):
+
+| Family | Mean R-squared | Best flavor |
+|---|---|---|
+| PXR | 0.660 | rdkit2d (0.701) |
+| Lipophilicity (LogD) | 0.446 | rdkit2d (0.656) |
+| Permeability/binding (MDR1, Caco-2, plasma-protein binding) | 0.423 | rdkit2d (0.495) |
+| Potency (pIC50) | 0.389 | usrcat (0.602) |
+| Solubility | 0.216 | rdkit2d (0.300) |
+| Clearance | 0.185 | rdkit2d (0.246) |
+| hERG | 0.162 | usrcat (0.223) |
+| CYP inhibition | 0.112 | pubchem (0.157) |
+
+PXR and lipophilicity are the easiest endpoints for every flavor; hERG and CYP inhibition
+are the hardest for every flavor, consistent with those being noisier, more
+mechanistically indirect assays regardless of pretraining target. `rdkit2d` is the best
+or near-best flavor on every family except potency and hERG, where `usrcat` (a 3D
+shape/pharmacophore descriptor) wins instead, the one specialization signal in this
+partial sweep: 3D shape appears to carry more signal for potency and hERG (both driven by
+binding-site geometry) than for the ADMET properties `rdkit2d` otherwise dominates.
 
 ## Per-flavor read
 
-To be filled, one short paragraph per flavor as results land. Expected priors to test:
-
-- Continuous descriptor flavors (osmordred, rdkit2d, erg) should be the strongest general foundations.
-- Binary fingerprint flavors (ecfp, atompair, pubchem, e3fp) are leaky/weak pretexts and
-  may underperform; confirm or refute.
-- 3D flavors (usrcat, whim, e3fp) encode information absent from the 2D graph; test
-  whether that helps any endpoint family.
-- Learned-model flavors (minimol, surrogate_adme, ml_qm) distill another model's
-  knowledge; test whether that transfers better than hand-crafted descriptor targets.
+- **rdkit2d**: strongest general foundation in this partial sweep, winning 16 of 32
+  endpoint-columns frozen and leading 6 of 8 endpoint families. Confirms the "continuous
+  descriptor flavors are strong general foundations" prior, at least relative to the other
+  8 flavors tested so far (osmordred not yet in this comparison).
+- **jazzy**: second-strongest frozen/reduced, and the unlocked-protocol winner. Notable
+  given the still-open target-dropout-fraction concern (`jazzy` is only 6 dims, so the
+  fixed 0.85 masked-pretext dropout keeps under 1 target/step on average); it is not
+  underperforming here despite that sparsity, so the dropout-ablation urgency should be
+  read against this result, not assumed to be confirmed by it.
+- **usrcat**: mid-table on mean R-squared but wins potency and hERG specifically, both
+  binding-driven endpoints. The one specialization result in this sweep: a 3D
+  shape/pharmacophore descriptor target transfers better than 2D descriptors for
+  endpoints that hinge on molecular shape and binding-site fit.
+- **ecfp, atompair, pubchem, e3fp** (binary fingerprint flavors): bottom half of the
+  ranking on mean R-squared (pubchem highest of the four at 0.285, e3fp lowest overall at
+  0.211), consistent with the "leaky/weak pretext" prior in the methodology watch-items.
+  Not uniformly worst, though: pubchem wins the CYP family, and atompair and e3fp each win
+  one endpoint-column outright.
+- **erg, whim**: unremarkable frozen/reduced, but both climb under unlocked (erg to 0.317,
+  whim to 0.324, whim's frozen-to-unlocked jump the largest in the table), suggesting
+  their pretext targets need more backbone adaptation to pay off than rdkit2d's does.
+- **osmordred**: not in this table (pretrained and finetuned separately under the
+  milestone-4/5 triage, full corpus, `chemeleon_baseline` prescaling); its frozen mean
+  R-squared there was 0.352, in the same range as `rdkit2d`'s 0.350 here, but the two runs
+  differ in corpus size and prescaling recipe, so this is context, not a controlled
+  comparison. A controlled osmordred-vs-Milestone-6 comparison needs osmordred rerun under
+  the Milestone-6 protocol (250K corpus, `order_fix`).
+- **minimol, surrogate_adme, ml_qm**: not started (Milestone 7).
 
 ## Meta-model
 
