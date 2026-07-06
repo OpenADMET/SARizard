@@ -68,7 +68,15 @@ mkdir -p slurm/logs
 # print the registry flavor list, one per line, using the main environment. the sed drops
 # blank lines: conda run appends a trailing newline that would otherwise become an empty
 # mapfile element and an off-by-one in every array that sizes itself from this list
+# Optional FLAVOR_SUBSET (space-separated flavor names) restricts every array-sized stage
+# that derives from this list (compute_targets, split, pretrain, finetune via
+# flavor_recipe_list, analyze) to that subset without touching the registry; unset (the
+# default) keeps the full flavor list
 flavor_list() {
+    if [[ -n "${FLAVOR_SUBSET:-}" ]]; then
+        tr ' ' '\n' <<<"$FLAVOR_SUBSET" | sed '/^$/d'
+        return
+    fi
     conda run -n "$MAIN_ENV" python -c \
         "from sarizard.pretraining.flavors import flavor_names; print('\n'.join(flavor_names()))" \
         | sed '/^$/d'

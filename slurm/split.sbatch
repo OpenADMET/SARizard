@@ -46,5 +46,22 @@ fi
 
 # split.py runs script-style from the pretraining directory; pass absolute paths
 cd "$REPO_DIR/sarizard/pretraining"
-python split.py --input-zarr "$TARGET_ZARR" --input-smiles "$CORPUS" \
-    --outdir "$SPLIT_DIR" --flavor "$FLAVOR" --force
+
+# continuous flavors get order_fix prescaling (winsorize before z-score, see
+# wiki/Prescaling Ablation.md) ahead of the split, the Milestone-6 override of the
+# Milestone-5 default (chemeleon_baseline); binary/fingerprint flavors skip rescaling
+# entirely regardless (their kind selects that inside split.py), so they run split.py
+# directly on the raw target as before
+KIND=$(conda run -n "$MAIN_ENV" python -c \
+    "from sarizard.pretraining.flavors import get_flavor; print(get_flavor('$FLAVOR').kind)")
+if [[ "$KIND" == "continuous" ]]; then
+    PRESCALED="$REPO_DIR/cache/prescaled/$FLAVOR/prescaled.zarr"
+    SUMMARY="$REPO_DIR/cache/prescaled/$FLAVOR/prescaling_summary.json"
+    python prescaling.py --input-zarr "$TARGET_ZARR" --output-zarr "$PRESCALED" \
+        --ablation order_fix --summary "$SUMMARY" --force
+    python split.py --input-zarr "$PRESCALED" --input-smiles "$CORPUS" \
+        --outdir "$SPLIT_DIR" --flavor "$FLAVOR" --prescaled --force
+else
+    python split.py --input-zarr "$TARGET_ZARR" --input-smiles "$CORPUS" \
+        --outdir "$SPLIT_DIR" --flavor "$FLAVOR" --force
+fi
