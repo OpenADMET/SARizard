@@ -177,6 +177,26 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   or was produced before that guard existed). Pinned `scipy<1.13` in `envs/minimol.yml`,
   confirmed the calculator returns real embeddings, deleted the corrupted
   `target.npy`/`target.zarr`, and let the resubmitted targets job recompute it clean.
+  **Chain complete through finetune; analyze's "failure" is expected.** Corpus, targets,
+  split, pretrain, and all 24 finetune array tasks (19181247) completed clean. Analyze
+  (19181248) shows FAILED in `sacct`, but the report card stage ran first and wrote
+  `results/metrics.csv` (32 rows) and the report-card plots before the job exited nonzero;
+  the actual exit came from `meta_model.py:210`'s deliberate
+  `raise SystemExit("no stackable endpoints... need >=2 flavors each")`, since minimol is
+  the only flavor with results in that directory right now. That guard is doing its job,
+  not signaling a bug. minimol's mean R-squared across the 32 endpoint-columns is 0.360
+  (frozen protocol), edging out `rdkit2d`'s 0.350 frozen mean from Milestone 6, though the
+  two runs were not evaluated in one merged table so treat this as context, not a
+  controlled comparison yet.
+  **Note for the next merged evaluation:** `evaluate.py`'s default `--out` always writes
+  `results/metrics.csv`, so this run's `--flavors minimol` invocation overwrote Milestone
+  6's 288-row merged file with minimol's 32 rows. Nothing is lost: every Milestone-6
+  finetune result dir and its cached `y_pred.npy` are still on disk under `results/`, and a
+  separately-named `results/metrics_report_card_with_osmordred.csv` already holds a
+  320-row merged table. Re-running `evaluate.py` with no `--flavors` filter (or with the
+  full flavor list) will regenerate a complete `results/metrics.csv` from the cached
+  predictions; do that before the next report-card or meta-model pass so it is not
+  scoped to whichever flavor last ran the analyze stage.
 - [ ] 8. Report card: heatmap of endpoints by flavors with a selectable metric (default R-squared).
 - [ ] 9. Meta-model: stack per-flavor finetuned predictions per endpoint, fit LGBM/RF/MLP
   on out-of-fold predictions, compare to the best single flavor.

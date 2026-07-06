@@ -25,7 +25,15 @@ finetune protocols) completed with no failures; see the report card below. Miles
 (learned-model flavors: minimol, surrogate_adme, ml_qm) is in progress, scoped to `minimol`
 only: `ml_qm` and `surrogate_adme` are held out pending the open target-dropout-fraction
 ablation (`TODO.md`, Future experiments), which names both directly as needing that
-ablation before fan-out.
+ablation before fan-out. `minimol`'s finetune chain (frozen protocol, 250K corpus)
+completed clean: mean R-squared 0.360 across 32 endpoint-columns, edging out `rdkit2d`'s
+0.350 frozen mean from Milestone 6, though the two were not evaluated in one merged table
+so this is context, not a controlled comparison yet. The chained analyze job exited
+nonzero, but only because `meta_model.py` deliberately refuses to stack fewer than two
+flavors; the report-card stage before it wrote `results/metrics.csv` and the plots
+successfully. See `TODO.md` Milestone 7 for the full account, including a note that this
+run overwrote Milestone 6's merged `results/metrics.csv` (recoverable from cached
+predictions; nothing was lost).
 
 ## Prescaling
 
@@ -384,8 +392,12 @@ binding-site geometry) than for the ADMET properties `rdkit2d` otherwise dominat
   differ in corpus size and prescaling recipe, so this is context, not a controlled
   comparison. A controlled osmordred-vs-Milestone-6 comparison needs osmordred rerun under
   the Milestone-6 protocol (250K corpus, `order_fix`).
-- **minimol**: Milestone 7, in progress (see Status above); results to follow once the
-  finetune/analyze stages complete.
+- **minimol**: Milestone 7, finetune complete (frozen protocol, 250K corpus). Mean
+  R-squared 0.360 across 32 endpoint-columns, the highest single-flavor mean seen so far
+  in this sweep (edges `rdkit2d`'s 0.350), though not yet compared to Milestone 6 in one
+  merged table. A learned 512-dim embedding transferring at least as well as the strongest
+  direct-compute descriptor is a positive early signal for the learned-flavor family,
+  worth confirming once `ml_qm` and `surrogate_adme` land and a merged comparison is run.
 - **surrogate_adme, ml_qm**: not started. Held out of Milestone 7 pending the open
   target-dropout-fraction ablation (`TODO.md`, Future experiments), which names both
   directly (24- and 25-dim targets) as needing that ablation before fan-out, unlike
