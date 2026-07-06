@@ -157,6 +157,26 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   this same protocol (250K corpus, `order_fix`).
 - [ ] 7. Add the learned-model flavors: minimol, surrogate_adme, ml_qm. Each runs its
   source model over the shared corpus in an isolated environment and caches the target.
+  **In progress, scoped to minimol only.** `ml_qm` (24-dim target) and `surrogate_adme`
+  (25-dim target) are skipped for now: the target-dropout-fraction blocker below names both
+  by name as needing that ablation before fan-out, not only "if they underperform," and it
+  has not been run. Explicit call: hold both pending either that ablation or an override
+  decision, rather than repeat the jazzy precedent (milestone 6 shipped jazzy, a similarly
+  narrow target, without the ablation). `minimol` (512-dim) is not implicated by the blocker
+  (comparable width to osmordred's 3585), so it proceeds alone via
+  `FLAVOR_SUBSET=minimol bash slurm/run_all.sh` (single frozen protocol, no LR-mode
+  override, unlike milestone 6). Submitted as one chain: corpus (job 19181243, skipped,
+  already exists) → targets (19181244) → split (19181245) → pretrain (19181246) → finetune
+  (19181247, array 0-23, 24 recipes) → analyze (19181248), each `afterok` the last.
+  Found and fixed a real bug before submitting: `cache/targets/minimol/target.npy` (250K
+  rows, cached from earlier scaffolding) was entirely NaN. `envs/minimol.yml` left `scipy`
+  unpinned, so pip resolved 1.15.3, which dropped `float16` sparse-matrix support that
+  `graphium`'s featurizer (a minimol dependency) relies on; every calculator call raised
+  `ValueError` before ever reaching a molecule, and the whole target came back NaN with no
+  per-row signal to catch it (this predates `compute_target.py`'s later crash-orphan guard,
+  or was produced before that guard existed). Pinned `scipy<1.13` in `envs/minimol.yml`,
+  confirmed the calculator returns real embeddings, deleted the corrupted
+  `target.npy`/`target.zarr`, and let the resubmitted targets job recompute it clean.
 - [ ] 8. Report card: heatmap of endpoints by flavors with a selectable metric (default R-squared).
 - [ ] 9. Meta-model: stack per-flavor finetuned predictions per endpoint, fit LGBM/RF/MLP
   on out-of-fold predictions, compare to the best single flavor.
@@ -230,7 +250,7 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   effect from initialization variance. Set `FLAVOR_SEEDS` for `run_all.sh` (and
   `ABLATION_SEEDS` for the triage); the report card and meta-model average the seeds per
   flavor, and re-running with more seeds fills in only the new ones.
-- [ ] **Blocker for Milestone 6, raised in urgency:** target-dropout fraction for small
+- [ ] **Blocker for Milestone 7, raised in urgency:** target-dropout fraction for small
   flavors. The masked-pretext dropout in `losses.py` (`DROPOUT_FRACTION`, applied per target
   element to every flavor) keeps a fixed fraction, not a fixed count. Its rationale (stop the
   head co-adapting across a wide descriptor block) is strong at 3585 dims (osmordred) but
@@ -240,10 +260,15 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   kept) that this item originally flagged as merely noisy. Mechanically safe (loss aggregates
   over all kept elements in the batch, not per-row, so no divide-by-zero), but likely
   unusably sparse. Ablate the fraction (e.g. 0.0, 0.15, 0.85) per small flavor, holding the
-  backbone and target fixed, the same way as the prescaling triage, **before** Milestone 6
-  fans out jazzy/ml_qm/surrogate_adme, not only "if they underperform" as originally scoped.
-  Keep it fixed across the main sweep once decided; varying it per flavor mid-sweep would
-  confound the report card.
+  backbone and target fixed, the same way as the prescaling triage, **before** ml_qm (24
+  dims) or surrogate_adme (25 dims) fan out, not only "if they underperform" as originally
+  scoped. Keep it fixed across the main sweep once decided; varying it per flavor mid-sweep
+  would confound the report card.
+  **Status: still open, now the reason ml_qm and surrogate_adme are held out of Milestone 7.**
+  Milestone 6 shipped `jazzy` without this ablation (an explicit, recorded deferral for that
+  one flavor); Milestone 7 does not repeat that deferral for `ml_qm`/`surrogate_adme` since
+  this item names them directly. `minimol` (512 dims) is unaffected by this blocker and
+  proceeds on its own.
 - [ ] Frozen warmup then coadaptation: train for N epochs with `mpnn_lr=0` so the FFN head
   finds a reasonable operating point against the fixed representations, then unfreeze the
   MPNN and continue training at a reduced rate. Avoids the large gradient shock that occurs
