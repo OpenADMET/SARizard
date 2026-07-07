@@ -4,7 +4,15 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from sarizard.analysis.report_card import _row_relative, build_matrix, collapse_seed_variants
+from sarizard.analysis.report_card import (
+    SPACER_COLUMN,
+    _row_relative,
+    augment_with_references,
+    build_matrix,
+    build_reference_series,
+    collapse_seed_variants,
+    meta_model_series,
+)
 
 
 @pytest.fixture
@@ -97,3 +105,76 @@ def test_seed_variants_average_into_one_flavor_column():
 
     assert pivot.shape == (1, 1)
     assert pivot.loc["herg · herg", "ecfp"] == pytest.approx(0.5)
+
+
+def test_build_reference_series_extracts_one_flavor(tidy_metrics):
+    baseline_row = pd.DataFrame(
+        [{"flavor": "chemeleon_stock", "dataset": "herg", "endpoint": "herg", "r2": 0.4}]
+    )
+    frame = pd.concat([tidy_metrics, baseline_row], ignore_index=True)
+
+    series = build_reference_series(frame, "chemeleon_stock", "r2")
+
+    assert series.to_dict() == {"herg · herg": 0.4}
+
+
+def test_build_reference_series_empty_when_flavor_absent(tidy_metrics):
+    series = build_reference_series(tidy_metrics, "chemeleon_stock", "r2")
+
+    assert series.empty
+
+
+def test_meta_model_series_reads_r2_column(tmp_path):
+    csv = tmp_path / "meta_model_lgbm.csv"
+    pd.DataFrame(
+        [{"dataset": "herg", "endpoint": "herg", "meta_r2": 0.8, "meta_rmse": 0.2}]
+    ).to_csv(csv, index=False)
+
+    series = meta_model_series(csv, "r2")
+
+    assert series.to_dict() == {"herg · herg": 0.8}
+
+
+def test_meta_model_series_empty_for_unsupported_metric(tmp_path):
+    csv = tmp_path / "meta_model_lgbm.csv"
+    pd.DataFrame(
+        [{"dataset": "herg", "endpoint": "herg", "meta_r2": 0.8, "meta_rmse": 0.2}]
+    ).to_csv(csv, index=False)
+
+    series = meta_model_series(csv, "spearman")
+
+    assert series.empty
+
+
+def test_meta_model_series_empty_when_csv_missing(tmp_path):
+    series = meta_model_series(tmp_path / "missing.csv", "r2")
+
+    assert series.empty
+
+
+def test_augment_with_references_adds_spacer_and_labeled_columns(tidy_metrics):
+    pivot = build_matrix(tidy_metrics, "r2")
+    baseline = pd.Series({"herg · herg": 0.2, "cyp · cyp3a4": 0.4})
+    meta = pd.Series({"herg · herg": 0.9, "cyp · cyp3a4": 0.8})
+
+    augmented, divider_at = augment_with_references(pivot, baseline=baseline, meta_model=meta)
+
+    assert divider_at == pivot.shape[1]
+    assert list(augmented.columns) == [
+        "osmordred", "ecfp", SPACER_COLUMN,
+        "chemeleon baseline (stock, external)", "meta-model (LGBM, all flavors)",
+    ]
+    assert augmented.loc["herg · herg", "chemeleon baseline (stock, external)"] == 0.2
+    assert augmented.loc["cyp · cyp3a4", "meta-model (LGBM, all flavors)"] == 0.8
+    assert np.isnan(augmented[SPACER_COLUMN]).all()
+
+
+def test_augment_with_references_skips_empty_series(tidy_metrics):
+    pivot = build_matrix(tidy_metrics, "r2")
+
+    augmented, divider_at = augment_with_references(
+        pivot, baseline=pd.Series(dtype=float), meta_model=None
+    )
+
+    assert divider_at == pivot.shape[1]
+    assert list(augmented.columns) == list(pivot.columns)
