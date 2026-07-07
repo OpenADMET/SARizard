@@ -21,9 +21,10 @@ class _RandomDropoutMixin:
 
     ``dropout_fraction`` is the fraction dropped, so a fraction ``1 - dropout_fraction``
     of the finite targets is kept and contributes to the loss. Defaults to the shared
-    regime constant ``DROPOUT_FRACTION``; pass an explicit value to override it for a
-    single flavor (e.g. narrow targets where the regime default keeps under one target
-    per step) without touching the constant every other flavor relies on. ``clone()``
+    regime constant ``DROPOUT_FRACTION``; pass an explicit value to tune it for a single
+    above-threshold flavor without touching the constant every other flavor relies on.
+    Narrow targets (at or under ``DROPOUT_OVERRIDE_MAX_DIM``) always receive 0.0 from the
+    caller as a hard invariant, never a nonzero override. ``clone()``
     (``torchmetrics.Metric.clone``, used by chemprop to snapshot the criterion as a
     validation metric) is a ``deepcopy``, so this instance attribute survives cloning.
     """

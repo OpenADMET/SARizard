@@ -111,6 +111,17 @@ foundation, so treat each as a gate.
   flavor, fixed backbone) can pick a recipe. Once picked, bake it into the core workflow and
   apply it identically to every continuous flavor; varying prescaling mid-sweep confounds the
   report card like varying the backbone would.
+- **Zero dropout below the width threshold (hard invariant).** The masked-pretext target
+  dropout (`losses.py`, `DROPOUT_FRACTION=0.85`) keeps a fixed fraction, so at narrow target
+  widths it starves supervision. Any target block at or under
+  `config.DROPOUT_OVERRIDE_MAX_DIM` (30 dims: jazzy at 6, ml_qm at 24, surrogate_adme at 25,
+  and any PCA threshold whose component count lands there) pretrains at `dropout_fraction=0.0`
+  unconditionally. `train.py` resolves this from `n_features` read off the split, before the
+  `--dropout-fraction` flag, and rejects a nonzero flag or `DROPOUT_FRACTION_OVERRIDES` entry
+  for such a flavor rather than honoring it. This is settled, not an open ablation: do not
+  reintroduce dropout on a sub-threshold flavor, do not raise the fraction for one, and do not
+  lift the threshold to bring one back under masking. The `--dropout-fraction` flag exists
+  only to tune above-threshold flavors as a recorded, one-off deviation.
 
 ## Standing gates
 

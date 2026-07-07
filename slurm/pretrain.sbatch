@@ -47,8 +47,10 @@ if [[ ! -d "$SPLIT_DIR/train_rescaled.zarr" ]]; then
 fi
 RUN_DIR="$REPO_DIR/sarizard/pretraining/runs/${FLAVOR}__s${SEED}"
 
-# per-flavor dropout-fraction override (see DROPOUT_FRACTION_OVERRIDES in env.sh); empty
-# for every flavor by default, in which case train.py falls back to the regime constant
+# per-flavor dropout-fraction override for above-threshold flavors only (see
+# DROPOUT_FRACTION_OVERRIDES in env.sh); empty for every flavor by default, in which case
+# train.py falls back to the regime constant. A flavor at or under DROPOUT_OVERRIDE_MAX_DIM
+# pretrains at 0.0 as a hard invariant and train.py rejects a nonzero override for it
 DROPOUT_ARGS=()
 DROPOUT_OVERRIDE="$(dropout_fraction_for "$FLAVOR")"
 if [[ -n "$DROPOUT_OVERRIDE" ]]; then
