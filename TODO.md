@@ -246,11 +246,18 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   `report_card.py`'s `build_reference_series`/`meta_model_series`/`augment_with_references`;
   `configs/generate.py --stock-baseline`; `slurm/run_stock_baseline.sh` +
   `finetune_stock_baseline.sbatch` (one-time, corpus/regime-independent); `analyze.sbatch`
-  folds `results/chemeleon_stock/` in automatically when present. **The stock-baseline
-  finetune has not been run yet**, so the baseline column is currently empty (silently
-  skipped, per `--no-references`'s fallback); the meta-model column populates once the
-  full-corpus rerun's `analyze` stage (job 33592) completes. Run `bash
-  slurm/run_stock_baseline.sh` to populate the baseline column.
+  folds `results/chemeleon_stock/` in automatically when present.
+  **Stock-baseline finetune submitted; a dedicated 250K report card is chained after it.**
+  `bash slurm/run_stock_baseline.sh` submitted job 53237 (24-task array, `results/
+  chemeleon_stock/`). `slurm/report_card_250k.sbatch` (job 54188, `afterok:53237`) evaluates
+  the baseline into `results/metrics_chemeleon_stock.csv`, merges it with the archived 250K
+  flavor-sweep metrics (`archive/flavor_sweep_250k/results/metrics.csv`, 10 flavors) into a
+  new derived file (`archive/flavor_sweep_250k/results/metrics_with_references.csv`, the
+  archive's own files untouched), and renders `plots/report_card_250k_r2.png` with both
+  reference columns, using the archived `meta_model_lgbm.csv` for the meta-model column.
+  This is a one-off request (a report card for the archived 250K run specifically), separate
+  from the full-corpus rerun's own `analyze` stage (job 33592), which will pick up
+  `chemeleon_stock` into the live `results/metrics.csv` automatically once both finish.
 - [x] 9. Meta-model: stack per-flavor finetuned predictions per endpoint, fit LGBM/RF/MLP
   on out-of-fold predictions, compare to the best single flavor.
   First real result, produced by the same job 19230968 now that ≥2 flavors have results:
