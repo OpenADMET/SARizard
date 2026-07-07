@@ -168,8 +168,15 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   archived to `archive/flavor_sweep_250k/`. Targets for all 9 flavors recomputed against
   `corpus/corpus_full.parquet`; the fast direct-compute ones (atompair, ecfp, erg, pubchem,
   rdkit2d) finished within the hour, the sharded slow ones (usrcat, whim, e3fp, jazzy) via
-  `compute_target_shard.sbatch`/`merge_target.sbatch` took several hours each. All 9 targets
-  are cached; prescale/split/pretrain/finetune/analyze at full-corpus scale have not yet run.
+  `compute_target_shard.sbatch`/`merge_target.sbatch` took several hours each.
+  **Submitted the rest of the chain** via `bash slurm/run_all.sh` (`CORPUS_FILE=corpus/
+  corpus_full.parquet CORPUS_N=1000000`, all 16 registry flavors including Milestone 7's
+  `ml_qm`/`minimol`/`surrogate_adme` and the new `osmordred_pca80/90/95`): corpus (job
+  33586, completed, skipped) → targets (33587, array 0-15, completed, all skipped since
+  already cached) → pca-targets (33588) → split (33589, array 0-15) → pretrain (33590,
+  16 tasks) → finetune (33591, array 0-383, 384 recipes) → analyze (33592), each `afterok`
+  the last. Not yet complete as of this note; check `sacct -j
+  33586,33587,33588,33589,33590,33591,33592` for current state.
 - [ ] 7. Add the learned-model flavors: minimol, surrogate_adme, ml_qm. Each runs its
   source model over the shared corpus in an isolated environment and caches the target.
   **In progress, scoped to minimol only.** `ml_qm` (24-dim target) and `surrogate_adme`
@@ -223,7 +230,8 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   (`cache/targets/ml_qm/target.zarr`, 944,296 x 24); `surrogate_adme` keeps its own
   Novartis-molecule corpus (unaffected by the full-corpus switch, per the AGENTS.md
   invariant) and has not been touched. Prescale/split/pretrain/finetune/analyze for
-  `ml_qm` have not yet run at full-corpus scale.
+  `ml_qm` (and every other flavor) are submitted as part of the same chain described in
+  Milestone 6's note above (jobs 33586-33592); not yet complete as of this note.
 - [x] 8. Report card: heatmap of endpoints by flavors with a selectable metric (default R-squared).
   Regenerated across all 10 completed flavors (the 9 Milestone-6 flavors plus `minimol`) by
   resubmitting `analyze.sbatch` with no `FLAVOR_SUBSET` (job 19230968, completed clean);
@@ -384,8 +392,10 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   `slurm/osmordred_pca_targets.sbatch` runs it, gated into `run_all.sh`'s chain only when
   the registry has a derived flavor. `compute_targets.sbatch` and `split.sbatch` skip a
   derived flavor's own target/prescale stage and treat its PCA output as already prescaled.
-  Recipes are generated (`configs/osmordred_pca{80,90,95}__s42/`) but nothing has pretrained
-  yet; this rides on the full-corpus rerun's `run_all.sh` submission.
+  Recipes are generated (`configs/osmordred_pca{80,90,95}__s42/`); its target-derivation
+  stage is job 33588 in the full-corpus `run_all.sh` chain described in Milestone 6, and
+  pretrain/finetune ride the same chain (jobs 33590/33591) once split completes. Not yet
+  complete as of this note.
 
 ## Methodology watch-items
 
