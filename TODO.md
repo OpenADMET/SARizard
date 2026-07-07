@@ -177,6 +177,15 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   16 tasks) → finetune (33591, array 0-383, 384 recipes) → analyze (33592), each `afterok`
   the last. Not yet complete as of this note; check `sacct -j
   33586,33587,33588,33589,33590,33591,33592` for current state.
+  **This `run_all.sh` chain covers the frozen protocol only** (384 = 16 flavors x 24
+  endpoints x 1 seed). Pretrain task 14 (`osmordred_pca90`) failed transiently on a bad GPU
+  node (`No CUDA GPUs are available`), which cascaded to cancel finetune (33591) and analyze
+  (33592) via their `afterok` dependency; the failed pretrain is resubmitted as job 93729_14
+  (running). Once it lands, the frozen finetune+analyze need resubmitting, AND the reduced +
+  unlocked protocols must be submitted separately via `bash slurm/run_lr_experiments.sh`
+  (`LR_MODES="reduced unlocked"`, `FLAVOR_SEEDS` matching the sweep) off the same
+  foundations, so all three learning-rate protocols are covered on the full corpus (per the
+  standing directive in Methodology watch-items). Neither is submitted yet.
 - [ ] 7. Add the learned-model flavors: minimol, surrogate_adme, ml_qm. Each runs its
   source model over the shared corpus in an isolated environment and caches the target.
   **In progress, scoped to minimol only.** `ml_qm` (24-dim target) and `surrogate_adme`
@@ -282,6 +291,23 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   Verified by rendering locally against 137211's own merged CSV: 29 unique endpoint rows, 13
   columns (10 flavors + spacer + 2 reference columns, both 29/29 populated). Report card saved
   at `plots/report_card_250k_r2.png`/`.csv`; the two intermediate CSVs above are on disk.
+  **Final full-corpus report-card deliverable (requested, produce after the sweep analysis
+  completes).** Six report cards: one per learning-rate protocol (frozen, reduced, unlocked)
+  crossed with the two color modes, `--color-mode absolute` (fixed [0,1] scale) and
+  `--color-mode baseline-diverging` (red/blue centered on each row's stock-CheMeleon
+  baseline). Every card shows all 16 flavors (osmordred, the 9 direct-compute flavors,
+  minimol, surrogate_adme, ml_qm, and osmordred_pca80/90/95) plus the two reference columns
+  (stock baseline, meta-model). Both color modes already exist in `report_card.py`; two gaps
+  remain for the non-frozen cards and the per-protocol meta-model, not yet wired:
+  (1) `report_card.py` keys columns by flavor label and reads a single `--metrics-csv`, so the
+  frozen card runs off `results/metrics.csv` directly, but the reduced and unlocked cards need
+  `results/lr_metrics.csv` filtered to one mode with its `lr_<mode>__` prefix stripped back to
+  the bare flavor name so the columns match the registry; no `--lr-mode` filter flag exists
+  yet, so add one (or a small per-mode CSV pre-filter). (2) The meta-model must run once per
+  protocol (see Milestone 9); `meta_model.py` currently runs frozen only and always writes
+  `<results>/meta_model_<estimator>.csv`, so each protocol needs its own mode-scoped prediction
+  dirs (`--results`/`--flavors`) and a distinct output CSV so the three do not overwrite each
+  other, then each card's `--meta-model-csv` points at the matching protocol's file.
 - [x] 9. Meta-model: stack per-flavor finetuned predictions per endpoint, fit LGBM/RF/MLP
   on out-of-fold predictions, compare to the best single flavor.
   First real result, produced by the same job 19230968 now that ≥2 flavors have results:
@@ -291,6 +317,11 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   meta-model has to beat; `usrcat` (4), `atompair`/`jazzy`/`e3fp` (2 each), `whim`/`ecfp` (1
   each) round out the rest. See `results/meta_model_lgbm.csv` for the per-endpoint table and
   `FINDINGS.md` for the read.
+  **Per-protocol meta-models wanted for the final deliverable (see Milestone 8's note).** The
+  full-corpus report cards need a meta-model per learning-rate protocol, not just frozen. Run
+  `meta_model.py` three times, once against each protocol's mode-scoped prediction dirs, and
+  write three distinct output CSVs (the default `meta_model_<estimator>.csv` name collides
+  across runs); feed each into the matching protocol's two report cards.
 - [ ] 10. (GATED on 8, and only if any flavor beats baseline) Scale the flavors that show
   utility up to the full 1M-molecule corpus to produce the final foundation-model artifacts.
   **Folded into Milestones 6-9's full-corpus rerun (Milestone 2's supersede note):** rather
@@ -478,6 +509,13 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   Do not reintroduce dropout on a sub-threshold flavor, raise its fraction, or lift the
   threshold to bring one back under masking; see the resolved blocker in Future experiments
   and the invariant in `AGENTS.md`.
+- **Finetuning always covers all three learning-rate protocols (standing directive).** Any
+  finetuning submission runs frozen (`mpnn_lr=0`), reduced (`mpnn_lr=ffn_lr/10`), and
+  unlocked (`mpnn_lr=ffn_lr`), not frozen alone. `run_all.sh`'s finetune stage is frozen-only
+  by construction, so pair it with `slurm/run_lr_experiments.sh` (`LR_MODES="reduced
+  unlocked"`, `FLAVOR_SEEDS` matching the sweep) off the same foundations; the LR path reuses
+  the pretrained foundations, so submit it only after every foundation the sweep needs is on
+  disk. Do not treat "finetune" as frozen-only.
 - Pretraining regime constants (`sarizard/pretraining/config.py`) are reconciled against the
   sibling `../foundation-models/pretraining` implementation as of the training-collapse fix
   (`PATIENCE`, `FNN_HIDDEN_SIZE`, `WARMUP_EPOCHS`, `DROPOUT_FRACTION`, `GRADIENT_CLIP_VAL`,
