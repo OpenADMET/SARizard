@@ -258,6 +258,30 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   This is a one-off request (a report card for the archived 250K run specifically), separate
   from the full-corpus rerun's own `analyze` stage (job 33592), which will pick up
   `chemeleon_stock` into the live `results/metrics.csv` automatically once both finish.
+  **One stock-finetune task failed transiently; rerun and report card resubmitted.** Task
+  `53237_11` (`chembl_clint_rlm_st`) died on `RuntimeError: No CUDA GPUs are available` (a bad
+  GPU node, not a code fault); the other 23 tasks completed. The `afterok:53237` dependency
+  therefore resolved to `(failed)` and left the report card (job 54188) parked in PENDING
+  forever, so nothing was rendered. The crash left a partial `results/chemeleon_stock/
+  chembl_clint_rlm_st/` (9 data-prep files, no trained model), which would have made the
+  skip-if-exists guard silently no-op a rerun; removed it, then resubmitted just that endpoint
+  (`sbatch --array=11`, job 137151_11, completed clean in 1:21). Cancelled the dead 54188 and
+  resubmitted the report card chained to the rerun (job 137211, `afterok:137151`).
+  **137211 exposed a real render bug, now fixed.** The rerun completed and 137211's evaluate
+  and merge stages wrote `results/metrics_chemeleon_stock.csv` (32 rows) and
+  `archive/flavor_sweep_250k/results/metrics_with_references.csv` (352 rows, 11 flavors), but
+  the render step crashed in `report_card.py`'s `augment_with_references` with
+  `ValueError: cannot reindex on an axis with duplicate labels`. Cause: the report card's row
+  identity is `dataset · endpoint`, but that pair is not unique when the same endpoint appears
+  under both a single-task and a multi-task recipe (`LOG_CLint_HLM`, `LOG_CLint_RLM`, `LogD`
+  each collide). `build_matrix` already collapses these with `aggfunc="mean"`, but
+  `build_reference_series` and `meta_model_series` built their Series with the raw, duplicated
+  index, so `.reindex` onto the pivot failed. This was the first run to exercise the reference
+  columns with real data (Milestone 8 left them "code done, data not generated"). Fixed both
+  builders to `.groupby(level=0).mean()` the duplicate labels, matching `build_matrix`.
+  Verified by rendering locally against 137211's own merged CSV: 29 unique endpoint rows, 13
+  columns (10 flavors + spacer + 2 reference columns, both 29/29 populated). Report card saved
+  at `plots/report_card_250k_r2.png`/`.csv`; the two intermediate CSVs above are on disk.
 - [x] 9. Meta-model: stack per-flavor finetuned predictions per endpoint, fit LGBM/RF/MLP
   on out-of-fold predictions, compare to the best single flavor.
   First real result, produced by the same job 19230968 now that ≥2 flavors have results:
