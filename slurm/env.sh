@@ -30,6 +30,14 @@ CORPUS_N="${CORPUS_N:-250000}"
 # the representative continuous flavor driven through the prescaling ablation triage
 ABLATION_FLAVOR="${ABLATION_FLAVOR:-osmordred}"
 
+# base flavor and explained-variance thresholds for the PCA-compressed-target flavors
+# (osmordred_pca80/90/95 by default). osmordred_pca_targets.sbatch prescales PCA_BASE_FLAVOR
+# with the "full" recipe, fits PCA on the train rows once, and writes one target.zarr per
+# threshold; flavors.py's flavor_names() must already register threshold_flavor_name(base, t)
+# for each threshold requested here.
+PCA_BASE_FLAVOR="${PCA_BASE_FLAVOR:-osmordred}"
+PCA_THRESHOLDS="${PCA_THRESHOLDS:-0.8 0.9 0.95}"
+
 # training seeds for the prescaling triage (space-separated). Multiple seeds estimate the
 # seed-driven variance the prescaling effect must clear; kept to the single ABLATION_FLAVOR.
 ABLATION_SEEDS="${ABLATION_SEEDS:-42}"

@@ -37,24 +37,34 @@ if [[ ! -d "$TARGET_ZARR" ]]; then
     echo "missing $TARGET_ZARR; run slurm/compute_targets.sbatch first" >&2
     exit 1
 fi
-# surrogate_adme uses its own corpus written by compute_target; all other flavors share 250K
+# surrogate_adme uses its own corpus written by compute_target; all other flavors share
+# whichever corpus this run targets (CORPUS_FILE, env.sh)
 if [[ "$FLAVOR" == "surrogate_adme" ]]; then
     CORPUS="$REPO_DIR/cache/targets/surrogate_adme/corpus_smiles.parquet"
 else
-    CORPUS="$REPO_DIR/corpus/corpus_250k.parquet"
+    CORPUS="$REPO_DIR/$CORPUS_FILE"
 fi
 
 # split.py runs script-style from the pretraining directory; pass absolute paths
 cd "$REPO_DIR/sarizard/pretraining"
 
-# continuous flavors get order_fix prescaling (winsorize before z-score, see
-# wiki/Prescaling Ablation.md) ahead of the split, the Milestone-6 override of the
-# Milestone-5 default (chemeleon_baseline); binary/fingerprint flavors skip rescaling
-# entirely regardless (their kind selects that inside split.py), so they run split.py
-# directly on the raw target as before
+DERIVED_FROM=$(conda run -n "$MAIN_ENV" python -c \
+    "from sarizard.pretraining.flavors import get_flavor; print(get_flavor('$FLAVOR').derived_from or '')")
 KIND=$(conda run -n "$MAIN_ENV" python -c \
     "from sarizard.pretraining.flavors import get_flavor; print(get_flavor('$FLAVOR').kind)")
-if [[ "$KIND" == "continuous" ]]; then
+
+if [[ -n "$DERIVED_FROM" ]]; then
+    # a derived flavor's target.zarr (e.g. osmordred_pca80, written by
+    # slurm/osmordred_pca_targets.sbatch) is already cleaned, PCA-projected, and z-scored;
+    # treat it exactly like a prescaled input, no further order_fix prescaling
+    python split.py --input-zarr "$TARGET_ZARR" --input-smiles "$CORPUS" \
+        --outdir "$SPLIT_DIR" --flavor "$FLAVOR" --prescaled --force
+elif [[ "$KIND" == "continuous" ]]; then
+    # continuous flavors get order_fix prescaling (winsorize before z-score, see
+    # wiki/Prescaling Ablation.md) ahead of the split, the Milestone-6 override of the
+    # Milestone-5 default (chemeleon_baseline); binary/fingerprint flavors skip rescaling
+    # entirely regardless (their kind selects that inside split.py), so they run split.py
+    # directly on the raw target as before
     PRESCALED="$REPO_DIR/cache/prescaled/$FLAVOR/prescaled.zarr"
     SUMMARY="$REPO_DIR/cache/prescaled/$FLAVOR/prescaling_summary.json"
     python prescaling.py --input-zarr "$TARGET_ZARR" --output-zarr "$PRESCALED" \
