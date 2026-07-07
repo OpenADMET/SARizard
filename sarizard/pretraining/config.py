@@ -30,6 +30,14 @@ CONFORMER_FORCE_FIELD = "MMFF94"
 # had it.
 DROPOUT_FRACTION = 0.85  # keeps 15% of targets/step (matches sibling's MASKING_RATIO=0.15);
 # was 0.30 (keeps 70%), a much denser per-step supervision load on a 3585-dim target block
+
+# a target block at or below this width keeps under ~5 elements/step at DROPOUT_FRACTION
+# (ml_qm 24, surrogate_adme 25, jazzy 6 all qualify); train.py drops dropout to 0.0 for these
+# automatically unless --dropout-fraction is passed explicitly, rather than pretraining
+# against near-zero supervision density. Not the ablation once planned to pick this value
+# (TODO.md Future experiments): an explicit override decision instead, since a 24-25 dim
+# target is unlikely to need masking's co-adaptation guard the way osmordred's 3585 does.
+DROPOUT_OVERRIDE_MAX_DIM = 30
 EPOCHS = 100
 PATIENCE = 50  # was 5; the sibling's patience is 10x more tolerant of a transient bad epoch
 INITIAL_LEARNING_RATE = 0.0001
