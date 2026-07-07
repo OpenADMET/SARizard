@@ -225,7 +225,13 @@ def _row_relative(values: np.ndarray, higher_better: bool) -> np.ndarray:
 
 
 def plot_report_card(
-    pivot: pd.DataFrame, metric: str, out_png: Path, out_csv: Path, *, divider_at: int | None = None
+    pivot: pd.DataFrame,
+    metric: str,
+    out_png: Path,
+    out_csv: Path,
+    *,
+    divider_at: int | None = None,
+    absolute_color: bool = False,
 ) -> None:
     """Render and save the report-card heatmap and its metric matrix CSV.
 
@@ -245,19 +251,33 @@ def plot_report_card(
         return value). When given and less than the column count, a white gap and divider
         lines are drawn there to visually separate reference columns from flavor columns,
         and the columns after it are bold-labeled as references rather than flavors.
+    absolute_color : bool, optional
+        When True, color each cell by its raw metric value on a fixed ``[0, 1]`` scale
+        (values outside the range clamp), so a color is comparable across endpoints. When
+        False (the default), color is row-relative: each endpoint is min-max normalized so
+        its best flavor maps to the top of the scale. Intended for metrics that live in
+        ``[0, 1]`` (e.g. r2, spearman); for a lower-is-better metric the colormap is
+        reversed so green still marks the better value.
     """
     values = pivot.to_numpy(dtype=float)
-    normed = _row_relative(values, metric in HIGHER_IS_BETTER)
+    higher_better = metric in HIGHER_IS_BETTER
     n_rows, n_cols = values.shape
 
-    cmap = plt.get_cmap("RdYlGn").copy()
+    # absolute mode colors by the raw value on a fixed [0, 1] scale (reverse the map for a
+    # lower-better metric so green stays "good"); row-relative mode normalizes each endpoint
+    if absolute_color:
+        color_values = values
+        cmap = plt.get_cmap("RdYlGn" if higher_better else "RdYlGn_r").copy()
+    else:
+        color_values = _row_relative(values, higher_better)
+        cmap = plt.get_cmap("RdYlGn").copy()
     cmap.set_bad("lightgrey")  # missing (flavor, endpoint) cells
 
     fig, ax = plt.subplots(
         figsize=(1.15 * n_cols + 3.0, 0.42 * n_rows + 2.0), constrained_layout=True
     )
     im = ax.imshow(
-        np.ma.masked_invalid(normed), aspect="auto", cmap=cmap, vmin=0.0, vmax=1.0
+        np.ma.masked_invalid(color_values), aspect="auto", cmap=cmap, vmin=0.0, vmax=1.0
     )
 
     has_references = divider_at is not None and divider_at < n_cols
@@ -289,14 +309,22 @@ def plot_report_card(
                 ax.text(j, i, f"{value:.3f}", ha="center", va="center", fontsize=7, color="black")
 
     label = METRIC_LABELS.get(metric, metric)
-    direction = "higher better" if metric in HIGHER_IS_BETTER else "lower better"
-    title = f"Report card: {label} ({direction}); color is row-relative"
+    direction = "higher better" if higher_better else "lower better"
+    scale_desc = (
+        f"color is absolute {label} in [0, 1]" if absolute_color else "color is row-relative"
+    )
+    title = f"Report card: {label} ({direction}); {scale_desc}"
     if has_references:
         title += " across flavors + references"
     ax.set_title(title, fontsize=11, pad=28)
     cbar = fig.colorbar(im, ax=ax, shrink=0.5, pad=0.02)
-    cbar.set_ticks([0.0, 1.0])
-    cbar.set_ticklabels(["worst for endpoint", "best for endpoint"], fontsize=7)
+    if absolute_color:
+        # fixed-scale ticks read as metric values; the reversed map already keeps green "good"
+        cbar.set_ticks([0.0, 0.5, 1.0])
+        cbar.set_ticklabels(["0.0", "0.5", "1.0"], fontsize=7)
+    else:
+        cbar.set_ticks([0.0, 1.0])
+        cbar.set_ticklabels(["worst for endpoint", "best for endpoint"], fontsize=7)
 
     out_png.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_png, dpi=300, bbox_inches="tight")
@@ -326,6 +354,11 @@ def main() -> None:
         "(default results/meta_model_lgbm.csv next to --metrics-csv's results dir); "
         "skipped if it doesn't exist",
     )
+    parser.add_argument(
+        "--absolute-color", action="store_true",
+        help="color cells by their raw metric value on a fixed [0, 1] scale rather than "
+        "row-relative per endpoint; use for metrics in [0, 1] such as r2",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -345,7 +378,10 @@ def main() -> None:
 
     out_png = args.out or (PLOTS_DIR / f"report_card_{args.metric}.png")
     out_csv = out_png.with_suffix(".csv")
-    plot_report_card(pivot, args.metric, out_png, out_csv, divider_at=divider_at)
+    plot_report_card(
+        pivot, args.metric, out_png, out_csv,
+        divider_at=divider_at, absolute_color=args.absolute_color,
+    )
 
 
 if __name__ == "__main__":

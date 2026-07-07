@@ -37,8 +37,9 @@ print(f"wrote {out} ({len(frame)} rows, {frame['flavor'].nunique()} flavors)")
 PY
 
 # render the 250K report card: the 10 archived flavors, plus the stock-CheMeleon baseline
-# and the archived meta-model as labeled reference columns
-python -m sarizard.analysis.report_card --metric r2 \
+# and the archived meta-model as labeled reference columns. color on a fixed [0, 1] r2 scale
+# (--absolute-color) rather than row-relative, so a cell's color reads as the actual r2
+python -m sarizard.analysis.report_card --metric r2 --absolute-color \
     --metrics-csv archive/flavor_sweep_250k/results/metrics_with_references.csv \
     --meta-model-csv archive/flavor_sweep_250k/results/meta_model_lgbm.csv \
     --out plots/report_card_250k_r2.png
