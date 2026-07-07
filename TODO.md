@@ -378,9 +378,21 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   `train.py` default that falls back to `dropout_fraction=0.0` for any target at or under
   that width once `n_features` is known from the split (jazzy at 6, ml_qm at 24, and
   surrogate_adme at 25 all qualify automatically; osmordred at 3585 and every other flavor
-  keep the regime default of 0.85). An explicit `--dropout-fraction` flag still overrides
-  either default for a one-off deviation. `DROPOUT_FRACTION_OVERRIDES` remains available in
-  `slurm/env.sh` for that explicit case but is no longer needed for ml_qm/surrogate_adme.
+  keep the regime default of 0.85).
+  **Hardened into an invariant: zero dropout below the threshold is not overridable.**
+  This is a settled decision, not an open ablation: no flavor at or under
+  `DROPOUT_OVERRIDE_MAX_DIM` may ever be pretrained with dropout. `train.py` now resolves the
+  sub-threshold case first, before the `--dropout-fraction` flag, and raises a `SystemExit`
+  if a nonzero `--dropout-fraction` (or `DROPOUT_FRACTION_OVERRIDES` entry) is passed for such
+  a flavor rather than silently honoring it. The `--dropout-fraction` flag and
+  `DROPOUT_FRACTION_OVERRIDES` list survive only to tune above-threshold flavors as a
+  recorded one-off; they cannot raise dropout on a narrow flavor. The running full-corpus
+  pretrain array already complies (jazzy/ml_qm/surrogate_adme all logged
+  `dropout_fraction=0.000`, the PCA thresholds at 70/147/237 dims sit above the threshold at
+  0.850), so nothing needed re-running. Do not reintroduce dropout on a sub-threshold flavor,
+  raise the fraction for one, or lift `DROPOUT_OVERRIDE_MAX_DIM` to pull one back under
+  masking. Mirrored in `AGENTS.md`'s experiment-discipline invariants and the methodology
+  watch-item below.
 - [ ] Frozen warmup then coadaptation: train for N epochs with `mpnn_lr=0` so the FFN head
   finds a reasonable operating point against the fixed representations, then unfreeze the
   MPNN and continue training at a reduced rate. Avoids the large gradient shock that occurs
@@ -433,12 +445,15 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   itself varies prescaling only because the backbone, corpus, and target (osmordred) are held
   fixed there.
 - The masked-pretext target dropout (`losses.py`, `DROPOUT_FRACTION=0.85` as of the
-  training-collapse regime fix, keeps 15%) is a fixed fraction applied to every flavor, so
-  its effect scales with target width: reasonable supervision density at high dims
-  (osmordred, 3585), likely unusably sparse at low dims (jazzy 6, ml_qm 24, under 1
-  target/step on average). It is part of the fixed regime; do not special-case small flavors
-  mid-sweep, but see the now-urgent dropout ablation in Future experiments, which must land
-  before Milestone 6.
+  training-collapse regime fix, keeps 15%) is a fixed fraction applied to every
+  above-threshold flavor, so its effect scales with target width: reasonable supervision
+  density at high dims (osmordred, 3585), unusably sparse at low dims (jazzy 6, ml_qm 24,
+  under 1 target/step on average). That sparsity is resolved, not open: any target at or
+  under `config.DROPOUT_OVERRIDE_MAX_DIM` (30 dims) pretrains at `dropout_fraction=0.0` as a
+  hard invariant enforced in `train.py`, which rejects a nonzero override for such a flavor.
+  Do not reintroduce dropout on a sub-threshold flavor, raise its fraction, or lift the
+  threshold to bring one back under masking; see the resolved blocker in Future experiments
+  and the invariant in `AGENTS.md`.
 - Pretraining regime constants (`sarizard/pretraining/config.py`) are reconciled against the
   sibling `../foundation-models/pretraining` implementation as of the training-collapse fix
   (`PATIENCE`, `FNN_HIDDEN_SIZE`, `WARMUP_EPOCHS`, `DROPOUT_FRACTION`, `GRADIENT_CLIP_VAL`,

@@ -61,9 +61,10 @@ LR_MODES="${LR_MODES:-reduced unlocked}"
 
 # Optional per-flavor override of the masked-pretext target-dropout fraction (config.py's
 # DROPOUT_FRACTION, 0.85 for every flavor by default). Space-separated flavor=value pairs;
-# a flavor absent from this list pretrains at the regime default. This is a recorded, explicit
-# deviation for narrow target blocks where the regime default keeps under one target per step
-# (e.g. ml_qm at 24 dims, surrogate_adme at 25), not a change to the regime for every flavor.
+# a flavor absent from this list pretrains at the regime default. This tunes above-threshold
+# flavors only: a flavor at or under DROPOUT_OVERRIDE_MAX_DIM (jazzy, ml_qm, surrogate_adme)
+# pretrains at 0.0 as a hard invariant, and train.py rejects a nonzero override for it, so
+# do not use this list to raise dropout on a narrow flavor.
 DROPOUT_FRACTION_OVERRIDES="${DROPOUT_FRACTION_OVERRIDES:-}"
 
 # print the --dropout-fraction value for $1 (a flavor name): its DROPOUT_FRACTION_OVERRIDES

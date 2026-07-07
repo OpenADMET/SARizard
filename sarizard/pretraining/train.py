@@ -112,8 +112,9 @@ def _build_model(
         The graph featurizer, used for the message-passing input dimensions.
     dropout_fraction : float, optional
         Masked-pretext target-dropout fraction (default the shared ``DROPOUT_FRACTION``
-        regime constant). Override per flavor when the regime default keeps too few
-        targets per step for a narrow target block.
+        regime constant). The caller passes 0.0 for any target block at or under
+        ``DROPOUT_OVERRIDE_MAX_DIM`` (a hard invariant, not an override), and may tune this
+        only for above-threshold flavors.
 
     Returns
     -------
@@ -199,12 +200,12 @@ def main() -> None:
         default=None,
         help=(
             "masked-pretext target-dropout fraction; default is the shared DROPOUT_FRACTION "
-            "regime constant (0.85), except a target block at or below "
-            f"DROPOUT_OVERRIDE_MAX_DIM ({DROPOUT_OVERRIDE_MAX_DIM}) dims falls back to 0.0 "
-            "automatically (n_features is only known once the split is read, so this default "
-            "is resolved after that, not here). Pass this flag explicitly to override either "
-            "default for a single flavor, as a recorded deviation, not a change to the "
-            "regime for every flavor"
+            "regime constant (0.85). A target block at or below "
+            f"DROPOUT_OVERRIDE_MAX_DIM ({DROPOUT_OVERRIDE_MAX_DIM}) dims trains at 0.0 "
+            "unconditionally (n_features is only known once the split is read, so this is "
+            "resolved after that, not here); that zero is a hard invariant, so this flag "
+            "may only tune above-threshold flavors and a nonzero value for a sub-threshold "
+            "flavor is rejected, never silently honored"
         ),
     )
     args = parser.parse_args()
@@ -221,12 +222,24 @@ def main() -> None:
     n_features = zarr.open_array(training_store, mode="r").shape[1]
     logger.info("flavor=%s kind=%s n_features=%d", flavor.name, flavor.kind, n_features)
 
-    if args.dropout_fraction is not None:
+    # resolve the masked-pretext dropout fraction. a target block at or under
+    # DROPOUT_OVERRIDE_MAX_DIM trains at zero dropout unconditionally: a hard invariant, not
+    # an overridable default, since the regime fraction would keep well under one target per
+    # step for so narrow a block. the sub-threshold check runs first and cannot be lifted by
+    # --dropout-fraction; a nonzero flag for such a flavor is rejected loudly rather than
+    # silently honored, so no narrow flavor can ever be pretrained with dropout
+    if n_features <= DROPOUT_OVERRIDE_MAX_DIM:
+        if args.dropout_fraction not in (None, 0.0):
+            raise SystemExit(
+                f"--dropout-fraction={args.dropout_fraction} rejected for {flavor.name}: "
+                f"n_features={n_features} <= DROPOUT_OVERRIDE_MAX_DIM={DROPOUT_OVERRIDE_MAX_DIM}, "
+                "which pretrains at zero dropout unconditionally (no override permitted)"
+            )
+        dropout_fraction = 0.0
+        dropout_source = f"invariant (n_features={n_features} <= DROPOUT_OVERRIDE_MAX_DIM={DROPOUT_OVERRIDE_MAX_DIM})"
+    elif args.dropout_fraction is not None:
         dropout_fraction = args.dropout_fraction
         dropout_source = "explicit --dropout-fraction"
-    elif n_features <= DROPOUT_OVERRIDE_MAX_DIM:
-        dropout_fraction = 0.0
-        dropout_source = f"auto (n_features={n_features} <= DROPOUT_OVERRIDE_MAX_DIM={DROPOUT_OVERRIDE_MAX_DIM})"
     else:
         dropout_fraction = DROPOUT_FRACTION
         dropout_source = "regime default"

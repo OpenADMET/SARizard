@@ -22,10 +22,12 @@ below. This does not change the Milestone-5 decision, since the flavor sweep run
 full corpus. Milestone 6's direct-compute flavor sweep (rdkit2d, erg, ecfp, atompair,
 pubchem, usrcat, whim, e3fp, jazzy; 250K corpus, `order_fix` prescaling, all three
 finetune protocols) completed with no failures; see the report card below. Milestone 7
-(learned-model flavors: minimol, surrogate_adme, ml_qm) is in progress, scoped to `minimol`
-only: `ml_qm` and `surrogate_adme` are held out pending the open target-dropout-fraction
-ablation (`TODO.md`, Future experiments), which names both directly as needing that
-ablation before fan-out. `minimol`'s finetune chain (frozen protocol, 250K corpus)
+(learned-model flavors: minimol, surrogate_adme, ml_qm) first ran on 250K scoped to
+`minimol` only, with `ml_qm` and `surrogate_adme` held out over the target-dropout-fraction
+question. That question is now settled by a hard invariant (both are sub-threshold, so they
+pretrain at `dropout_fraction=0.0`; see `TODO.md` Future experiments and `AGENTS.md`), and
+both fan out alongside every other flavor in the full-corpus rerun. `minimol`'s 250K finetune
+chain (frozen protocol)
 completed clean: mean R-squared 0.360 across 32 endpoint-columns, edging out `rdkit2d`'s
 0.350 frozen mean from Milestone 6, though the two were not evaluated in one merged table
 so this is context, not a controlled comparison yet. The chained analyze job exited
@@ -303,11 +305,13 @@ job (18420145) produced `results/ablation_metrics.csv` and `plots/prescaling_rep
 the full-corpus numbers above.
 
 One consequence to flag: `DROPOUT_FRACTION=0.85` (keep 15%) is a fixed-regime constant
-applied to every future flavor. For osmordred (3585 dims) that is ~537 supervised dims/step,
-fine; for a small flavor like jazzy (6 dims) later, that is under 1 supervised dim/step on
-average, worse than the borderline case already flagged in `TODO.md`. Flagged there as a
-pre-Milestone-6 item rather than fixed now, per the fixed-regime discipline (do not
-special-case flavors mid-sweep).
+applied to every above-threshold flavor. For osmordred (3585 dims) that is ~537 supervised
+dims/step, fine; for a small flavor like jazzy (6 dims) that is under 1 supervised dim/step
+on average. This is now resolved by a hard invariant, not left open: any target at or under
+`config.DROPOUT_OVERRIDE_MAX_DIM` (30 dims: jazzy 6, ml_qm 24, surrogate_adme 25) pretrains at
+`dropout_fraction=0.0`, enforced in `train.py` before the `--dropout-fraction` flag and not
+overridable to a nonzero value. See the resolved blocker in `TODO.md` and the invariant in
+`AGENTS.md`.
 
 ## Report card
 
@@ -369,11 +373,12 @@ binding-site geometry) than for the ADMET properties `rdkit2d` otherwise dominat
   endpoint-columns frozen and leading 6 of 8 endpoint families. Confirms the "continuous
   descriptor flavors are strong general foundations" prior, at least relative to the other
   8 flavors tested so far (osmordred not yet in this comparison).
-- **jazzy**: second-strongest frozen/reduced, and the unlocked-protocol winner. Notable
-  given the still-open target-dropout-fraction concern (`jazzy` is only 6 dims, so the
-  fixed 0.85 masked-pretext dropout keeps under 1 target/step on average); it is not
-  underperforming here despite that sparsity, so the dropout-ablation urgency should be
-  read against this result, not assumed to be confirmed by it.
+- **jazzy**: second-strongest frozen/reduced, and the unlocked-protocol winner. This result
+  predates the target-dropout invariant: it was pretrained under the fixed 0.85 masked-pretext
+  dropout (`jazzy` is only 6 dims, so under 1 target/step on average) yet did not underperform.
+  Under the full-corpus rerun, jazzy and every other sub-threshold flavor pretrain at
+  `dropout_fraction=0.0` per the now-enforced invariant, so re-read this number as a
+  pre-invariant data point, not the current regime.
 - **usrcat**: mid-table on mean R-squared but wins potency and hERG specifically, both
   binding-driven endpoints. The one specialization result in this sweep: a 3D
   shape/pharmacophore descriptor target transfers better than 2D descriptors for
@@ -398,14 +403,13 @@ binding-site geometry) than for the ADMET properties `rdkit2d` otherwise dominat
   merged table. A learned 512-dim embedding transferring at least as well as the strongest
   direct-compute descriptor is a positive early signal for the learned-flavor family,
   worth confirming once `ml_qm` and `surrogate_adme` land and a merged comparison is run.
-- **surrogate_adme, ml_qm**: not started. Were held out of Milestone 7 pending the open
-  target-dropout-fraction ablation (24- and 25-dim targets, where the regime-default 0.85
-  keeps under one target per step); the ablation itself was not run. Decision: override
-  `DROPOUT_FRACTION` to 0.0 for these two flavors only, on the reasoning that near-zero
-  supervision density is unlikely to beat no masking, and proceed. `TODO.md`'s Future
-  experiments entry has the full account, including the code wired to make the override
-  per-flavor rather than global (`losses.py`, `train.py`, `slurm/env.sh`'s
-  `DROPOUT_FRACTION_OVERRIDES`).
+- **surrogate_adme, ml_qm**: fanning out in the full-corpus rerun. Were held out of the
+  250K Milestone 7 pending the target-dropout-fraction question (24- and 25-dim targets, where
+  the regime-default 0.85 keeps under one target per step). That question is settled: both are
+  sub-threshold, so they pretrain at `dropout_fraction=0.0` under the hard invariant enforced
+  in `train.py` (`config.DROPOUT_OVERRIDE_MAX_DIM=30`), with no per-flavor decision left to
+  make and no nonzero override permitted. `TODO.md`'s Future experiments entry has the full
+  account, including the enforcement path (`losses.py`, `train.py`, `config.py`).
 
 ## Meta-model
 
