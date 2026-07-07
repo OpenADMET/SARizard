@@ -21,6 +21,19 @@ The narrative goal and headline results live in `FINDINGS.md`; open avenues in `
 - Prefer small, incremental, reviewable changes; follow the commit conventions in the
   global instructions (bare imperative subject, no conventional-commit prefixes, no
   authorship footers).
+- **`TODO.md` is the source of truth for what has run, not the filesystem.** Update it in
+  the same session as any action that changes shared state: submitting a job that
+  computes/recomputes a target, changes the corpus a milestone runs against, archives
+  results, or otherwise moves a milestone forward. Write the update immediately after
+  submitting or confirming completion, not deferred to "later" or the next session; a gap
+  between what ran and what `TODO.md` says ran is the failure mode to avoid; do not require
+  the next reader to reconstruct it from `sacct`/`squeue` history and file mtimes. Do not
+  leave code that implements a recorded decision (e.g. an override, a new flavor, a
+  pipeline change) uncommitted across a session boundary; commit it as soon as it is
+  tested, even if the run it enables hasn't finished yet. If a scope decision changes
+  mid-flight (e.g. which corpus a milestone runs against), edit the milestone's own
+  entry to say so explicitly rather than adding a note only at the point of change; a
+  reader jumping to the milestone should not see stale scope.
 
 ## Repository layout
 
