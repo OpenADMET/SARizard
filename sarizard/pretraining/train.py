@@ -45,6 +45,7 @@ from torch.utils.data import DataLoader
 
 from config import (
     DROPOUT_FRACTION,
+    DROPOUT_OVERRIDE_MAX_DIM,
     EPOCHS,
     FEATURIZER,
     FINAL_LEARNING_RATE,
@@ -195,12 +196,15 @@ def main() -> None:
     parser.add_argument(
         "--dropout-fraction",
         type=float,
-        default=DROPOUT_FRACTION,
+        default=None,
         help=(
-            "masked-pretext target-dropout fraction (default the shared DROPOUT_FRACTION "
-            "regime constant, 0.85); override only for a narrow target block where the "
-            "default keeps too few targets per step (e.g. ml_qm, surrogate_adme), as a "
-            "recorded per-flavor deviation, not a change to the regime for every flavor"
+            "masked-pretext target-dropout fraction; default is the shared DROPOUT_FRACTION "
+            "regime constant (0.85), except a target block at or below "
+            f"DROPOUT_OVERRIDE_MAX_DIM ({DROPOUT_OVERRIDE_MAX_DIM}) dims falls back to 0.0 "
+            "automatically (n_features is only known once the split is read, so this default "
+            "is resolved after that, not here). Pass this flag explicitly to override either "
+            "default for a single flavor, as a recorded deviation, not a change to the "
+            "regime for every flavor"
         ),
     )
     args = parser.parse_args()
@@ -216,6 +220,17 @@ def main() -> None:
     validation_store = args.input_dir / "val_rescaled.zarr"
     n_features = zarr.open_array(training_store, mode="r").shape[1]
     logger.info("flavor=%s kind=%s n_features=%d", flavor.name, flavor.kind, n_features)
+
+    if args.dropout_fraction is not None:
+        dropout_fraction = args.dropout_fraction
+        dropout_source = "explicit --dropout-fraction"
+    elif n_features <= DROPOUT_OVERRIDE_MAX_DIM:
+        dropout_fraction = 0.0
+        dropout_source = f"auto (n_features={n_features} <= DROPOUT_OVERRIDE_MAX_DIM={DROPOUT_OVERRIDE_MAX_DIM})"
+    else:
+        dropout_fraction = DROPOUT_FRACTION
+        dropout_source = "regime default"
+    logger.info("dropout_fraction=%.3f (%s)", dropout_fraction, dropout_source)
 
     featurizer = _build_featurizer()
     train_smiles = polars.read_parquet(args.input_dir / "train_smiles.parquet")["SMILES"].to_list()
@@ -235,7 +250,7 @@ def main() -> None:
         persistent_workers=True,
     )
 
-    model = _build_model(flavor.kind, n_features, featurizer, dropout_fraction=args.dropout_fraction)
+    model = _build_model(flavor.kind, n_features, featurizer, dropout_fraction=dropout_fraction)
 
     # monitor a deterministic validation metric. chemprop appends a clone of the
     # random-dropout criterion as metrics[-1] and logs it as val_loss, so continuous
@@ -285,7 +300,8 @@ def main() -> None:
                     "mp_depth": MP_DEPTH,
                     "gradient_clip_val": GRADIENT_CLIP_VAL,
                     "precision": default_precision(),
-                    "dropout_fraction": args.dropout_fraction,
+                    "dropout_fraction": dropout_fraction,
+                    "dropout_fraction_source": dropout_source,
                 },
             },
             indent=2,
