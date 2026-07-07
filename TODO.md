@@ -295,10 +295,14 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   completes).** Six report cards: one per learning-rate protocol (frozen, reduced, unlocked)
   crossed with the two color modes, `--color-mode absolute` (fixed [0,1] scale) and
   `--color-mode baseline-diverging` (red/blue centered on each row's stock-CheMeleon
-  baseline). Every card shows all 16 flavors (osmordred, the 9 direct-compute flavors,
+  baseline). The stock baseline is finetuned under each protocol (decision), so a card
+  diverges around its own-protocol stock baseline, not a single shared frozen reference; the
+  meta-model and stock-baseline reference columns on each card are that protocol's.
+  Every card shows all 16 flavors (osmordred, the 9 direct-compute flavors,
   minimol, surrogate_adme, ml_qm, and osmordred_pca80/90/95) plus the two reference columns
-  (stock baseline, meta-model). Both color modes already exist in `report_card.py`; two gaps
-  remain for the non-frozen cards and the per-protocol meta-model, not yet wired:
+  (stock baseline, meta-model). Both color modes already exist in `report_card.py`; three gaps
+  remain for the non-frozen cards, the per-protocol meta-model, and the per-protocol stock
+  baseline, not yet wired:
   (1) `report_card.py` keys columns by flavor label and reads a single `--metrics-csv`, so the
   frozen card runs off `results/metrics.csv` directly, but the reduced and unlocked cards need
   `results/lr_metrics.csv` filtered to one mode with its `lr_<mode>__` prefix stripped back to
@@ -308,6 +312,15 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   `<results>/meta_model_<estimator>.csv`, so each protocol needs its own mode-scoped prediction
   dirs (`--results`/`--flavors`) and a distinct output CSV so the three do not overwrite each
   other, then each card's `--meta-model-csv` points at the matching protocol's file.
+  (3) The stock baseline must be finetuned once per protocol. `generate.py --stock-baseline`
+  already accepts `--mpnn-lr-mode`, but stock-baseline mode hardcodes the label to
+  `chemeleon_stock` and ignores `--label-prefix`, so reduced/unlocked would only change
+  `mpnn_lr` inside the recipe while overwriting the frozen `configs/chemeleon_stock/` and
+  `results/chemeleon_stock/`. Make the stock-baseline label mode-aware (e.g. append the mode
+  for the non-frozen protocols, or honor `--label-prefix`) so the three land in distinct
+  config/result dirs, run `run_stock_baseline.sh` per protocol, and point each card's
+  stock-baseline reference at the matching protocol's `chemeleon_stock` results. This adds two
+  stock-baseline finetune runs (reduced, unlocked) on top of the existing frozen one.
 - [x] 9. Meta-model: stack per-flavor finetuned predictions per endpoint, fit LGBM/RF/MLP
   on out-of-fold predictions, compare to the best single flavor.
   First real result, produced by the same job 19230968 now that ≥2 flavors have results:
