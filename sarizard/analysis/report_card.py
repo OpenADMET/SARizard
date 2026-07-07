@@ -18,9 +18,11 @@ flavor column; the divider and reference labels keep that distinction visible in
 This step depends only on pandas, numpy, and matplotlib, so it runs without openadmet or a GPU.
 
 Usage:
-    python -m sarizard.analysis.report_card                 # R-squared, with references
+    python -m sarizard.analysis.report_card                        # R-squared, with references
     python -m sarizard.analysis.report_card --metric rmse
-    python -m sarizard.analysis.report_card --no-references # flavor columns only
+    python -m sarizard.analysis.report_card --no-references        # flavor columns only
+    python -m sarizard.analysis.report_card --color-mode absolute  # raw value on a [0, 1] scale
+    python -m sarizard.analysis.report_card --color-mode baseline-diverging  # gap to baseline
 """
 
 from __future__ import annotations
@@ -35,6 +37,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402 - set backend before importing pyplot
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
+from matplotlib.colors import TwoSlopeNorm  # noqa: E402
 
 from sarizard.analysis.metrics_spec import (  # noqa: E402
     DATASETS,
@@ -46,6 +49,13 @@ from sarizard.analysis.paths import METRICS_CSV, PLOTS_DIR, parse_seed_variant  
 from sarizard.pretraining.flavors import flavor_names  # noqa: E402
 
 logger = logging.getLogger(__name__)
+
+# heatmap coloring strategies (see plot_report_card):
+#   row-relative       min-max normalize each endpoint so its best flavor is greenest
+#   absolute           color by the raw metric value on a fixed [0, 1] scale
+#   baseline-diverging red-blue diverging around each row's chemeleon-baseline value, on one
+#                      shared min-to-max delta scale so a cell's color is comparable across rows
+COLOR_MODES = ("row-relative", "absolute", "baseline-diverging")
 
 
 def collapse_seed_variants(frame: pd.DataFrame, column: str = "flavor") -> pd.DataFrame:
@@ -231,7 +241,8 @@ def plot_report_card(
     out_csv: Path,
     *,
     divider_at: int | None = None,
-    absolute_color: bool = False,
+    color_mode: str = "row-relative",
+    baseline_row: np.ndarray | None = None,
 ) -> None:
     """Render and save the report-card heatmap and its metric matrix CSV.
 
@@ -251,21 +262,43 @@ def plot_report_card(
         return value). When given and less than the column count, a white gap and divider
         lines are drawn there to visually separate reference columns from flavor columns,
         and the columns after it are bold-labeled as references rather than flavors.
-    absolute_color : bool, optional
-        When True, color each cell by its raw metric value on a fixed ``[0, 1]`` scale
-        (values outside the range clamp), so a color is comparable across endpoints. When
-        False (the default), color is row-relative: each endpoint is min-max normalized so
-        its best flavor maps to the top of the scale. Intended for metrics that live in
-        ``[0, 1]`` (e.g. r2, spearman); for a lower-is-better metric the colormap is
-        reversed so green still marks the better value.
+    color_mode : {"row-relative", "absolute", "baseline-diverging"}, optional
+        How cell color is computed (see ``COLOR_MODES``). ``row-relative`` (default) min-max
+        normalizes each endpoint so its best flavor is greenest. ``absolute`` colors by the
+        raw metric value on a fixed ``[0, 1]`` scale (for metrics in that range, e.g. r2).
+        ``baseline-diverging`` colors by each cell's metric minus that row's baseline value
+        on a red-blue diverging map with white pinned to the baseline, over one shared
+        min-to-max delta scale, so color is comparable across rows; requires ``baseline_row``.
+    baseline_row : numpy.ndarray, optional
+        Per-row baseline metric values (aligned to ``pivot``'s rows), required when
+        ``color_mode`` is ``baseline-diverging`` and ignored otherwise.
     """
+    if color_mode not in COLOR_MODES:
+        raise ValueError(f"unknown color_mode {color_mode!r}; expected one of {COLOR_MODES}")
     values = pivot.to_numpy(dtype=float)
     higher_better = metric in HIGHER_IS_BETTER
     n_rows, n_cols = values.shape
 
-    # absolute mode colors by the raw value on a fixed [0, 1] scale (reverse the map for a
-    # lower-better metric so green stays "good"); row-relative mode normalizes each endpoint
-    if absolute_color:
+    # pick the per-cell color values, colormap, and norm per mode. baseline-diverging colors
+    # the signed gap to each row's baseline (white = baseline) on one shared min-to-max delta
+    # scale; absolute colors the raw value on [0, 1]; row-relative normalizes each endpoint
+    norm = None
+    diverging_bounds: tuple[float, float] | None = None
+    if color_mode == "baseline-diverging":
+        if baseline_row is None:
+            raise ValueError("baseline-diverging color_mode requires baseline_row")
+        color_values = values - baseline_row[:, None]
+        finite = color_values[np.isfinite(color_values)]
+        lo = float(finite.min()) if finite.size else -1.0
+        hi = float(finite.max()) if finite.size else 1.0
+        # TwoSlopeNorm needs vmin < 0 < vmax; nudge if every cell sits on one side of baseline
+        vmin, vmax = min(lo, -1e-9), max(hi, 1e-9)
+        norm = TwoSlopeNorm(vcenter=0.0, vmin=vmin, vmax=vmax)
+        diverging_bounds = (lo, hi)
+        # RdBu maps high->blue, so a positive gap (beat baseline) is blue for a higher-better
+        # metric; reverse for lower-better so "improved on baseline" stays blue either way
+        cmap = plt.get_cmap("RdBu" if higher_better else "RdBu_r").copy()
+    elif color_mode == "absolute":
         color_values = values
         cmap = plt.get_cmap("RdYlGn" if higher_better else "RdYlGn_r").copy()
     else:
@@ -276,8 +309,9 @@ def plot_report_card(
     fig, ax = plt.subplots(
         figsize=(1.15 * n_cols + 3.0, 0.42 * n_rows + 2.0), constrained_layout=True
     )
+    imshow_kwargs = {"norm": norm} if norm is not None else {"vmin": 0.0, "vmax": 1.0}
     im = ax.imshow(
-        np.ma.masked_invalid(color_values), aspect="auto", cmap=cmap, vmin=0.0, vmax=1.0
+        np.ma.masked_invalid(color_values), aspect="auto", cmap=cmap, **imshow_kwargs
     )
 
     has_references = divider_at is not None and divider_at < n_cols
@@ -310,15 +344,24 @@ def plot_report_card(
 
     label = METRIC_LABELS.get(metric, metric)
     direction = "higher better" if higher_better else "lower better"
-    scale_desc = (
-        f"color is absolute {label} in [0, 1]" if absolute_color else "color is row-relative"
-    )
+    scale_desc = {
+        "absolute": f"color is absolute {label} in [0, 1]",
+        "baseline-diverging": (
+            f"color is {label} minus the chemeleon baseline per row (white = baseline)"
+        ),
+        "row-relative": "color is row-relative",
+    }[color_mode]
     title = f"Report card: {label} ({direction}); {scale_desc}"
     if has_references:
         title += " across flavors + references"
     ax.set_title(title, fontsize=11, pad=28)
     cbar = fig.colorbar(im, ax=ax, shrink=0.5, pad=0.02)
-    if absolute_color:
+    if color_mode == "baseline-diverging" and diverging_bounds is not None:
+        # ticks read as signed metric gaps to the baseline; 0 is the baseline (white)
+        lo, hi = diverging_bounds
+        cbar.set_ticks([lo, 0.0, hi])
+        cbar.set_ticklabels([f"{lo:+.2f}", "0 (baseline)", f"{hi:+.2f}"], fontsize=7)
+    elif color_mode == "absolute":
         # fixed-scale ticks read as metric values; the reversed map already keeps green "good"
         cbar.set_ticks([0.0, 0.5, 1.0])
         cbar.set_ticklabels(["0.0", "0.5", "1.0"], fontsize=7)
@@ -355,9 +398,11 @@ def main() -> None:
         "skipped if it doesn't exist",
     )
     parser.add_argument(
-        "--absolute-color", action="store_true",
-        help="color cells by their raw metric value on a fixed [0, 1] scale rather than "
-        "row-relative per endpoint; use for metrics in [0, 1] such as r2",
+        "--color-mode", choices=COLOR_MODES, default="row-relative",
+        help="cell coloring: 'row-relative' (default) normalizes each endpoint; 'absolute' "
+        "colors the raw value on a fixed [0, 1] scale (for metrics in [0, 1] such as r2); "
+        "'baseline-diverging' colors the red-blue gap to each row's chemeleon baseline on one "
+        "shared scale (requires the baseline reference column)",
     )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -370,17 +415,29 @@ def main() -> None:
     pivot = build_matrix(frame, args.metric)
 
     divider_at = pivot.shape[1]
+    baseline = pd.Series(dtype=float)
     if not args.no_references:
         baseline = build_reference_series(frame, args.baseline_flavor, args.metric)
         meta_csv = args.meta_model_csv or (args.metrics_csv.parent / "meta_model_lgbm.csv")
         meta = meta_model_series(meta_csv, args.metric)
         pivot, divider_at = augment_with_references(pivot, baseline=baseline, meta_model=meta)
 
+    # baseline-diverging coloring needs each row's baseline value aligned to the final pivot
+    baseline_row = None
+    if args.color_mode == "baseline-diverging":
+        if baseline.empty:
+            raise SystemExit(
+                "--color-mode baseline-diverging needs the baseline reference column, but it "
+                f"is absent (--no-references set, or flavor {args.baseline_flavor!r} not in "
+                f"{args.metrics_csv})"
+            )
+        baseline_row = baseline.reindex(pivot.index).to_numpy(dtype=float)
+
     out_png = args.out or (PLOTS_DIR / f"report_card_{args.metric}.png")
     out_csv = out_png.with_suffix(".csv")
     plot_report_card(
         pivot, args.metric, out_png, out_csv,
-        divider_at=divider_at, absolute_color=args.absolute_color,
+        divider_at=divider_at, color_mode=args.color_mode, baseline_row=baseline_row,
     )
 
 
