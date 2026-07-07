@@ -124,7 +124,10 @@ def build_reference_series(frame: pd.DataFrame, flavor: str, metric: str) -> pd.
     if subset.empty:
         return pd.Series(dtype=float)
     row = subset["dataset"] + " · " + subset["endpoint"]
-    return pd.Series(subset[metric].to_numpy(), index=row)
+    # collapse a dataset+endpoint that appears under more than one recipe (single-task and
+    # multi-task variants share an endpoint) by mean, matching build_matrix's aggfunc="mean"
+    # pivot; without this the index carries duplicate labels and reindex onto the pivot fails
+    return pd.Series(subset[metric].to_numpy(), index=row).groupby(level=0).mean()
 
 
 def meta_model_series(meta_model_csv: Path, metric: str) -> pd.Series:
@@ -150,7 +153,9 @@ def meta_model_series(meta_model_csv: Path, metric: str) -> pd.Series:
         return pd.Series(dtype=float)
     frame = pd.read_csv(meta_model_csv)
     row = frame["dataset"] + " · " + frame["endpoint"]
-    return pd.Series(frame[column].to_numpy(), index=row)
+    # collapse duplicate dataset+endpoint labels (same endpoint under single-task and
+    # multi-task recipes) by mean, matching build_matrix, so the index stays unique
+    return pd.Series(frame[column].to_numpy(), index=row).groupby(level=0).mean()
 
 
 SPACER_COLUMN = " "  # single space: a distinct, blank column label
