@@ -42,6 +42,14 @@ class Flavor:
         Conda environment that computes this flavor's target.
     description : str
         Short human-readable summary.
+    derived_from : str or None, optional
+        For a flavor whose target is not computed by its own calculator but derived from
+        another flavor's already-computed target (e.g. ``osmordred_pca80`` is PCA fit on
+        ``osmordred``'s fully-prescaled descriptor matrix), the base flavor name. ``None``
+        for every flavor with its own calculator. ``compute_targets.sbatch`` skips a
+        derived flavor's own target stage (nothing to compute independently); the
+        derivation runs later in ``split.sbatch``, after the base flavor's raw target
+        exists.
     """
 
     name: str
@@ -50,6 +58,7 @@ class Flavor:
     target_dim: int | None
     env: str
     description: str
+    derived_from: str | None = None
 
 
 FLAVORS: dict[str, Flavor] = {
@@ -104,6 +113,21 @@ FLAVORS: dict[str, Flavor] = {
     "ml_qm": Flavor(
         "ml_qm", "continuous", "model", 24, "sarizard-mlqm",
         "qmdesc ML-predicted QM atom/bond descriptors, pooled (mean/std/min/max) to a molecule vector",
+    ),
+    "osmordred_pca80": Flavor(
+        "osmordred_pca80", "continuous", "direct", None, "sarizard",
+        "osmordred, full-recipe prescaled then PCA-compressed to 80% explained variance",
+        derived_from="osmordred",
+    ),
+    "osmordred_pca90": Flavor(
+        "osmordred_pca90", "continuous", "direct", None, "sarizard",
+        "osmordred, full-recipe prescaled then PCA-compressed to 90% explained variance",
+        derived_from="osmordred",
+    ),
+    "osmordred_pca95": Flavor(
+        "osmordred_pca95", "continuous", "direct", None, "sarizard",
+        "osmordred, full-recipe prescaled then PCA-compressed to 95% explained variance",
+        derived_from="osmordred",
     ),
 }
 

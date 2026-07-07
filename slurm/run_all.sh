@@ -69,11 +69,28 @@ JOB_TARGETS=$(sbatch --parsable \
     "$SCRIPT_DIR/compute_targets.sbatch")
 echo "targets    job=$JOB_TARGETS  (after corpus $JOB_CORPUS)"
 
+# a derived flavor (e.g. osmordred_pca80) has no calculator of its own; compute_targets.sbatch
+# skips it, and this single-task stage builds its target.zarr afterward, from the base
+# flavor's raw target the targets stage above just computed. Only submitted when the current
+# registry actually has a derived flavor, so a registry with none skips straight to split.
+SPLIT_DEPENDENCY="afterok:$JOB_TARGETS"
+HAS_DERIVED=$(conda run -n "$MAIN_ENV" python -c "
+from sarizard.pretraining.flavors import flavor_names, get_flavor
+print('1' if any(get_flavor(f).derived_from for f in flavor_names()) else '')
+")
+if [[ -n "$HAS_DERIVED" ]]; then
+    JOB_PCA=$(sbatch --parsable \
+        --dependency=afterok:"$JOB_TARGETS" \
+        "$SCRIPT_DIR/osmordred_pca_targets.sbatch")
+    echo "pca-targets job=$JOB_PCA  (after targets $JOB_TARGETS)"
+    SPLIT_DEPENDENCY="afterok:$JOB_TARGETS,afterok:$JOB_PCA"
+fi
+
 JOB_SPLIT=$(sbatch --parsable \
-    --dependency=afterok:"$JOB_TARGETS" \
+    --dependency="$SPLIT_DEPENDENCY" \
     --array=0-$((N_FLAVORS - 1)) \
     "$SCRIPT_DIR/split.sbatch")
-echo "split      job=$JOB_SPLIT  (after targets $JOB_TARGETS)"
+echo "split      job=$JOB_SPLIT  (after $SPLIT_DEPENDENCY)"
 
 JOB_PRETRAIN=$(sbatch --parsable \
     --dependency=afterok:"$JOB_SPLIT" \

@@ -20,5 +20,5 @@ source "${SLURM_SUBMIT_DIR:-$(pwd)}/slurm/env.sh"
 conda activate "$MAIN_ENV"
 # concatenate shards (validates completeness), then pack the full target into the zarr
 python -m sarizard.pretraining.features.compute_target \
-    --flavor "$FLAVOR" --merge-shards --num-shards "$NUM_SHARDS"
+    --flavor "$FLAVOR" --corpus "$REPO_DIR/$CORPUS_FILE" --merge-shards --num-shards "$NUM_SHARDS"
 python -m sarizard.pretraining.features.pack_target --flavor "$FLAVOR"

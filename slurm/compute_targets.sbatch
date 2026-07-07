@@ -30,13 +30,24 @@ fi
 FLAVOR="${FLAVORS[$SLURM_ARRAY_TASK_ID]}"
 FLAVOR_ENV=$(conda run -n "$MAIN_ENV" python -c \
     "from sarizard.pretraining.flavors import get_flavor; print(get_flavor('$FLAVOR').env)")
-echo "task=$SLURM_ARRAY_TASK_ID flavor=$FLAVOR env=$FLAVOR_ENV"
+DERIVED_FROM=$(conda run -n "$MAIN_ENV" python -c \
+    "from sarizard.pretraining.flavors import get_flavor; print(get_flavor('$FLAVOR').derived_from or '')")
+echo "task=$SLURM_ARRAY_TASK_ID flavor=$FLAVOR env=$FLAVOR_ENV derived_from=${DERIVED_FROM:-none}"
+
+if [[ -n "$DERIVED_FROM" ]]; then
+    # a derived flavor (e.g. osmordred_pca80) has no calculator of its own; its target.zarr
+    # is written later by slurm/osmordred_pca_targets.sbatch, from the base flavor's raw
+    # target, once this array (including the base flavor) has completed
+    echo "$FLAVOR is derived from $DERIVED_FROM; nothing to compute here, skipping"
+    exit 0
+fi
 
 if [[ -d "cache/targets/$FLAVOR/target.zarr" ]]; then
     echo "cache/targets/$FLAVOR/target.zarr exists; skipping"
     exit 0
 fi
 
+CORPUS="$REPO_DIR/$CORPUS_FILE"
 if [[ "$FLAVOR" == "surrogate_adme" ]]; then
     # surrogate_adme runs in the main env; compute_target writes target.npy + corpus_smiles.parquet
     conda activate "$MAIN_ENV"
@@ -46,7 +57,7 @@ if [[ "$FLAVOR" == "surrogate_adme" ]]; then
 else
     # compute the raw target in the flavor's isolated environment (writes target.npy)
     conda activate "$FLAVOR_ENV"
-    python -m sarizard.pretraining.features.compute_target --flavor "$FLAVOR"
+    python -m sarizard.pretraining.features.compute_target --flavor "$FLAVOR" --corpus "$CORPUS"
 
     # pack the .npy into the chunked target.zarr the trainer reads, in the main environment
     conda activate "$MAIN_ENV"

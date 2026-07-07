@@ -27,5 +27,6 @@ echo "shard $SLURM_ARRAY_TASK_ID/$NUM_SHARDS flavor=$FLAVOR env=$FLAVOR_ENV"
 # pin worker count to the allocation so we do not oversubscribe the node's cores
 conda activate "$FLAVOR_ENV"
 python -m sarizard.pretraining.features.compute_target \
-    --flavor "$FLAVOR" --num-shards "$NUM_SHARDS" --shard-index "$SLURM_ARRAY_TASK_ID" \
+    --flavor "$FLAVOR" --corpus "$REPO_DIR/$CORPUS_FILE" \
+    --num-shards "$NUM_SHARDS" --shard-index "$SLURM_ARRAY_TASK_ID" \
     --n-jobs "${SLURM_CPUS_PER_TASK:-32}"

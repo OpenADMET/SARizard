@@ -239,7 +239,7 @@ def _apply_yj_cols(
             out[:, k] = col.astype(DTYPE)
 
 
-def _evenly_spaced(n: int, max_n: int) -> np.ndarray:
+def evenly_spaced(n: int, max_n: int) -> np.ndarray:
     """Return up to ``max_n`` evenly spaced indices from ``range(n)``."""
     if n <= max_n:
         return np.arange(n)
@@ -251,7 +251,7 @@ def _drop_high_corr_columns(
     sample: np.ndarray, threshold: float, max_rows: int, block_rows: int = 4096
 ) -> np.ndarray:
     """Return a keep-mask dropping the later column of each highly correlated pair."""
-    rows = _evenly_spaced(sample.shape[0], max_rows)
+    rows = evenly_spaced(sample.shape[0], max_rows)
     n = len(rows)
     n_cols = sample.shape[1]
     if n < 2:
@@ -286,7 +286,7 @@ def _drop_high_corr_columns(
     return keep_mask
 
 
-def _welford_over_ranges(
+def welford_over_ranges(
     arr: zarr.Array,
     ranges: Sequence[tuple[int, int]],
     transform: Callable[[np.ndarray], np.ndarray],
@@ -373,7 +373,7 @@ def run_prescaling(
     sample_target = int(
         np.clip(n_train_rows * cfg.sample_frac, cfg.sample_rows_min, cfg.sample_rows_max)
     )
-    sample_idx = _evenly_spaced(n_rows, sample_target)
+    sample_idx = evenly_spaced(n_rows, sample_target)
     sample_idx = sample_idx[is_train_chunk[sample_idx // chunk_rows]]
     logger.info(
         "prescaling %s: %d x %d, %d train rows, sample %d, steps "
@@ -423,7 +423,7 @@ def run_prescaling(
     raw_mean = raw_std = None
     if cfg.winsorize_method == "std" or cfg.zscore_fit == "raw":
         train_ranges = chunk_row_ranges(train_chunks, chunk_rows)
-        raw_mean, raw_std = _welford_over_ranges(
+        raw_mean, raw_std = welford_over_ranges(
             arr,
             train_ranges,
             lambda c: _clean_chunk(c, col_max_f, col_min_f, valid_mask),
@@ -506,7 +506,7 @@ def run_prescaling(
         mean, std = raw_mean, raw_std
     elif cfg.zscore_fit == "post_transform":
         train_ranges = chunk_row_ranges(train_chunks, chunk_rows)
-        mean, std = _welford_over_ranges(arr, train_ranges, _transform, n_kept, chunk_rows)
+        mean, std = welford_over_ranges(arr, train_ranges, _transform, n_kept, chunk_rows)
     else:
         raise ValueError(f"unknown zscore_fit {cfg.zscore_fit!r}")
 
