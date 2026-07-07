@@ -238,6 +238,19 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   `results/metrics.csv` (320 rows) and `plots/report_card_r2.png`/`.csv` are the current
   merged report card. `osmordred`, `ml_qm`, and `surrogate_adme` are still absent (osmordred
   ran under a different corpus/naming convention, the other two haven't fanned out yet).
+  **Added two reference columns, code done, data not yet generated.** The report card now
+  appends the stock-CheMeleon baseline and the LGBM meta-model as labeled columns after a
+  blank spacer (divider lines, bold labels), separate from the per-flavor columns since
+  neither is a selectable flavor (the baseline used a different corpus/regime; the
+  meta-model needs every flavor's prediction, not one deployable foundation). Wiring:
+  `report_card.py`'s `build_reference_series`/`meta_model_series`/`augment_with_references`;
+  `configs/generate.py --stock-baseline`; `slurm/run_stock_baseline.sh` +
+  `finetune_stock_baseline.sbatch` (one-time, corpus/regime-independent); `analyze.sbatch`
+  folds `results/chemeleon_stock/` in automatically when present. **The stock-baseline
+  finetune has not been run yet**, so the baseline column is currently empty (silently
+  skipped, per `--no-references`'s fallback); the meta-model column populates once the
+  full-corpus rerun's `analyze` stage (job 33592) completes. Run `bash
+  slurm/run_stock_baseline.sh` to populate the baseline column.
 - [x] 9. Meta-model: stack per-flavor finetuned predictions per endpoint, fit LGBM/RF/MLP
   on out-of-fold predictions, compare to the best single flavor.
   First real result, produced by the same job 19230968 now that ≥2 flavors have results:
