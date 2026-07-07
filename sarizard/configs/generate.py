@@ -152,12 +152,30 @@ def main() -> None:
         "--label-prefix", default="",
         help="flavor mode: namespace prefix for the recipe label/dir (e.g. lr_reduced)",
     )
+    parser.add_argument(
+        "--stock-baseline", action="store_true",
+        help="write configs/chemeleon_stock/<endpoint>.yaml: the baseline templates "
+        "unchanged (from_foundation stays 'chemeleon', so anvil downloads and finetunes "
+        "the released stock checkpoint) except relabeled for provenance. This is the "
+        "external reference column for the report card, not one of our pretrained "
+        "flavors; run once, it does not depend on the corpus or pretraining regime.",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     templates = sorted(args.baseline_dir.glob(f"{BACKBONE}_*.yaml"))
     if not templates:
         raise SystemExit(f"no baseline templates in {args.baseline_dir}")
+
+    # stock-baseline mode: relabel only, from_foundation stays "chemeleon" (a no-op override)
+    if args.stock_baseline:
+        label = "chemeleon_stock"
+        n = _generate_one(
+            templates, CONFIGS_DIR / label, BACKBONE, label, args.accelerator,
+            mpnn_lr_mode=args.mpnn_lr_mode,
+        )
+        logger.info("stock baseline (%s): %d recipes -> configs/%s", args.mpnn_lr_mode, n, label)
+        return
 
     # ablation mode: one explicit foundation -> configs/<out-subdir>/
     if args.foundation is not None:

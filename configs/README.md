@@ -55,6 +55,18 @@ generates are `configs/ablation_<name>__s<seed>/`; they are gitignored like the 
 
 ## Stock-CheMeleon reference
 
-The `_baseline/` recipes keep `from_foundation: chemeleon`, so running them directly gives a
-stock-CheMeleon reference column. It uses a different pretraining corpus and regime than our
-flavors, so treat it as an external reference, not an apples-to-apples arm of the study.
+The `_baseline/` recipes keep `from_foundation: chemeleon`, so running them directly (rather
+than through the flavor mode above) gives a stock-CheMeleon reference column: `anvil`
+downloads the released checkpoint itself, no local pretraining needed. It uses a different
+pretraining corpus and regime than our flavors, so treat it as an external reference, not an
+apples-to-apples arm of the study.
+
+```
+python -m sarizard.configs.generate --stock-baseline   # -> configs/chemeleon_stock/<endpoint>.yaml
+```
+
+Or `bash slurm/run_stock_baseline.sh` to generate and finetune all 24 in one step. This is a
+one-time run (it doesn't depend on the corpus or pretraining regime, unlike every other
+recipe here); `results/chemeleon_stock/` is picked up automatically by `analyze.sbatch` and
+rendered as a labeled reference column by `sarizard.analysis.report_card` (alongside the
+meta-model), separated from the flavor columns by a blank spacer.

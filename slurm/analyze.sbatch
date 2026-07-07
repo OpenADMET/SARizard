@@ -28,6 +28,13 @@ for flavor in "${FLAVORS[@]}"; do
     done
 done
 
+# the stock-CheMeleon reference (slurm/run_stock_baseline.sh) is a one-time, corpus-independent
+# run; fold it into the same metrics.csv whenever it has results, so report_card's
+# --baseline-flavor finds it without a separate evaluate pass
+if [[ -d "$REPO_DIR/results/chemeleon_stock" ]]; then
+    LABELS+=("chemeleon_stock")
+fi
+
 # reload test-set predictions and write metrics.csv
 python -m sarizard.analysis.evaluate --accelerator "$ACCELERATOR" --flavors "${LABELS[@]}"
 
