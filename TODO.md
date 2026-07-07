@@ -14,8 +14,17 @@ Headline results and the read on each flavor: `FINDINGS.md`.
 ## Milestones (ranked)
 
 - [ ] 1. Scaffold the repo, copy data, wire the conda environments. (in progress)
-- [ ] 2. Prepare the shared 250K corpus from the original CheMeleon PubChem set (Zenodo
+- [x] 2. Prepare the shared 250K corpus from the original CheMeleon PubChem set (Zenodo
   DOI 10.5281/zenodo.15733574), single seed, persisted, with cached default-featurizer graphs.
+  **Superseded: the shared corpus is now the full corpus, not the 250K screening set.**
+  Decision to run the whole flavor sweep (Milestones 6-9, not just the Milestone 10
+  scale-up) directly on `corpus/corpus_full.parquet` (944,296 molecules, `CORPUS_FILE`/
+  `CORPUS_N` in `slurm/env.sh`). This folds what Milestone 10 originally deferred
+  ("scale winning flavors up to 1M after the 250K screen decides which are worth it")
+  forward into the main sweep itself. The 250K flavor-sweep artifacts (targets, splits,
+  foundations, results, plots) are archived at `archive/flavor_sweep_250k/` rather than
+  overwritten, mirroring the ablation-triage archive precedent. See Milestones 6-9 below
+  for the rerun's progress.
 - [ ] 3. Drive osmordred end to end as the validation flavor: compute target, pretrain
   (MeanAggregation, DEFAULT featurizer), convert checkpoint, finetune one endpoint,
   confirm the foundation loads and a sane R-squared lands. This validates the checkpoint
@@ -155,6 +164,12 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   full corpus used for the Milestone-4/5 osmordred triage), so osmordred is not yet
   directly comparable on this table; a controlled comparison needs osmordred rerun under
   this same protocol (250K corpus, `order_fix`).
+  **Rerunning on the full corpus (see Milestone 2's supersede note).** 250K artifacts
+  archived to `archive/flavor_sweep_250k/`. Targets for all 9 flavors recomputed against
+  `corpus/corpus_full.parquet`; the fast direct-compute ones (atompair, ecfp, erg, pubchem,
+  rdkit2d) finished within the hour, the sharded slow ones (usrcat, whim, e3fp, jazzy) via
+  `compute_target_shard.sbatch`/`merge_target.sbatch` took several hours each. All 9 targets
+  are cached; prescale/split/pretrain/finetune/analyze at full-corpus scale have not yet run.
 - [ ] 7. Add the learned-model flavors: minimol, surrogate_adme, ml_qm. Each runs its
   source model over the shared corpus in an isolated environment and caches the target.
   **In progress, scoped to minimol only.** `ml_qm` (24-dim target) and `surrogate_adme`
@@ -197,6 +212,18 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   full flavor list) will regenerate a complete `results/metrics.csv` from the cached
   predictions; do that before the next report-card or meta-model pass so it is not
   scoped to whichever flavor last ran the analyze stage.
+  **Superseded by the full-corpus rerun (Milestone 2).** minimol's 250K results are
+  archived at `archive/flavor_sweep_250k/`; its target has been recomputed against
+  `corpus/corpus_full.parquet`. `ml_qm` and `surrogate_adme` are no longer held out: the
+  target-dropout-fraction blocker below is resolved by an automatic rule
+  (`DROPOUT_OVERRIDE_MAX_DIM=30` in `config.py`, `train.py` falls back to
+  `dropout_fraction=0.0` for any target at or under that width) rather than the earlier
+  per-flavor `DROPOUT_FRACTION_OVERRIDES` list, so both proceed alongside every other
+  flavor in the full-corpus rerun. `ml_qm`'s target is computed and cached
+  (`cache/targets/ml_qm/target.zarr`, 944,296 x 24); `surrogate_adme` keeps its own
+  Novartis-molecule corpus (unaffected by the full-corpus switch, per the AGENTS.md
+  invariant) and has not been touched. Prescale/split/pretrain/finetune/analyze for
+  `ml_qm` have not yet run at full-corpus scale.
 - [x] 8. Report card: heatmap of endpoints by flavors with a selectable metric (default R-squared).
   Regenerated across all 10 completed flavors (the 9 Milestone-6 flavors plus `minimol`) by
   resubmitting `analyze.sbatch` with no `FLAVOR_SUBSET` (job 19230968, completed clean);
@@ -214,13 +241,12 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   `FINDINGS.md` for the read.
 - [ ] 10. (GATED on 8, and only if any flavor beats baseline) Scale the flavors that show
   utility up to the full 1M-molecule corpus to produce the final foundation-model artifacts.
-  The 250K corpus is the screening set that decides which descriptor targets are worth the
-  cost; the sweep is descriptive, not the deliverable. If no flavor clears the baseline on
-  250K, there is nothing to scale and this milestone is void. Otherwise, recompute the winning
-  flavors' targets over the 1M set, pretrain at full scale, and ship those foundations as the
-  release artifacts. Hold the pretraining regime (backbone, prescaling from milestone 5,
-  target-dropout) identical to the sweep so the 1M foundation is the same experiment at scale,
-  not a new one.
+  **Folded into Milestones 6-9's full-corpus rerun (Milestone 2's supersede note):** rather
+  than screen on 250K first and scale only the winners, the whole sweep now runs directly on
+  the full corpus, so every flavor's foundation is already the release-scale artifact once
+  its pretrain/finetune completes. This milestone is void as originally scoped (there is no
+  separate 250K-screen-then-scale step left to do); revisit only if a flavor needs to move
+  beyond the current full corpus (944,296 molecules) to the full 1M CheMeleon PubChem set.
 
 ## Open items (need input or external data)
 
@@ -282,7 +308,7 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   effect from initialization variance. Set `FLAVOR_SEEDS` for `run_all.sh` (and
   `ABLATION_SEEDS` for the triage); the report card and meta-model average the seeds per
   flavor, and re-running with more seeds fills in only the new ones.
-- [ ] **Blocker for Milestone 7, raised in urgency:** target-dropout fraction for small
+- [x] **Blocker for Milestone 7, raised in urgency:** target-dropout fraction for small
   flavors. The masked-pretext dropout in `losses.py` (`DROPOUT_FRACTION`, applied per target
   element to every flavor) keeps a fixed fraction, not a fixed count. Its rationale (stop the
   head co-adapting across a wide descriptor block) is strong at 3585 dims (osmordred) but
@@ -318,6 +344,15 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   without an entry (everything run so far) still pretrains at the regime default, so this
   does not touch anything already on disk. To fan out `ml_qm`/`surrogate_adme` at 0.0,
   export `DROPOUT_FRACTION_OVERRIDES="ml_qm=0.0 surrogate_adme=0.0"` before submitting.
+  **Superseded by an automatic rule, ahead of the full-corpus rerun.** The manual
+  per-flavor `DROPOUT_FRACTION_OVERRIDES` list required remembering to export it for every
+  narrow flavor; replaced with `config.py`'s `DROPOUT_OVERRIDE_MAX_DIM=30` and a
+  `train.py` default that falls back to `dropout_fraction=0.0` for any target at or under
+  that width once `n_features` is known from the split (jazzy at 6, ml_qm at 24, and
+  surrogate_adme at 25 all qualify automatically; osmordred at 3585 and every other flavor
+  keep the regime default of 0.85). An explicit `--dropout-fraction` flag still overrides
+  either default for a one-off deviation. `DROPOUT_FRACTION_OVERRIDES` remains available in
+  `slurm/env.sh` for that explicit case but is no longer needed for ml_qm/surrogate_adme.
 - [ ] Frozen warmup then coadaptation: train for N epochs with `mpnn_lr=0` so the FFN head
   finds a reasonable operating point against the fixed representations, then unfreeze the
   MPNN and continue training at a reduced rate. Avoids the large gradient shock that occurs
@@ -327,7 +362,7 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   custom Lightning callback or a sequential two-recipe approach. This is the one LR experiment
   `run_lr_experiments.sh` does not cover (it only sweeps single-rate protocols: reduced,
   unlocked); wiring it needs that anvil feature first.
-- [ ] PCA-compressed osmordred target (not yet started): osmordred only, backbone/corpus/regime
+- [ ] PCA-compressed osmordred target (wiring in progress, not yet run): osmordred only, backbone/corpus/regime
   held fixed as usual. Run the descriptor matrix through the full prescaling pipeline (the
   `full` recipe: order-fixed winsorize/z-score plus correlation drop, low-variance drop, and
   Yeo-Johnson), then fit PCA on the resulting matrix and pretrain against the component scores
@@ -339,7 +374,18 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   that ablation. Needs new wiring: an `osmordred_pca<threshold>` target variant computed after
   prescaling (fit PCA on the train split only, apply the same transform to val, cache the
   component count each threshold picks), plus the corresponding prescale/pretrain/finetune/
-  analyze plumbing. Plan only; do not execute yet.
+  analyze plumbing.
+  **No longer plan-only; wiring underway alongside the full-corpus rerun.** `flavors.py`
+  gained a `derived_from` field (a flavor whose target has no calculator of its own, built
+  instead from a base flavor's already-computed target) and registered
+  `osmordred_pca80`/`pca90`/`pca95`; `sarizard/pretraining/pca_target.py` fits PCA once on
+  the `full`-recipe-prescaled osmordred store (train rows only) to the largest requested
+  threshold and slices a prefix of the fitted components for the smaller thresholds;
+  `slurm/osmordred_pca_targets.sbatch` runs it, gated into `run_all.sh`'s chain only when
+  the registry has a derived flavor. `compute_targets.sbatch` and `split.sbatch` skip a
+  derived flavor's own target/prescale stage and treat its PCA output as already prescaled.
+  Recipes are generated (`configs/osmordred_pca{80,90,95}__s42/`) but nothing has pretrained
+  yet; this rides on the full-corpus rerun's `run_all.sh` submission.
 
 ## Methodology watch-items
 

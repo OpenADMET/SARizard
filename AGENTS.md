@@ -28,7 +28,8 @@ All Python code lives in the importable `sarizard/` package (`pip install -e .`)
 root holds inputs, recipes, and regenerable artifacts. Run modules from the repo root as
 `python -m sarizard.<sub>.<module>`.
 
-- `sarizard/corpus/` shared 250K corpus preparation; `sarizard/pretraining/` vendored and
+- `sarizard/corpus/` shared corpus preparation (full corpus by default as of the
+  full-corpus rerun; still parameterized by size for screening runs); `sarizard/pretraining/` vendored and
   adapted `how-to-train-your-chemeleon` (`features/` holds one target calculator per flavor,
   `prescaling.py` the toggleable descriptor preprocessing and ablation registry,
   `convert_checkpoint.py` exports foundations); `sarizard/configs/` the recipe generator;
@@ -61,10 +62,13 @@ foundation, so treat each as a gate.
 
 ## Experiment discipline
 
-- **One shared corpus.** Every flavor computes its target on the same fixed 250K
-  molecule subset (single seed, persisted). Do not let a flavor drift to a different
-  molecule set; the report-card columns must be comparable. Learned-model flavors run
-  their source model over this same corpus. The lone exception is `surrogate_adme`: its
+- **One shared corpus.** Every flavor computes its target on the same fixed corpus
+  (single seed, persisted). Do not let a flavor drift to a different molecule set; the
+  report-card columns must be comparable. As of the full-corpus rerun, that shared corpus
+  is `corpus/corpus_full.parquet` (944,296 molecules, `CORPUS_FILE`/`CORPUS_N` in
+  `slurm/env.sh`), superseding the 250K screening corpus (`corpus/corpus_250k.parquet`)
+  the sweep originally ran on; the 250K results are archived at `archive/flavor_sweep_250k/`.
+  Learned-model flavors run their source model over this same corpus. The lone exception is `surrogate_adme`: its
   target (the 25 Novartis ADME predictions) is only defined on the Novartis molecules, so
   that flavor pretrains on its own corpus (`compute_target --flavor surrogate_adme` writes
   `corpus_smiles.parquet` alongside its `target.npy`, and `split.py` uses it). Its column is
