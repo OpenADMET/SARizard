@@ -11,6 +11,13 @@ per-flavor finetuned predictions into a meta-model beat the best single foundati
 
 ## Status
 
+**Current (2026-07-08): the full-corpus frozen flavor sweep is complete for all 15 flavors.**
+`results/metrics.csv`, `plots/report_card_r2.png`, and `results/meta_model_lgbm.csv` are the
+live frozen report card and meta-model; see the full-corpus table under Report card below. The
+reduced and unlocked protocols on the full corpus, the per-protocol stock baseline and
+meta-model, and the six final report cards remain to run. The rest of this section is the
+prior history leading here.
+
 Prescaling ablation triage complete on the full corpus with the regime fix, including the
 cross-protocol check (frozen/reduced/unlocked; see below): `chemeleon_baseline` wins under
 frozen, the protocol the flavor sweep uses, though by a close margin over `order_fix`, which
@@ -314,6 +321,51 @@ overridable to a nonzero value. See the resolved blocker in `TODO.md` and the in
 `AGENTS.md`.
 
 ## Report card
+
+### Full-corpus frozen sweep (current headline, 2026-07-08)
+
+All 15 flavors on the full corpus (`corpus/corpus_full.parquet`, 944,296 molecules), frozen
+protocol, seed 42; `results/metrics.csv` (512 rows = 15 flavors + the `chemeleon_stock`
+reference column) and `plots/report_card_r2.png`/`.csv` hold the numbers. Mean R-squared
+across the 32 endpoint-columns:
+
+| Flavor | Frozen mean R-squared |
+|---|---|
+| surrogate_adme | 0.369 |
+| minimol | 0.355 |
+| rdkit2d | 0.339 |
+| osmordred | 0.327 |
+| osmordred_pca95 | 0.325 |
+| osmordred_pca90 | 0.322 |
+| osmordred_pca80 | 0.321 |
+| chemeleon_stock (reference) | 0.297 |
+| jazzy | 0.284 |
+| usrcat | 0.281 |
+| erg | 0.271 |
+| pubchem | 0.270 |
+| atompair | 0.261 |
+| e3fp | 0.239 |
+| ecfp | 0.223 |
+| whim | 0.204 |
+
+The two learned-model flavors lead (`surrogate_adme` 0.369, `minimol` 0.355), both above
+`rdkit2d` (0.339), the strongest direct-compute descriptor. `surrogate_adme` is a
+different-corpus reference arm (it pretrains on its own Novartis molecules per the AGENTS.md
+invariant), so it is not an apples-to-apples column; read it as such. The three PCA-compressed
+osmordred targets land within 0.006 of full osmordred (0.321-0.325 vs. 0.327), so compressing
+the 3585-dim block to 70-237 components costs almost nothing on frozen transfer. Ten of the
+15 flavors clear the stock-CheMeleon baseline (0.297); the five below it are the binary
+fingerprint flavors (ecfp, atompair, e3fp) plus erg/whim/pubchem's weakest, consistent with
+the leaky-pretext prior. The LGBM meta-model beats the best single flavor on 24 of 32
+endpoint-columns (mean delta R-squared +0.118; `results/meta_model_lgbm.csv`).
+
+This ran via frozen finetune job 477538 (`ml_qm`'s block failed as expected, the flavor being
+dropped) and analyze job 510881 (a first analyze attempt, job 509950, died on a bad GPU node
+and was resubmitted with that node excluded). The reduced and unlocked protocols on the full
+corpus are not yet run; the 250K partial sweep below is superseded by this table for the
+flavors it covers.
+
+### Milestone 6 (partial, 250K, superseded by the full-corpus table above)
 
 **Milestone 6 (partial): 9 direct-compute flavors, 250K corpus, `order_fix` prescaling, 24
 finetune recipes / 32 endpoint columns (multi-target recipes split into one column per
