@@ -193,6 +193,21 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   `FLAVOR_SEEDS` matching the sweep) off the same foundations, so all three learning-rate
   protocols are covered on the full corpus (per the standing directive in Methodology
   watch-items). Neither is submitted yet.
+  **Frozen finetune + analyze now complete (2026-07-08).** The frozen finetune array ran as
+  job 477538: 1104 tasks clean, the only failures being `ml_qm`'s 24-endpoint block (tasks
+  288-311), expected since that flavor is dropped and its foundation is all-NaN. Analyze was
+  submitted as job 509950 but died on a bad GPU node (`iscn008`, `CUDA driver initialization
+  failed` on every `model.predict`, after Lightning reported the GPU as available); it wrote a
+  degenerate `results/metrics.csv` (1 flavor, from osmordred's stale cached predictions) before
+  exiting. Resubmitted with `--exclude=iscn008` as job 510881, which completed clean on
+  `iscn010`: `results/metrics.csv` (512 rows = 15 live flavors + `chemeleon_stock`, `ml_qm`
+  absent), `plots/report_card_r2.png`/`.csv`, and `results/meta_model_lgbm.csv`. Frozen mean
+  R-squared per flavor: surrogate_adme 0.369, minimol 0.355, rdkit2d 0.339, osmordred 0.327,
+  osmordred_pca95/90/80 0.325/0.322/0.321, chemeleon_stock 0.297, jazzy 0.284, usrcat 0.281,
+  erg 0.271, pubchem 0.270, atompair 0.261, e3fp 0.239, ecfp 0.223, whim 0.204. The LGBM
+  meta-model beats the best single flavor on 24 of 32 endpoint-columns (mean delta R-squared
+  +0.118). Still to submit: the reduced + unlocked protocols via `slurm/run_lr_experiments.sh`
+  (`LR_MODES="reduced unlocked"`), per the all-three-protocols directive.
 - [ ] 7. Add the learned-model flavors: minimol, surrogate_adme. Each runs its
   source model over the shared corpus in an isolated environment and caches the target.
   **`ml_qm` dropped from scope (decision, 2026-07-08): we are not running it.** Its qmdesc
