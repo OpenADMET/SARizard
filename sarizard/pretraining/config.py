@@ -32,7 +32,7 @@ DROPOUT_FRACTION = 0.85  # keeps 15% of targets/step (matches sibling's MASKING_
 # was 0.30 (keeps 70%), a much denser per-step supervision load on a 3585-dim target block
 
 # a target block at or below this width keeps under ~5 elements/step at DROPOUT_FRACTION
-# (ml_qm 24, surrogate_adme 25, jazzy 6 all qualify); train.py pretrains these at 0.0
+# (surrogate_adme 25, jazzy 6 all qualify); train.py pretrains these at 0.0
 # unconditionally rather than against near-zero supervision density. This zero is a hard
 # invariant, not an overridable default: the sub-threshold check runs before --dropout-fraction
 # and rejects any nonzero value for such a flavor, so no narrow target is ever pretrained with

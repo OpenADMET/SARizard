@@ -13,7 +13,7 @@ tags: [endpoint-family, status/blue]
 
 ## Candidate flavors
 
-- [[usrcat]] (3D shape) · [[erg]] (pharmacophore) · [[ml_qm]] (electronic structure)
+- [[usrcat]] (3D shape) · [[erg]] (pharmacophore)
 
 ## Related
 

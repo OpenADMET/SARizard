@@ -5,7 +5,7 @@ cached. Calculators fall into two groups by the environment they run in:
 
 - direct-compute flavors (rdkit2d, erg, ecfp, atompair, pubchem, usrcat, whim, e3fp,
   osmordred) derive the target from the molecular graph or geometry;
-- learned-model flavors (minimol, ml_qm, surrogate_adme) run a source model over the
+- learned-model flavors (minimol, surrogate_adme) run a source model over the
   shared corpus.
 
 Every calculator writes a plain ``target.npy`` memmap (numpy only), so the finicky or

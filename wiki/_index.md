@@ -47,7 +47,6 @@ Fingerprints (binary, leaky pretext):
 Learned-model targets:
 - [[minimol]] 🟣 — 512 minimol embedding (MSE)
 - [[surrogate_adme]] 🟣 — 25 surrogate ADME predictions (MSE)
-- [[ml_qm]] 🟣 — 24 pooled qmdesc QM descriptors (MSE)
 
 ## Endpoint families
 

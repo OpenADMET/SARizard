@@ -22,8 +22,8 @@ from sarizard.pretraining.config import CONFORMER_FORCE_FIELD, CONFORMER_NUM, CO
 logger = logging.getLogger(__name__)
 
 # Names of the flavors computed here, kept static so membership can be tested without
-# importing skfp. This matters: the isolated target environments (osmordred, minimol, jazzy,
-# ml_qm) have no skfp, and compute_target probes is_skfp_flavor for every flavor before
+# importing skfp. This matters: the isolated target environments (osmordred, minimol, jazzy)
+# have no skfp, and compute_target probes is_skfp_flavor for every flavor before
 # dispatching, so the probe must not drag skfp in. _register_builders asserts the built
 # tables match these sets, so the two cannot drift.
 _2D_FLAVORS = frozenset({"rdkit2d", "erg", "ecfp", "atompair", "pubchem"})

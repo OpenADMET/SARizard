@@ -63,10 +63,6 @@ def _streaming_compute_fn(
         from sarizard.pretraining.features.minimol_target import build_compute_fn
 
         return build_compute_fn(batch_size)
-    if name == "ml_qm":
-        from sarizard.pretraining.features.qmdesc_target import build_compute_fn
-
-        return build_compute_fn()
     if name == "jazzy":
         from sarizard.pretraining.features.jazzy_target import build_compute_fn
 

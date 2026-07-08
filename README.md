@@ -49,7 +49,6 @@ foundational pretraining target lends itself to which endpoint and endpoint fami
 | jazzy | hydration energy + H-bond strengths | 6 | MSE | direct compute (isolated env) |
 | minimol | minimol embedding | 512 | MSE | learned model (isolated env) |
 | surrogate_adme | 25 ADME predictions | 25 | MSE | released dataset (native corpus) |
-| ml_qm | qmdesc QM descriptors (pooled) | 24 | MSE | learned model (isolated env) |
 
 Binary fingerprint targets are deterministic from the input graph, so they are a
 leaky and likely weak pretext; their position on the report card is itself a result.
@@ -110,8 +109,8 @@ pip install -e ../openadmet-models
 pip install -e .
 ```
 
-Four target generators with conflicting stacks have isolated environments
-(`envs/osmordred.yml`, `envs/jazzy.yml`, `envs/minimol.yml`, `envs/mlqm.yml`). Each writes a plain `target.npy` to `cache/` that the main
+Three target generators with conflicting stacks have isolated environments
+(`envs/osmordred.yml`, `envs/jazzy.yml`, `envs/minimol.yml`). Each writes a plain `target.npy` to `cache/` that the main
 environment packs to zarr, so their dependencies never reach this training env. osmordred has
 no package release and is built from source into its env with `envs/build_osmordred.sh`;
 minimol needs the PyG extension wheels declared in its env file's find-links.
@@ -172,7 +171,7 @@ production recipe, then bake it into the core workflow before running the flavor
 
 The scikit-fingerprints flavors (`ecfp`, `rdkit2d`, `erg`, `atompair`, `pubchem`, `usrcat`,
 `whim`, `e3fp`) and `surrogate_adme` compute in the main `sarizard` env; only `osmordred`,
-`jazzy`, `minimol`, and `ml_qm` have isolated envs. Compute the target in the flavor's env
+`jazzy`, and `minimol` have isolated envs. Compute the target in the flavor's env
 (`get_flavor(name).env`), pack and train in the main env. Example with `ecfp` (main env
 throughout) at the default seed 42:
 

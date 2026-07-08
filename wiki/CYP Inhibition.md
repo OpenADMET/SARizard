@@ -13,7 +13,7 @@ tags: [endpoint-family, status/blue]
 
 ## Candidate flavors
 
-- [[erg]] (pharmacophore) · [[ml_qm]] (electronic and reactivity)
+- [[erg]] (pharmacophore)
 - [[surrogate_adme]] (its target includes CYP TDI) · [[usrcat]] (3D shape)
 
 ## Related

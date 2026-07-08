@@ -14,7 +14,7 @@ tags: [endpoint-family, status/blue]
 
 ## Candidate flavors
 
-- [[surrogate_adme]] (on-task ADME target) · [[ml_qm]] (reactivity and metabolism)
+- [[surrogate_adme]] (on-task ADME target)
 - [[osmordred]] and [[jazzy]] (physicochemical drivers)
 
 ## Related

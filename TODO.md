@@ -137,7 +137,7 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   filter (space-separated flavor names; unset keeps the full registry) so the array-sized
   stages (targets/split/pretrain/finetune/analyze) can be scoped to just these 9 flavors
   without dragging in `osmordred` (already done) or the milestone-7 model flavors
-  (`minimol`/`surrogate_adme`/`ml_qm`, not yet started); scoping matters because `analyze`'s
+  (`minimol`/`surrogate_adme`, not yet started); scoping matters because `analyze`'s
   `afterok` dependency needs every array task to succeed, and running unbuilt milestone-7
   flavors alongside would risk cancelling the whole chain on an unrelated failure.
   (2) `slurm/split.sbatch` now runs `prescaling.py --ablation order_fix` ahead of `split.py
@@ -170,8 +170,9 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   rdkit2d) finished within the hour, the sharded slow ones (usrcat, whim, e3fp, jazzy) via
   `compute_target_shard.sbatch`/`merge_target.sbatch` took several hours each.
   **Submitted the rest of the chain** via `bash slurm/run_all.sh` (`CORPUS_FILE=corpus/
-  corpus_full.parquet CORPUS_N=1000000`, all 16 registry flavors including Milestone 7's
-  `ml_qm`/`minimol`/`surrogate_adme` and the new `osmordred_pca80/90/95`): corpus (job
+  corpus_full.parquet CORPUS_N=1000000`, the full registry as of submission including
+  Milestone 7's `minimol`/`surrogate_adme` and the new `osmordred_pca80/90/95`; `ml_qm` was
+  in this chain too but has since been dropped, see Milestone 7): corpus (job
   33586, completed, skipped) → targets (33587, array 0-15, completed, all skipped since
   already cached) → pca-targets (33588) → split (33589, array 0-15) → pretrain (33590,
   16 tasks) → finetune (33591, array 0-383, 384 recipes) → analyze (33592), each `afterok`
@@ -180,18 +181,31 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   **This `run_all.sh` chain covers the frozen protocol only** (384 = 16 flavors x 24
   endpoints x 1 seed). Pretrain task 14 (`osmordred_pca90`) failed transiently on a bad GPU
   node (`No CUDA GPUs are available`), which cascaded to cancel finetune (33591) and analyze
-  (33592) via their `afterok` dependency; the failed pretrain is resubmitted as job 93729_14
-  (running). Once it lands, the frozen finetune+analyze need resubmitting, AND the reduced +
-  unlocked protocols must be submitted separately via `bash slurm/run_lr_experiments.sh`
-  (`LR_MODES="reduced unlocked"`, `FLAVOR_SEEDS` matching the sweep) off the same
-  foundations, so all three learning-rate protocols are covered on the full corpus (per the
-  standing directive in Methodology watch-items). Neither is submitted yet.
-- [ ] 7. Add the learned-model flavors: minimol, surrogate_adme, ml_qm. Each runs its
+  (33592) via their `afterok` dependency; the failed pretrain was resubmitted as job 93729_14.
+  **93729_14 completed clean** (2026-07-07T15:39, 3h41m on an A100), writing
+  `foundations/osmordred_pca90__s42_mp.pt`. **All 15 in-scope full-corpus foundations are on
+  disk** (osmordred, the 9 direct-compute flavors, minimol, surrogate_adme, and
+  osmordred_pca80/90/95; `ml_qm`'s foundation was also written but came back all-NaN and the
+  flavor is dropped, see Milestone 7), so the pretrain stage of the full-corpus rerun is complete and the
+  finetune stages are unblocked. Still to submit (nothing is queued): the frozen finetune +
+  analyze (the cancelled 33591/33592 equivalents), AND the reduced + unlocked protocols
+  separately via `bash slurm/run_lr_experiments.sh` (`LR_MODES="reduced unlocked"`,
+  `FLAVOR_SEEDS` matching the sweep) off the same foundations, so all three learning-rate
+  protocols are covered on the full corpus (per the standing directive in Methodology
+  watch-items). Neither is submitted yet.
+- [ ] 7. Add the learned-model flavors: minimol, surrogate_adme. Each runs its
   source model over the shared corpus in an isolated environment and caches the target.
-  **In progress, scoped to minimol only.** `ml_qm` (24-dim target) and `surrogate_adme`
-  (25-dim target) are skipped for now: the target-dropout-fraction blocker below names both
-  by name as needing that ablation before fan-out, not only "if they underperform," and it
-  has not been run. Explicit call: hold both pending either that ablation or an override
+  **`ml_qm` dropped from scope (decision, 2026-07-08): we are not running it.** Its qmdesc
+  target legitimately contains ~1.4% NaN (qmdesc fails on some molecules), which, combined with
+  the pre-fix prescaling re-scatter bug, reached the trainer and drove `train_loss=nan` from
+  epoch 0, producing an all-NaN foundation; rather than rerun it, the flavor is removed from
+  the registry, the code (`flavors.py`, `compute_target.py`, `qmdesc_target.py`), and the
+  environments (`envs/mlqm.yml`). The sweep is now 15 flavors. The rest of this milestone
+  concerns `minimol` and `surrogate_adme` only.
+  **In progress, scoped to minimol only.** `surrogate_adme`
+  (25-dim target) was skipped in the 250K pass: the target-dropout-fraction blocker below named
+  it as needing that ablation before fan-out, not only "if they underperform," and it
+  had not been run. Explicit call at the time: hold it pending either that ablation or an override
   decision, rather than repeat the jazzy precedent (milestone 6 shipped jazzy, a similarly
   narrow target, without the ablation). `minimol` (512-dim) is not implicated by the blocker
   (comparable width to osmordred's 3585), so it proceeds alone via
@@ -230,23 +244,24 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   scoped to whichever flavor last ran the analyze stage.
   **Superseded by the full-corpus rerun (Milestone 2).** minimol's 250K results are
   archived at `archive/flavor_sweep_250k/`; its target has been recomputed against
-  `corpus/corpus_full.parquet`. `ml_qm` and `surrogate_adme` are no longer held out: the
+  `corpus/corpus_full.parquet`. `surrogate_adme` is no longer held out: the
   target-dropout-fraction blocker below is resolved by an automatic rule
   (`DROPOUT_OVERRIDE_MAX_DIM=30` in `config.py`, `train.py` falls back to
   `dropout_fraction=0.0` for any target at or under that width) rather than the earlier
-  per-flavor `DROPOUT_FRACTION_OVERRIDES` list, so both proceed alongside every other
-  flavor in the full-corpus rerun. `ml_qm`'s target is computed and cached
-  (`cache/targets/ml_qm/target.zarr`, 944,296 x 24); `surrogate_adme` keeps its own
+  per-flavor `DROPOUT_FRACTION_OVERRIDES` list, so it proceeds alongside every other
+  flavor in the full-corpus rerun. `surrogate_adme` keeps its own
   Novartis-molecule corpus (unaffected by the full-corpus switch, per the AGENTS.md
   invariant) and has not been touched. Prescale/split/pretrain/finetune/analyze for
-  `ml_qm` (and every other flavor) are submitted as part of the same chain described in
-  Milestone 6's note above (jobs 33586-33592); not yet complete as of this note.
+  `surrogate_adme` (and every other flavor) are submitted as part of the same chain described in
+  Milestone 6's note above (jobs 33586-33592). **Pretrain is now complete:
+  `minimol` and `surrogate_adme` foundations are on disk (part of the 15 in-scope full-corpus
+  foundations).** Finetune + analyze still to be submitted (see Milestone 6's note).
 - [x] 8. Report card: heatmap of endpoints by flavors with a selectable metric (default R-squared).
   Regenerated across all 10 completed flavors (the 9 Milestone-6 flavors plus `minimol`) by
   resubmitting `analyze.sbatch` with no `FLAVOR_SUBSET` (job 19230968, completed clean);
   `results/metrics.csv` (320 rows) and `plots/report_card_r2.png`/`.csv` are the current
-  merged report card. `osmordred`, `ml_qm`, and `surrogate_adme` are still absent (osmordred
-  ran under a different corpus/naming convention, the other two haven't fanned out yet).
+  merged report card. `osmordred` and `surrogate_adme` are still absent (osmordred
+  ran under a different corpus/naming convention, surrogate_adme hasn't fanned out yet).
   **Added two reference columns, code done, data not yet generated.** The report card now
   appends the stock-CheMeleon baseline and the LGBM meta-model as labeled columns after a
   blank spacer (divider lines, bold labels), separate from the per-flavor columns since
@@ -298,8 +313,8 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   baseline). The stock baseline is finetuned under each protocol (decision), so a card
   diverges around its own-protocol stock baseline, not a single shared frozen reference; the
   meta-model and stock-baseline reference columns on each card are that protocol's.
-  Every card shows all 16 flavors (osmordred, the 9 direct-compute flavors,
-  minimol, surrogate_adme, ml_qm, and osmordred_pca80/90/95) plus the two reference columns
+  Every card shows all 15 flavors (osmordred, the 9 direct-compute flavors,
+  minimol, surrogate_adme, and osmordred_pca80/90/95) plus the two reference columns
   (stock baseline, meta-model). Both color modes already exist in `report_card.py`; three gaps
   remain for the non-frozen cards, the per-protocol meta-model, and the per-protocol stock
   baseline, not yet wired:
@@ -346,12 +361,11 @@ Headline results and the read on each flavor: `FINDINGS.md`.
 
 ## Open items (need input or external data)
 
-- [x] ML-QM flavor: use qmdesc (Guan et al., MIT, bundled weights). It predicts 4 atom-level
-  (partial charge, nucleophilic/electrophilic Fukui, NMR shielding) and 2 bond-level (bond
-  order, bond length) QM descriptors. Pooled per descriptor with mean/std/min/max to a
-  24-dim molecule target. Open design choice: a richer alternative is to regress the
-  per-atom/per-bond descriptors directly as node/edge targets (chemprop supports this),
-  which keeps the resolution that pooling discards; revisit if the pooled target underperforms.
+- [~] ML-QM flavor (dropped, 2026-07-08): the qmdesc-based flavor was implemented (24-dim
+  pooled QM descriptors) and pretrained, but its target legitimately carries ~1.4% NaN
+  (qmdesc fails on some molecules) and its full-corpus foundation came back all-NaN. Decision:
+  do not run it; the flavor, its calculator, and `envs/mlqm.yml` are removed from the repo.
+  See Milestone 7's drop note.
 - [x] SLURM specifics: partitions are set in the sbatch headers (cpu for corpus/target/split/
   prescale, gpu with `--gres=gpu:1` for pretrain/finetune/analyze), per-job time limits live in
   each header, `setup.sh` builds the conda envs on the cluster, and the repo sits on the shared
@@ -414,19 +428,19 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   kept) that this item originally flagged as merely noisy. Mechanically safe (loss aggregates
   over all kept elements in the batch, not per-row, so no divide-by-zero), but likely
   unusably sparse. Ablate the fraction (e.g. 0.0, 0.15, 0.85) per small flavor, holding the
-  backbone and target fixed, the same way as the prescaling triage, **before** ml_qm (24
-  dims) or surrogate_adme (25 dims) fan out, not only "if they underperform" as originally
+  backbone and target fixed, the same way as the prescaling triage, **before** surrogate_adme
+  (25 dims) fans out, not only "if they underperform" as originally
   scoped. Keep it fixed across the main sweep once decided; varying it per flavor mid-sweep
   would confound the report card.
-  **Status: still open, now the reason ml_qm and surrogate_adme are held out of Milestone 7.**
+  **Status: still open, now the reason surrogate_adme is held out of Milestone 7.**
   Milestone 6 shipped `jazzy` without this ablation (an explicit, recorded deferral for that
-  one flavor); Milestone 7 does not repeat that deferral for `ml_qm`/`surrogate_adme` since
-  this item names them directly. `minimol` (512 dims) is unaffected by this blocker and
+  one flavor); Milestone 7 does not repeat that deferral for `surrogate_adme` since
+  this item names it directly. `minimol` (512 dims) is unaffected by this blocker and
   proceeds on its own.
-  **Decision: override to 0.0 for these two flavors, skipping the ablation, not running it
+  **Decision: override to 0.0 for the narrow flavors, skipping the ablation, not running it
   later.** Explicit call, not a default: the ablation (0.0 vs. 0.15 vs. 0.85) is not being run;
   0.0 is picked directly on the reasoning that under-1-target/step supervision is unlikely to
-  beat no masking at all for a 24-25 dim block, and confirmed post hoc rather than compared
+  beat no masking at all for a ~25-dim block, and confirmed post hoc rather than compared
   against alternatives. `DROPOUT_FRACTION` was hardcoded and applied identically to every
   flavor with no per-flavor override path, so wired one rather than changing the global
   constant (which would silently change the regime for every already-run flavor):
@@ -438,14 +452,14 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   `DROPOUT_FRACTION_OVERRIDES` (space-separated `flavor=value` pairs) plus a
   `dropout_fraction_for` lookup that `pretrain.sbatch` consults per flavor. Every flavor
   without an entry (everything run so far) still pretrains at the regime default, so this
-  does not touch anything already on disk. To fan out `ml_qm`/`surrogate_adme` at 0.0,
-  export `DROPOUT_FRACTION_OVERRIDES="ml_qm=0.0 surrogate_adme=0.0"` before submitting.
+  does not touch anything already on disk. To fan out `surrogate_adme` at 0.0,
+  export `DROPOUT_FRACTION_OVERRIDES="surrogate_adme=0.0"` before submitting.
   **Superseded by an automatic rule, ahead of the full-corpus rerun.** The manual
   per-flavor `DROPOUT_FRACTION_OVERRIDES` list required remembering to export it for every
   narrow flavor; replaced with `config.py`'s `DROPOUT_OVERRIDE_MAX_DIM=30` and a
   `train.py` default that falls back to `dropout_fraction=0.0` for any target at or under
-  that width once `n_features` is known from the split (jazzy at 6, ml_qm at 24, and
-  surrogate_adme at 25 all qualify automatically; osmordred at 3585 and every other flavor
+  that width once `n_features` is known from the split (jazzy at 6 and
+  surrogate_adme at 25 qualify automatically; osmordred at 3585 and every other flavor
   keep the regime default of 0.85).
   **Hardened into an invariant: zero dropout below the threshold is not overridable.**
   This is a settled decision, not an open ablation: no flavor at or under
@@ -455,7 +469,7 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   a flavor rather than silently honoring it. The `--dropout-fraction` flag and
   `DROPOUT_FRACTION_OVERRIDES` list survive only to tune above-threshold flavors as a
   recorded one-off; they cannot raise dropout on a narrow flavor. The running full-corpus
-  pretrain array already complies (jazzy/ml_qm/surrogate_adme all logged
+  pretrain array already complies (jazzy/surrogate_adme all logged
   `dropout_fraction=0.000`, the PCA thresholds at 70/147/237 dims sit above the threshold at
   0.850), so nothing needed re-running. Do not reintroduce dropout on a sub-threshold flavor,
   raise the fraction for one, or lift `DROPOUT_OVERRIDE_MAX_DIM` to pull one back under
@@ -494,8 +508,9 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   derived flavor's own target/prescale stage and treat its PCA output as already prescaled.
   Recipes are generated (`configs/osmordred_pca{80,90,95}__s42/`); its target-derivation
   stage is job 33588 in the full-corpus `run_all.sh` chain described in Milestone 6, and
-  pretrain/finetune ride the same chain (jobs 33590/33591) once split completes. Not yet
-  complete as of this note.
+  pretrain/finetune ride the same chain (jobs 33590/33591) once split completes. **Pretrain
+  is now complete: all three `osmordred_pca80/90/95` foundations are on disk (pca90 via the
+  93729_14 resubmit after a transient GPU failure); finetune still pending, see Milestone 6.**
 
 ## Methodology watch-items
 
@@ -515,7 +530,7 @@ Headline results and the read on each flavor: `FINDINGS.md`.
 - The masked-pretext target dropout (`losses.py`, `DROPOUT_FRACTION=0.85` as of the
   training-collapse regime fix, keeps 15%) is a fixed fraction applied to every
   above-threshold flavor, so its effect scales with target width: reasonable supervision
-  density at high dims (osmordred, 3585), unusably sparse at low dims (jazzy 6, ml_qm 24,
+  density at high dims (osmordred, 3585), unusably sparse at low dims (jazzy 6, surrogate_adme 25,
   under 1 target/step on average). That sparsity is resolved, not open: any target at or
   under `config.DROPOUT_OVERRIDE_MAX_DIM` (30 dims) pretrains at `dropout_fraction=0.0` as a
   hard invariant enforced in `train.py`, which rejects a nonzero override for such a flavor.

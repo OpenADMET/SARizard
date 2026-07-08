@@ -151,8 +151,8 @@ mis-shaped, or short of the corpus, then packs the zarr. The fast flavors stay o
   (`DependencyNeverSatisfied`) and the chain stops there. Recover by fixing the cause and
   re-running `run_all.sh`: resumability means only the failed gaps recompute and the chain
   re-arms. Read the failing task's `slurm/logs/<stage>_<jobid>_<taskid>.out` first.
-- The learned-model flavors (minimol, ml_qm) need their isolated envs created before the
-  targets stage (`conda env create -f envs/minimol.yml`, `conda env create -f envs/mlqm.yml`).
+- The learned-model flavor minimol needs its isolated env created before the
+  targets stage (`conda env create -f envs/minimol.yml`).
   `surrogate_adme` runs in the main env and only needs the released CSV.
 - Logs land in `slurm/logs/` (gitignored).
 - The committed `configs/_baseline/` recipes are stock CheMeleon; the finetune array excludes
