@@ -1,8 +1,8 @@
 # Main conda environment: foundation pretraining, openadmet finetuning, the
 # direct-compute descriptor targets (RDKit and scikit-fingerprints), target packing,
 # and the analysis package. Three target generators with conflicting stacks live in
-# isolated environments (envs/osmordred.yml, envs/jazzy.yml, envs/minimol.yml,
-# envs/mlqm.yml); see AGENTS.md.
+# isolated environments (envs/osmordred.yml, envs/jazzy.yml, envs/minimol.yml);
+# see AGENTS.md.
 #
 # PyTorch is intentionally left to a cluster-specific install: pick the build
 # matching the node CUDA with `conda install pytorch pytorch-cuda=<ver> -c pytorch

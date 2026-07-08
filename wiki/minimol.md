@@ -12,8 +12,8 @@ tags: [flavor, status/planned]
 
 ## Status
 
-Milestone 7, in progress (its siblings [[surrogate_adme]] and [[ml_qm]] are held out; see
-their Status sections). Not implicated by the target-dropout-fraction blocker in `TODO.md`
+Milestone 7, in progress (its sibling [[surrogate_adme]] is held out; see its Status
+section). Not implicated by the target-dropout-fraction blocker in `TODO.md`
 (512 dims is comparably wide to osmordred's 3585). The cached target was found to be
 entirely NaN before this run: `envs/minimol.yml` left `scipy` unpinned, so it resolved to
 1.15.3, which dropped `float16` sparse-matrix support that `graphium`'s featurizer needs,
@@ -27,5 +27,5 @@ learned target beats hand-built descriptors at their own specialties.
 
 ## Related
 
-- Learned-model siblings: [[surrogate_adme]], [[ml_qm]]
+- Learned-model sibling: [[surrogate_adme]]
 - Regime: [[Shared Corpus and Regime]] · [[Report Card]] · [[Meta-Model]]

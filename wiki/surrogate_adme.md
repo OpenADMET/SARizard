@@ -53,5 +53,5 @@ whether an on-task pretraining target beats generic representations.
 
 ## Related
 
-- Learned-model siblings: [[minimol]], [[ml_qm]]
+- Learned-model sibling: [[minimol]]
 - Regime: [[Shared Corpus and Regime]] · [[Report Card]] · [[Meta-Model]]

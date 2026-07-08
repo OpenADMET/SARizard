@@ -17,7 +17,7 @@ def test_parse_lr_variant_frozen_has_no_prefix():
 
 def test_parse_lr_variant_reads_mode_from_prefix():
     assert parse_lr_variant("lr_reduced__ecfp__s2") == ("reduced", "ecfp")
-    assert parse_lr_variant("lr_unlocked__ml_qm__s1") == ("unlocked", "ml_qm")
+    assert parse_lr_variant("lr_unlocked__surrogate_adme__s1") == ("unlocked", "surrogate_adme")
 
 
 @pytest.fixture

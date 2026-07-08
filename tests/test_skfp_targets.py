@@ -17,7 +17,7 @@ def test_is_skfp_flavor_partitions_the_registry() -> None:
 
 
 def test_is_skfp_flavor_does_not_import_skfp(monkeypatch: pytest.MonkeyPatch) -> None:
-    # reproduce the isolated target environments (osmordred, minimol, jazzy, ml_qm), which
+    # reproduce the isolated target environments (osmordred, minimol, jazzy), which
     # dispatch through is_skfp_flavor but have no skfp installed; the probe must not import it
     real_import = builtins.__import__
 

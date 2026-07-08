@@ -110,10 +110,6 @@ FLAVORS: dict[str, Flavor] = {
         "surrogate_adme", "continuous", "direct", 25, "sarizard",
         "25 surrogate ADME predictions read directly from the Novartis released dataset",
     ),
-    "ml_qm": Flavor(
-        "ml_qm", "continuous", "model", 24, "sarizard-mlqm",
-        "qmdesc ML-predicted QM atom/bond descriptors, pooled (mean/std/min/max) to a molecule vector",
-    ),
     "osmordred_pca80": Flavor(
         "osmordred_pca80", "continuous", "direct", None, "sarizard",
         "osmordred, full-recipe prescaled then PCA-compressed to 80% explained variance",

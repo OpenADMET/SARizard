@@ -22,10 +22,10 @@ below. This does not change the Milestone-5 decision, since the flavor sweep run
 full corpus. Milestone 6's direct-compute flavor sweep (rdkit2d, erg, ecfp, atompair,
 pubchem, usrcat, whim, e3fp, jazzy; 250K corpus, `order_fix` prescaling, all three
 finetune protocols) completed with no failures; see the report card below. Milestone 7
-(learned-model flavors: minimol, surrogate_adme, ml_qm) first ran on 250K scoped to
-`minimol` only, with `ml_qm` and `surrogate_adme` held out over the target-dropout-fraction
-question. That question is now settled by a hard invariant (both are sub-threshold, so they
-pretrain at `dropout_fraction=0.0`; see `TODO.md` Future experiments and `AGENTS.md`), and
+(learned-model flavors: minimol, surrogate_adme) first ran on 250K scoped to
+`minimol` only, with `surrogate_adme` held out over the target-dropout-fraction
+question. That question is now settled by a hard invariant (surrogate_adme is sub-threshold, so it
+pretrains at `dropout_fraction=0.0`; see `TODO.md` Future experiments and `AGENTS.md`), and
 both fan out alongside every other flavor in the full-corpus rerun. `minimol`'s 250K finetune
 chain (frozen protocol)
 completed clean: mean R-squared 0.360 across 32 endpoint-columns, edging out `rdkit2d`'s
@@ -308,7 +308,7 @@ One consequence to flag: `DROPOUT_FRACTION=0.85` (keep 15%) is a fixed-regime co
 applied to every above-threshold flavor. For osmordred (3585 dims) that is ~537 supervised
 dims/step, fine; for a small flavor like jazzy (6 dims) that is under 1 supervised dim/step
 on average. This is now resolved by a hard invariant, not left open: any target at or under
-`config.DROPOUT_OVERRIDE_MAX_DIM` (30 dims: jazzy 6, ml_qm 24, surrogate_adme 25) pretrains at
+`config.DROPOUT_OVERRIDE_MAX_DIM` (30 dims: jazzy 6, surrogate_adme 25) pretrains at
 `dropout_fraction=0.0`, enforced in `train.py` before the `--dropout-fraction` flag and not
 overridable to a nonzero value. See the resolved blocker in `TODO.md` and the invariant in
 `AGENTS.md`.
@@ -402,11 +402,11 @@ binding-site geometry) than for the ADMET properties `rdkit2d` otherwise dominat
   in this sweep (edges `rdkit2d`'s 0.350), though not yet compared to Milestone 6 in one
   merged table. A learned 512-dim embedding transferring at least as well as the strongest
   direct-compute descriptor is a positive early signal for the learned-flavor family,
-  worth confirming once `ml_qm` and `surrogate_adme` land and a merged comparison is run.
-- **surrogate_adme, ml_qm**: fanning out in the full-corpus rerun. Were held out of the
-  250K Milestone 7 pending the target-dropout-fraction question (24- and 25-dim targets, where
-  the regime-default 0.85 keeps under one target per step). That question is settled: both are
-  sub-threshold, so they pretrain at `dropout_fraction=0.0` under the hard invariant enforced
+  worth confirming once `surrogate_adme` lands and a merged comparison is run.
+- **surrogate_adme**: fanning out in the full-corpus rerun. Was held out of the
+  250K Milestone 7 pending the target-dropout-fraction question (a 25-dim target, where
+  the regime-default 0.85 keeps under one target per step). That question is settled: it is
+  sub-threshold, so it pretrains at `dropout_fraction=0.0` under the hard invariant enforced
   in `train.py` (`config.DROPOUT_OVERRIDE_MAX_DIM=30`), with no per-flavor decision left to
   make and no nonzero override permitted. `TODO.md`'s Future experiments entry has the full
   account, including the enforcement path (`losses.py`, `train.py`, `config.py`).
@@ -414,7 +414,7 @@ binding-site geometry) than for the ADMET properties `rdkit2d` otherwise dominat
 ## Meta-model
 
 First result, across the 10 flavors with finetuned results (the 9 Milestone-6 flavors plus
-`minimol`; `osmordred`, `ml_qm`, `surrogate_adme` not yet in this table). Stacking with LGBM
+`minimol`; `osmordred`, `surrogate_adme` not yet in this table). Stacking with LGBM
 on out-of-fold per-flavor predictions beats the best single flavor on 23 of 32
 endpoint-columns: mean R-squared 0.481 for the meta-model vs. 0.390 for the best single
 flavor per endpoint (mean delta +0.091). `rdkit2d` and `minimol` are the two flavors the
@@ -423,5 +423,5 @@ is the single-flavor winner), consistent with both being the strongest general-p
 flavors in the per-flavor read above. The ensemble does not win everywhere: it loses on 9 of
 32 endpoints, mostly where one flavor already specializes strongly (e.g. `usrcat` on potency,
 where stacking in weaker flavors dilutes rather than helps). See `results/meta_model_lgbm.csv`
-for the per-endpoint table. Not yet run: RF/MLP alternative estimators, and osmordred/ml_qm/
+for the per-endpoint table. Not yet run: RF/MLP alternative estimators, and osmordred/
 surrogate_adme once they join the merged table.

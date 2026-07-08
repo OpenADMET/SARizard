@@ -10,7 +10,7 @@ The narrative goal and headline results live in `FINDINGS.md`; open avenues in `
 - Environments are managed with conda, not uv. All environment manifests live in `envs/`.
   The main environment is `envs/main.yml`; the conflicting target generators have isolated
   environments under the same directory (`envs/osmordred.yml`, `envs/jazzy.yml` for its exact
-  RDKit pin, `envs/minimol.yml`, `envs/mlqm.yml`). osmordred has no package release and is
+  RDKit pin, `envs/minimol.yml`). osmordred has no package release and is
   built from source into its env via `envs/build_osmordred.sh` after the env is created;
   minimol pulls the PyG C++ extensions from the find-links pinned in its manifest. Declare a
   dependency in the relevant manifest before installing; never `pip install` or `conda install`
@@ -114,7 +114,7 @@ foundation, so treat each as a gate.
 - **Zero dropout below the width threshold (hard invariant).** The masked-pretext target
   dropout (`losses.py`, `DROPOUT_FRACTION=0.85`) keeps a fixed fraction, so at narrow target
   widths it starves supervision. Any target block at or under
-  `config.DROPOUT_OVERRIDE_MAX_DIM` (30 dims: jazzy at 6, ml_qm at 24, surrogate_adme at 25,
+  `config.DROPOUT_OVERRIDE_MAX_DIM` (30 dims: jazzy at 6, surrogate_adme at 25,
   and any PCA threshold whose component count lands there) pretrains at `dropout_fraction=0.0`
   unconditionally. `train.py` resolves this from `n_features` read off the split, before the
   `--dropout-fraction` flag, and rejects a nonzero flag or `DROPOUT_FRACTION_OVERRIDES` entry
