@@ -478,6 +478,18 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   effect from initialization variance. Set `FLAVOR_SEEDS` for `run_all.sh` (and
   `ABLATION_SEEDS` for the triage); the report card and meta-model average the seeds per
   flavor, and re-running with more seeds fills in only the new ones.
+- [~] 5-seed finetune-only redo (in progress): replicate finetuning across 5 fresh seeds
+  (1-5) off the fixed s42 foundations to put error bars on every report-card cell, without
+  pretraining anything new. `generate.py` decouples the two seeds (commit 6a75165):
+  `--foundation-seed` pins the foundation while `--seeds`/`--finetune-seed` vary the finetune,
+  written into every `random_seed` field. The three runners take `FOUNDATION_SEED` to switch
+  into finetune-only mode (skip corpus/target/prescale/pretrain, gate on the pinned foundations
+  existing, submit only finetune + analyze): `run_all.sh` (flavors, frozen), `run_lr_experiments.sh`
+  (flavors, reduced + unlocked), `run_ablations.sh` (ablations, all three protocols). Plan:
+  flavors frozen 1800 tasks, flavors reduced+unlocked 3600, ablations x 3 protocols 2520.
+  **Submitted so far:** flavors frozen only, `FOUNDATION_SEED=42 FLAVOR_SEEDS="1 2 3 4 5" bash
+  slurm/run_all.sh` (finetune job 641124, array 0-1799; analyze job 641126 chained). The LR and
+  ablation legs are wired but not yet launched (held pending the frozen leg completing).
 - [x] **Blocker for Milestone 7, raised in urgency:** target-dropout fraction for small
   flavors. The masked-pretext dropout in `losses.py` (`DROPOUT_FRACTION`, applied per target
   element to every flavor) keeps a fixed fraction, not a fixed count. Its rationale (stop the
