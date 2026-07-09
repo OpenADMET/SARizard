@@ -49,6 +49,7 @@ from sarizard.analysis.paths import (  # noqa: E402
     parse_lr_mode,
 )
 from sarizard.analysis.report_card import (  # noqa: E402
+    COLOR_MODES,
     build_matrix,
     collapse_seed_variants,
     plot_report_card,
@@ -68,6 +69,19 @@ def _strip(label: str) -> str:
     """Map an ``ablation_<name>`` result label back to the plain ablation name."""
     prefix = "ablation_"
     return label[len(prefix):] if label.startswith(prefix) else label
+
+
+# baseline-diverging centers each row on the chemeleon_baseline recipe (the milestone-5
+# production choice), mirroring how the flavor cards diverge around the stock-CheMeleon column
+DIVERGING_BASELINE = "chemeleon_baseline"
+
+# filename tag per color mode; row-relative keeps the original unsuffixed name so the existing
+# pipeline output is unchanged, while the two flavor schemes get their own files
+_COLOR_TAG = {
+    "row-relative": "",
+    "absolute": "_absolute",
+    "baseline-diverging": "_baseline_diverging",
+}
 
 
 def rank_ablations(pivot: pd.DataFrame, metric: str) -> pd.DataFrame:
@@ -140,12 +154,15 @@ def plot_mode_comparison(comparison: pd.DataFrame, metric: str, out_png: Path) -
     plt.close(fig)
 
 
-def report_one_mode(frame: pd.DataFrame, metric: str, mode: str) -> pd.Series | None:
+def report_one_mode(
+    frame: pd.DataFrame, metric: str, mode: str, color_modes: list[str]
+) -> pd.Series | None:
     """Build and save the report card and ranking for one protocol; return its mean series.
 
-    Writes the endpoints-by-ablation heatmap, the ranking CSV, and the ranking bar chart for this
-    finetune LR protocol (frozen keeps the unsuffixed filenames, the LR protocols add a
-    ``_<mode>`` suffix), then returns the per-ablation mean metric for the cross-protocol read.
+    Writes one endpoints-by-ablation heatmap per requested color mode, plus the ranking CSV and
+    bar chart, for this finetune LR protocol (frozen keeps the unsuffixed filenames, the LR
+    protocols add a ``_<mode>`` suffix; each color mode adds its own tag), then returns the
+    per-ablation mean metric for the cross-protocol read.
 
     Parameters
     ----------
@@ -157,6 +174,10 @@ def report_one_mode(frame: pd.DataFrame, metric: str, mode: str) -> pd.Series | 
     mode : str
         The protocol these rows belong to, one of :data:`sarizard.analysis.paths.LR_MODES`; sets
         the output-filename suffix.
+    color_modes : list of str
+        Report-card color schemes to render, each one of
+        :data:`sarizard.analysis.report_card.COLOR_MODES`; ``baseline-diverging`` centers each
+        row on the ``chemeleon_baseline`` recipe and is skipped when that column is absent.
 
     Returns
     -------
@@ -171,8 +192,29 @@ def report_one_mode(frame: pd.DataFrame, metric: str, mode: str) -> pd.Series | 
     if pivot.empty or pivot.shape[1] == 0:
         return None
     suffix = "" if mode == BASELINE_LR_MODE else f"_{mode}"
-    out_png = PLOTS_DIR / f"prescaling_report_{metric}{suffix}.png"
-    plot_report_card(pivot, metric, out_png, out_png.with_suffix(".csv"))
+
+    # baseline-diverging needs a per-row reference; the chemeleon_baseline recipe column is it
+    baseline_row = (
+        pivot[DIVERGING_BASELINE].to_numpy(dtype=float)
+        if DIVERGING_BASELINE in pivot.columns
+        else None
+    )
+
+    # one heatmap per requested color mode; the color tag in the filename keeps the modes from
+    # overwriting each other, and the shared metric-matrix CSV is written alongside each
+    for color_mode in color_modes:
+        if color_mode == "baseline-diverging" and baseline_row is None:
+            logger.warning(
+                "protocol %s: no %s column; skipping baseline-diverging card",
+                mode, DIVERGING_BASELINE,
+            )
+            continue
+        out_png = PLOTS_DIR / f"prescaling_report_{metric}{_COLOR_TAG[color_mode]}{suffix}.png"
+        plot_report_card(
+            pivot, metric, out_png, out_png.with_suffix(".csv"),
+            color_mode=color_mode, baseline_row=baseline_row,
+        )
+
     summary = rank_ablations(pivot, metric)
     summary.to_csv(PLOTS_DIR / f"prescaling_ranking_{metric}{suffix}.csv")
     plot_ranking(summary, metric, PLOTS_DIR / f"prescaling_ranking_{metric}{suffix}.png")
@@ -198,6 +240,12 @@ def main() -> None:
         help="finetune LR protocol to report; 'all' builds every present protocol and, when more "
         "than one is present, a cross-protocol comparison",
     )
+    parser.add_argument(
+        "--color-mode", nargs="+", default=["row-relative"], choices=COLOR_MODES,
+        help="report-card color scheme(s) to render; 'absolute' colors the raw value on a fixed "
+        "[0, 1] scale, 'baseline-diverging' centers each row on the chemeleon_baseline recipe. "
+        "Pass several to render one card each (default: row-relative)",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -220,7 +268,9 @@ def main() -> None:
     # one report card + ranking per protocol; keep each protocol's mean series for the comparison
     per_mode_mean: dict[str, pd.Series] = {}
     for mode in modes:
-        mean_series = report_one_mode(frame[frame["mpnn_lr_mode"] == mode], args.metric, mode)
+        mean_series = report_one_mode(
+            frame[frame["mpnn_lr_mode"] == mode], args.metric, mode, args.color_mode
+        )
         if mean_series is None:
             logger.warning("protocol %s: no ablation results; skipping", mode)
             continue
