@@ -20,8 +20,27 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/env.sh"
 
-# preflight: the LR recipes point at the flavor-sweep foundations, so at least one must exist
-if ! ls "$REPO_DIR"/foundations/*__s*_mp.pt >/dev/null 2>&1; then
+# FOUNDATION_SEED set => finetune-only replication: every FLAVOR_SEED finetunes the one
+# foundation pretrained at FOUNDATION_SEED, so the seeds are finetune replicates off that
+# foundation rather than one foundation per seed. This script never pretrains regardless (the
+# LR recipes reuse the flavor-sweep foundations); FOUNDATION_SEED only pins which foundation.
+FINETUNE_ONLY=""
+[[ -n "${FOUNDATION_SEED:-}" ]] && FINETUNE_ONLY=1
+
+# preflight: the LR recipes point at the flavor-sweep foundations. Finetune-only needs every
+# pinned s<FOUNDATION_SEED> foundation; the legacy path just needs at least one to exist.
+if [[ -n "$FINETUNE_ONLY" ]]; then
+    MISSING=""
+    while IFS= read -r flavor; do
+        [[ -n "$flavor" ]] || continue
+        foundation="foundations/${flavor}__s${FOUNDATION_SEED}_mp.pt"
+        [[ -f "$REPO_DIR/$foundation" ]] || MISSING+=" $foundation"
+    done < <(flavor_list)
+    if [[ -n "$MISSING" ]]; then
+        echo "ERROR: finetune-only requires the s$FOUNDATION_SEED foundations; missing:$MISSING" >&2
+        exit 1
+    fi
+elif ! ls "$REPO_DIR"/foundations/*__s*_mp.pt >/dev/null 2>&1; then
     echo "ERROR: no flavor-sweep foundations found under $REPO_DIR/foundations" >&2
     echo "  run slurm/run_all.sh first (its pretrain stage writes <flavor>__s<seed>_mp.pt)" >&2
     exit 1
@@ -31,11 +50,15 @@ read -ra MODES <<<"$LR_MODES"
 echo "LR modes: ${MODES[*]}   seeds: $FLAVOR_SEEDS"
 
 # generate LR recipes for each mode off the existing flavor foundations; this only reads
-# templates and flavor metadata, so it runs before any job queues
+# templates and flavor metadata, so it runs before any job queues. Finetune-only pins the
+# foundation seed so every FLAVOR_SEED finetunes the one s<FOUNDATION_SEED> foundation.
 echo "generating LR finetuning configs..."
+foundation_flag=()
+[[ -n "$FINETUNE_ONLY" ]] && foundation_flag=(--foundation-seed "$FOUNDATION_SEED")
 for mode in "${MODES[@]}"; do
     conda run -n "$MAIN_ENV" python -m sarizard.configs.generate \
-        --seeds $FLAVOR_SEEDS --mpnn-lr-mode "$mode" --label-prefix "lr_${mode}"
+        --seeds $FLAVOR_SEEDS --mpnn-lr-mode "$mode" --label-prefix "lr_${mode}" \
+        "${foundation_flag[@]}"
 done
 N_RECIPES=$(lr_recipe_list | wc -l | tr -d ' ')
 if [[ "$N_RECIPES" -eq 0 ]]; then
