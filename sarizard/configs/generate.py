@@ -43,6 +43,18 @@ MPNN_LR_MODES = ("frozen", "reduced", "unlocked")
 REDUCED_MPNN_LR_FACTOR = 0.1
 
 
+def stock_baseline_label(mpnn_lr_mode: str) -> str:
+    """Return the stock-CheMeleon reference label for a finetune protocol.
+
+    Frozen keeps the bare ``chemeleon_stock`` label so the existing frozen configs and results
+    stay valid; reduced and unlocked append the mode so each protocol's stock baseline lands in
+    its own ``configs/`` and ``results/`` dir instead of overwriting the frozen one.
+    """
+    if mpnn_lr_mode == "frozen":
+        return "chemeleon_stock"
+    return f"chemeleon_stock_{mpnn_lr_mode}"
+
+
 def _mpnn_lr(ffn_lr: float, mode: str) -> float:
     """Return the MPNN learning rate for a finetune protocol, relative to ``ffn_lr``."""
     if mode == "frozen":
@@ -158,7 +170,10 @@ def main() -> None:
         "unchanged (from_foundation stays 'chemeleon', so anvil downloads and finetunes "
         "the released stock checkpoint) except relabeled for provenance. This is the "
         "external reference column for the report card, not one of our pretrained "
-        "flavors; run once, it does not depend on the corpus or pretraining regime.",
+        "flavors; it does not depend on the corpus or pretraining regime. Run once per "
+        "finetune protocol: the label is mode-aware (chemeleon_stock for frozen, "
+        "chemeleon_stock_<mode> for reduced/unlocked), so the protocols do not overwrite "
+        "each other.",
     )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -167,9 +182,10 @@ def main() -> None:
     if not templates:
         raise SystemExit(f"no baseline templates in {args.baseline_dir}")
 
-    # stock-baseline mode: relabel only, from_foundation stays "chemeleon" (a no-op override)
+    # stock-baseline mode: relabel only, from_foundation stays "chemeleon" (a no-op override).
+    # the label is mode-aware so reduced/unlocked land beside, not on top of, the frozen baseline
     if args.stock_baseline:
-        label = "chemeleon_stock"
+        label = stock_baseline_label(args.mpnn_lr_mode)
         n = _generate_one(
             templates, CONFIGS_DIR / label, BACKBONE, label, args.accelerator,
             mpnn_lr_mode=args.mpnn_lr_mode,

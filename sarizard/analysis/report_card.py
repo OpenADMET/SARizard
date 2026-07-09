@@ -71,6 +71,36 @@ def collapse_seed_variants(frame: pd.DataFrame, column: str = "flavor") -> pd.Da
     return frame
 
 
+def filter_lr_mode(frame: pd.DataFrame, mode: str, column: str = "flavor") -> pd.DataFrame:
+    """Keep one learning-rate protocol's rows and strip the ``lr_<mode>__`` prefix.
+
+    The LR-experiment metrics CSV (``results/lr_metrics.csv``) namespaces every row's flavor as
+    ``lr_<mode>__<flavor>``. Selecting one mode and stripping the prefix rewrites the labels back
+    to the bare flavor name, so a reduced or unlocked card reuses the registry-ordered flavor
+    columns exactly as the frozen card does. Rows for other modes, and un-prefixed rows (bare
+    flavors, reference labels), are dropped, so pass the full frame to the reference-series
+    builders separately if their labels are not prefixed.
+
+    Parameters
+    ----------
+    frame : pandas.DataFrame
+        Seed-collapsed tidy metrics (call ``collapse_seed_variants`` first).
+    mode : str
+        The LR protocol to keep (e.g. ``reduced`` or ``unlocked``).
+    column : str, optional
+        The label column to filter and rewrite.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Only this mode's rows, with ``column`` rewritten to the bare flavor name.
+    """
+    prefix = f"lr_{mode}__"
+    kept = frame[frame[column].str.startswith(prefix)].copy()
+    kept[column] = kept[column].str.slice(len(prefix))
+    return kept
+
+
 def build_matrix(
     frame: pd.DataFrame, metric: str, columns: list[str] | None = None
 ) -> pd.DataFrame:
@@ -398,6 +428,14 @@ def main() -> None:
         "skipped if it doesn't exist",
     )
     parser.add_argument(
+        "--lr-mode", choices=("reduced", "unlocked"), default=None,
+        help="render a learning-rate-experiment card: filter --metrics-csv (typically "
+        "results/lr_metrics.csv) to this protocol's lr_<mode>__<flavor> rows and strip the "
+        "prefix so the columns match the flavor registry. The reference columns still read from "
+        "the full frame, so pass the protocol's stock baseline via --baseline-flavor "
+        "(chemeleon_stock_<mode>). The frozen card needs no filter (bare-flavor metrics.csv)",
+    )
+    parser.add_argument(
         "--color-mode", choices=COLOR_MODES, default="row-relative",
         help="cell coloring: 'row-relative' (default) normalizes each endpoint; 'absolute' "
         "colors the raw value on a fixed [0, 1] scale (for metrics in [0, 1] such as r2); "
@@ -412,7 +450,17 @@ def main() -> None:
     frame = pd.read_csv(args.metrics_csv)
     # average any per-seed variants back to one column per flavor before pivoting
     frame = collapse_seed_variants(frame)
-    pivot = build_matrix(frame, args.metric)
+    # for a reduced/unlocked card, keep only that protocol's rows as bare-flavor columns; the
+    # reference series below still read from the full frame so the mode's stock baseline survives
+    matrix_frame = frame
+    if args.lr_mode is not None:
+        matrix_frame = filter_lr_mode(frame, args.lr_mode)
+        if matrix_frame.empty:
+            raise SystemExit(
+                f"--lr-mode {args.lr_mode} matched no lr_{args.lr_mode}__ rows in "
+                f"{args.metrics_csv}; point it at results/lr_metrics.csv"
+            )
+    pivot = build_matrix(matrix_frame, args.metric)
 
     divider_at = pivot.shape[1]
     baseline = pd.Series(dtype=float)
