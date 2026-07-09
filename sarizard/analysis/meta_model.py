@@ -64,8 +64,23 @@ def _make_estimator(name: str, seed: int):
     raise ValueError(f"unknown estimator {name!r}")
 
 
-def collect_predictions(results_root: Path, flavors: list[str]) -> dict:
+def collect_predictions(
+    results_root: Path, flavors: list[str], *, strip_prefix: str = ""
+) -> dict:
     """Gather per-flavor test predictions, keyed by (dataset, recipe, endpoint).
+
+    Parameters
+    ----------
+    results_root : pathlib.Path
+        Root under which each label in ``flavors`` names a result dir.
+    flavors : list of str
+        The result-dir labels to read (typically ``<flavor>__s<seed>`` seed variants, or
+        ``lr_<mode>__<flavor>__s<seed>`` for a learning-rate protocol).
+    strip_prefix : str, optional
+        A namespace prefix (e.g. ``lr_reduced__``) to strip from each label's base before it
+        becomes the per-flavor feature key. This maps a protocol's ``lr_<mode>__<flavor>``
+        labels back to the bare flavor name, so the stacker's feature columns match the flavor
+        registry the same way the frozen sweep's do. Default keeps the base unchanged.
 
     Returns
     -------
@@ -80,6 +95,10 @@ def collect_predictions(results_root: Path, flavors: list[str]) -> dict:
     store: dict[tuple[str, str, str], dict] = {}
     for flavor in flavors:
         base = parse_seed_variant(flavor)[0]
+        # map a protocol-namespaced label (lr_<mode>__<flavor>) back to the bare flavor key so
+        # the registry filter in _evaluate_endpoint matches it as it does the frozen sweep
+        if strip_prefix and base.startswith(strip_prefix):
+            base = base[len(strip_prefix):]
         flavor_dir = results_root / flavor
         if not flavor_dir.is_dir():
             continue
@@ -161,10 +180,16 @@ def _evaluate_endpoint(entry: dict, estimator: str, n_splits: int, seed: int) ->
 
 
 def run(
-    results_root: Path, flavors: list[str], estimator: str, n_splits: int, seed: int
+    results_root: Path,
+    flavors: list[str],
+    estimator: str,
+    n_splits: int,
+    seed: int,
+    *,
+    strip_prefix: str = "",
 ) -> pd.DataFrame:
     """Evaluate the stacker against the best single flavor for every endpoint."""
-    store = collect_predictions(results_root, flavors)
+    store = collect_predictions(results_root, flavors, strip_prefix=strip_prefix)
     rows: list[dict] = []
     for (dataset, recipe, endpoint), entry in store.items():
         result = _evaluate_endpoint(entry, estimator, n_splits, seed)
@@ -201,17 +226,28 @@ def main() -> None:
     parser.add_argument("--results", type=Path, default=RESULTS_DIR, help="results root")
     parser.add_argument("--folds", type=int, default=5, help="cross-validation folds")
     parser.add_argument("--seed", type=int, default=42, help="random seed")
+    parser.add_argument(
+        "--lr-mode", choices=("reduced", "unlocked"), default=None,
+        help="score one learning-rate protocol: read its lr_<mode>__<flavor> result dirs "
+        "(passed via --flavors), strip the prefix back to the bare flavor, and write a "
+        "mode-scoped meta_model_<estimator>_<mode>.csv so the three protocols do not collide",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     flavors = args.flavors or flavor_names()
-    frame = run(args.results, flavors, args.estimator, args.folds, args.seed)
+    strip_prefix = f"lr_{args.lr_mode}__" if args.lr_mode else ""
+    frame = run(
+        args.results, flavors, args.estimator, args.folds, args.seed, strip_prefix=strip_prefix
+    )
     if frame.empty:
         raise SystemExit(f"no stackable endpoints under {args.results} (need >=2 flavors each)")
 
-    out_csv = args.results / f"meta_model_{args.estimator}.csv"
+    # mode-scoped output names keep the three protocols' meta-models from overwriting each other
+    suffix = f"_{args.lr_mode}" if args.lr_mode else ""
+    out_csv = args.results / f"meta_model_{args.estimator}{suffix}.csv"
     frame.to_csv(out_csv, index=False)
-    plot_delta(frame, args.estimator, PLOTS_DIR / f"meta_model_{args.estimator}.png")
+    plot_delta(frame, args.estimator, PLOTS_DIR / f"meta_model_{args.estimator}{suffix}.png")
 
     wins = int((frame["delta_r2"] > 0).sum())
     logger.info(

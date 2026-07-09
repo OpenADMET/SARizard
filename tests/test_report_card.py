@@ -11,6 +11,7 @@ from sarizard.analysis.report_card import (
     build_matrix,
     build_reference_series,
     collapse_seed_variants,
+    filter_lr_mode,
     meta_model_series,
 )
 
@@ -105,6 +106,33 @@ def test_seed_variants_average_into_one_flavor_column():
 
     assert pivot.shape == (1, 1)
     assert pivot.loc["herg · herg", "ecfp"] == pytest.approx(0.5)
+
+
+def test_filter_lr_mode_keeps_one_mode_and_strips_prefix():
+    frame = pd.DataFrame(
+        {
+            "flavor": [
+                "lr_reduced__ecfp",
+                "lr_reduced__osmordred",
+                "lr_unlocked__ecfp",
+                "chemeleon_stock_reduced",
+            ]
+        }
+    )
+
+    kept = filter_lr_mode(frame, "reduced")
+
+    # only reduced rows survive, rewritten to the bare flavor name; unlocked and the
+    # un-prefixed stock reference are dropped from the flavor columns
+    assert list(kept["flavor"]) == ["ecfp", "osmordred"]
+
+
+def test_filter_lr_mode_empty_when_no_rows_match():
+    frame = pd.DataFrame({"flavor": ["ecfp", "osmordred", "lr_unlocked__ecfp"]})
+
+    kept = filter_lr_mode(frame, "reduced")
+
+    assert kept.empty
 
 
 def test_build_reference_series_extracts_one_flavor(tidy_metrics):

@@ -4,7 +4,12 @@ from pathlib import Path
 
 import yaml
 
-from sarizard.configs.generate import _endpoint_name, _generate_one, _retarget
+from sarizard.configs.generate import (
+    _endpoint_name,
+    _generate_one,
+    _retarget,
+    stock_baseline_label,
+)
 
 
 def _baseline_recipe() -> dict:
@@ -70,6 +75,17 @@ def test_retarget_relabels_with_ablation_label():
     out = _retarget(_baseline_recipe(), "foundations/ablation_full_mp.pt", "ablation_full", "auto")
 
     assert out["metadata"]["name"] == "ablation_full_cyp"
+
+
+def test_stock_baseline_label_frozen_stays_bare():
+    # frozen keeps the bare label so the existing frozen configs/results are not renamed
+    assert stock_baseline_label("frozen") == "chemeleon_stock"
+
+
+def test_stock_baseline_label_appends_mode_for_non_frozen():
+    # reduced/unlocked get a distinct label so a protocol does not overwrite another's dirs
+    assert stock_baseline_label("reduced") == "chemeleon_stock_reduced"
+    assert stock_baseline_label("unlocked") == "chemeleon_stock_unlocked"
 
 
 def test_endpoint_name_strips_backbone_prefix():
