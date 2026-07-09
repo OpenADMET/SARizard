@@ -155,7 +155,7 @@ def plot_mode_comparison(comparison: pd.DataFrame, metric: str, out_png: Path) -
 
 
 def report_one_mode(
-    frame: pd.DataFrame, metric: str, mode: str, color_modes: list[str]
+    frame: pd.DataFrame, metric: str, mode: str, color_modes: list[str], out_dir: Path
 ) -> pd.Series | None:
     """Build and save the report card and ranking for one protocol; return its mean series.
 
@@ -178,6 +178,9 @@ def report_one_mode(
         Report-card color schemes to render, each one of
         :data:`sarizard.analysis.report_card.COLOR_MODES`; ``baseline-diverging`` centers each
         row on the ``chemeleon_baseline`` recipe and is skipped when that column is absent.
+    out_dir : pathlib.Path
+        Directory the cards, ranking CSV, and bar chart are written to; lets an archived run
+        render into its own plots dir instead of clobbering the live one.
 
     Returns
     -------
@@ -209,15 +212,15 @@ def report_one_mode(
                 mode, DIVERGING_BASELINE,
             )
             continue
-        out_png = PLOTS_DIR / f"prescaling_report_{metric}{_COLOR_TAG[color_mode]}{suffix}.png"
+        out_png = out_dir / f"prescaling_report_{metric}{_COLOR_TAG[color_mode]}{suffix}.png"
         plot_report_card(
             pivot, metric, out_png, out_png.with_suffix(".csv"),
             color_mode=color_mode, baseline_row=baseline_row,
         )
 
     summary = rank_ablations(pivot, metric)
-    summary.to_csv(PLOTS_DIR / f"prescaling_ranking_{metric}{suffix}.csv")
-    plot_ranking(summary, metric, PLOTS_DIR / f"prescaling_ranking_{metric}{suffix}.png")
+    summary.to_csv(out_dir / f"prescaling_ranking_{metric}{suffix}.csv")
+    plot_ranking(summary, metric, out_dir / f"prescaling_ranking_{metric}{suffix}.png")
     logger.info("protocol %s: best by mean %s is %s", mode, metric, summary.index[0])
     return summary["mean"]
 
@@ -246,9 +249,15 @@ def main() -> None:
         "[0, 1] scale, 'baseline-diverging' centers each row on the chemeleon_baseline recipe. "
         "Pass several to render one card each (default: row-relative)",
     )
+    parser.add_argument(
+        "--out-dir", type=Path, default=PLOTS_DIR,
+        help="directory for the cards, rankings, and comparison; point at an archived run's plots "
+        "dir to render it without overwriting the live report card (default: live plots dir)",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
+    args.out_dir.mkdir(parents=True, exist_ok=True)
     if not args.metrics_csv.exists():
         raise SystemExit(f"{args.metrics_csv} not found; run analysis.evaluate on the ablations")
     frame = pd.read_csv(args.metrics_csv)
@@ -269,7 +278,7 @@ def main() -> None:
     per_mode_mean: dict[str, pd.Series] = {}
     for mode in modes:
         mean_series = report_one_mode(
-            frame[frame["mpnn_lr_mode"] == mode], args.metric, mode, args.color_mode
+            frame[frame["mpnn_lr_mode"] == mode], args.metric, mode, args.color_mode, args.out_dir
         )
         if mean_series is None:
             logger.warning("protocol %s: no ablation results; skipping", mode)
@@ -282,10 +291,10 @@ def main() -> None:
     # cross-protocol read: does the winning recipe hold once the backbone can move?
     if len(per_mode_mean) > 1:
         comparison = mode_comparison(per_mode_mean)
-        comp_csv = PLOTS_DIR / f"prescaling_mode_comparison_{args.metric}.csv"
+        comp_csv = args.out_dir / f"prescaling_mode_comparison_{args.metric}.csv"
         comparison.to_csv(comp_csv)
         plot_mode_comparison(
-            comparison, args.metric, PLOTS_DIR / f"prescaling_mode_comparison_{args.metric}.png"
+            comparison, args.metric, args.out_dir / f"prescaling_mode_comparison_{args.metric}.png"
         )
         higher = args.metric in HIGHER_IS_BETTER
         winners = {
