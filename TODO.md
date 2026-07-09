@@ -208,6 +208,17 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   meta-model beats the best single flavor on 24 of 32 endpoint-columns (mean delta R-squared
   +0.118). Still to submit: the reduced + unlocked protocols via `slurm/run_lr_experiments.sh`
   (`LR_MODES="reduced unlocked"`), per the all-three-protocols directive.
+  **Reduced protocol submitted (2026-07-09).** Sent reduced only (unlocked deferred, held for a
+  later submission on explicit call) via `REPO_DIR=/scratch/choderaj/westd/SARizard
+  LR_MODES="reduced" FLAVOR_SEEDS="42" bash slurm/run_lr_experiments.sh`: lr-finetune job 605427
+  (array 0-359 = 15 flavors x 24 endpoints x 1 seed), lr-analyze job 605428 chained `afterok`.
+  Cleared the stale 250K LR recipe dirs first (`configs/lr_reduced__*`, `configs/lr_unlocked__*`,
+  which still included the dropped `ml_qm` and, being globbed by `lr_recipe_list`, would have
+  swept unlocked too and cascade-cancelled analyze on the all-NaN `ml_qm` foundation); the
+  regenerated reduced recipes are the 15-flavor registry and point at the full-corpus
+  `foundations/<flavor>__s42_mp.pt`. Unlocked still to submit the same way when reduced looks
+  healthy; the per-protocol stock baseline / meta-model and the six report cards (Milestone 8)
+  remain gated behind both non-frozen protocols.
 - [ ] 7. Add the learned-model flavors: minimol, surrogate_adme. Each runs its
   source model over the shared corpus in an isolated environment and caches the target.
   **`ml_qm` dropped from scope (decision, 2026-07-08): we are not running it.** Its qmdesc
