@@ -55,6 +55,13 @@ ABLATION_LR_MODES="${ABLATION_LR_MODES:-frozen}"
 # re-run to accumulate: existing (flavor, seed) foundations/results are skipped.
 FLAVOR_SEEDS="${FLAVOR_SEEDS:-42}"
 
+# finetune-only replication: pin the pretraining seed of the foundation every recipe finetunes
+# from. When set, run_all.sh runs finetune-only (skips corpus/targets/split/pretrain, whose
+# foundations already exist) and each FLAVOR_SEED is a separate finetune replicate off that one
+# pinned foundation rather than a fresh pretraining run. Unset (the default) keeps the legacy
+# full-pipeline path where the foundation seed tracks each finetune seed (one foundation per seed).
+FOUNDATION_SEED="${FOUNDATION_SEED:-}"
+
 # finetune learning-rate experiments: the backbone protocols to sweep off the flavor-sweep
 # foundations (frozen is the flavor sweep itself, so it is not repeated here)
 LR_MODES="${LR_MODES:-reduced unlocked}"
