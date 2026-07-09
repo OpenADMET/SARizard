@@ -219,6 +219,25 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   `foundations/<flavor>__s42_mp.pt`. Unlocked still to submit the same way when reduced looks
   healthy; the per-protocol stock baseline / meta-model and the six report cards (Milestone 8)
   remain gated behind both non-frozen protocols.
+  **Reduced finetune hit the bad-node fault; reran the 10 casualties (2026-07-09).** 605427
+  finished 350/360; the 10 failures (minimol, osmordred, osmordred_pca90/95, surrogate_adme
+  endpoints) all died on `iscn008` with `CUDA driver initialization failed`, the same bad GPU
+  node that killed the frozen analyze (509950), not a code fault. The failures tripped
+  lr-analyze 605428's `afterok`, leaving it `DependencyNeverSatisfied`. Each crashed task had
+  left a partial `results/lr_reduced__<flavor>__s42/<endpoint>/` dir (dataloaders only, no
+  `model.pth`) that the `[[ -d "$OUT" ]]` skip guard in `lr_finetune.sbatch` would have silently
+  no-op'd, so removed all 10 first. Cancelled 605428, resubmitted the 10 indices
+  (`--array=130,131,133,189,190,192,239,292,293,295 --exclude=iscn008`) as lr-finetune job
+  609466, re-chained lr-analyze job 609467 (`afterok`, also `--exclude=iscn008`).
+  **Reduced protocol complete (2026-07-09).** 609466 (10 tasks) and 609467 both completed clean.
+  `results/lr_metrics.csv` now carries all 15 `lr_reduced__<flavor>__s42` flavors at a uniform 32
+  endpoint-columns each, zero NaN (the 10 rerun endpoints all filled); the analyze also
+  re-evaluated the 15 frozen flavor dirs, so the file is 960 rows (30 flavor labels x 32).
+  `plots/lr_ranking_r2.csv`: reduced mean R-squared 0.324 vs. frozen 0.289 (+0.035, reduced wins
+  202 of 285 endpoint comparisons), matching the standing "reduced is the best protocol" pattern.
+  Reduced per-flavor leaders: minimol 0.380, surrogate_adme 0.377, rdkit2d 0.371, osmordred 0.360.
+  Unlocked still to submit the same way; the Milestone-8 per-protocol stock baseline / meta-model
+  and six report cards remain gated behind unlocked.
 - [ ] 7. Add the learned-model flavors: minimol, surrogate_adme. Each runs its
   source model over the shared corpus in an isolated environment and caches the target.
   **`ml_qm` dropped from scope (decision, 2026-07-08): we are not running it.** Its qmdesc
