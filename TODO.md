@@ -381,6 +381,21 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   config/result dirs, run `run_stock_baseline.sh` per protocol, and point each card's
   stock-baseline reference at the matching protocol's `chemeleon_stock` results. This adds two
   stock-baseline finetune runs (reduced, unlocked) on top of the existing frozen one.
+  **All three code gaps are now wired (commit 4dd1ed1), data not yet generated.** (1)
+  `report_card.py` gained `--lr-mode {reduced,unlocked}`: it filters `--metrics-csv` (point it
+  at `results/lr_metrics.csv`) to that protocol's `lr_<mode>__<flavor>` rows and strips the
+  prefix back to the bare flavor so the columns match the registry; the reference series still
+  read the full frame, so pass the protocol's stock baseline via `--baseline-flavor
+  chemeleon_stock_<mode>`. The frozen card is unchanged. (2) `meta_model.py` gained
+  `--lr-mode`: it strips the `lr_<mode>__` prefix from each result-dir label at collection so
+  the stacker's features match `flavor_names()` (the prefixed labels never matched before, so a
+  reduced meta-model silently produced nothing) and writes a mode-scoped
+  `meta_model_<estimator>_<mode>.csv`. (3) `generate.py`'s `stock_baseline_label` makes the
+  stock label mode-aware (`chemeleon_stock` for frozen, `chemeleon_stock_<mode>` otherwise) so
+  the protocols do not overwrite each other's config/result dirs. Regression tests added for
+  all three. Still to do (submission orchestration, part of the 5-seed launch): finetune the
+  stock baseline per protocol, run `meta_model.py --lr-mode` per protocol, and render the six
+  cards (three protocols x two color modes).
 - [x] 9. Meta-model: stack per-flavor finetuned predictions per endpoint, fit LGBM/RF/MLP
   on out-of-fold predictions, compare to the best single flavor.
   First real result, produced by the same job 19230968 now that ≥2 flavors have results:
