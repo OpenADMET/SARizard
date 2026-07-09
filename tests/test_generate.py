@@ -8,19 +8,26 @@ from sarizard.configs.generate import (
     _endpoint_name,
     _generate_one,
     _retarget,
+    _set_random_seeds,
     stock_baseline_label,
 )
 
 
 def _baseline_recipe() -> dict:
-    """A minimal recipe with the fields _retarget rewrites."""
+    """A minimal recipe with the fields _retarget rewrites, including nested random_seed."""
     return {
         "procedure": {
             "model": {
-                "params": {"from_foundation": "chemeleon", "mpnn_lr": 1.0e-3, "ffn_lr": 1.0e-3}
+                "params": {
+                    "from_foundation": "chemeleon",
+                    "mpnn_lr": 1.0e-3,
+                    "ffn_lr": 1.0e-3,
+                    "random_seed": 42,
+                }
             },
-            "train": {"params": {"accelerator": "mps"}},
+            "train": {"params": {"accelerator": "mps", "random_seed": 42}},
         },
+        "random_seed": 42,
         "metadata": {
             "name": "chemeleon_cyp",
             "tag": "chemeleon-cyp",
@@ -86,6 +93,34 @@ def test_stock_baseline_label_appends_mode_for_non_frozen():
     # reduced/unlocked get a distinct label so a protocol does not overwrite another's dirs
     assert stock_baseline_label("reduced") == "chemeleon_stock_reduced"
     assert stock_baseline_label("unlocked") == "chemeleon_stock_unlocked"
+
+
+def test_set_random_seeds_overwrites_every_nested_field():
+    recipe = _baseline_recipe()
+
+    _set_random_seeds(recipe, 7)
+
+    # all three random_seed fields (run, model params, train params) are rewritten
+    assert recipe["random_seed"] == 7
+    assert recipe["procedure"]["model"]["params"]["random_seed"] == 7
+    assert recipe["procedure"]["train"]["params"]["random_seed"] == 7
+
+
+def test_retarget_writes_finetune_seed_into_recipe():
+    out = _retarget(
+        _baseline_recipe(), "foundations/ecfp__s42_mp.pt", "ecfp__s3", "auto", finetune_seed=3
+    )
+
+    # the finetune seed replaces the template default everywhere so the replicate actually differs
+    assert out["random_seed"] == 3
+    assert out["procedure"]["model"]["params"]["random_seed"] == 3
+
+
+def test_retarget_leaves_seed_untouched_when_none():
+    out = _retarget(_baseline_recipe(), "foundations/ecfp__s42_mp.pt", "ecfp", "auto")
+
+    # single-seed default: random_seed keeps the template value (42)
+    assert out["random_seed"] == 42
 
 
 def test_endpoint_name_strips_backbone_prefix():
