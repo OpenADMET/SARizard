@@ -13,7 +13,7 @@
 #SBATCH --time=06:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
+#SBATCH --mem=20G
 #SBATCH --array=0-23
 #SBATCH --output=slurm/logs/stock_finetune_%A_%a.out
 

@@ -8,10 +8,10 @@
 # recipe count: (source slurm/env.sh; lr_recipe_list | wc -l).
 #SBATCH --job-name=sar-lr-finetune
 #SBATCH --partition=gpu
-#SBATCH --time=06:00:00
+#SBATCH --time=12:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
+#SBATCH --mem=20G
 #SBATCH --array=0-0
 #SBATCH --output=slurm/logs/lr_finetune_%A_%a.out
 

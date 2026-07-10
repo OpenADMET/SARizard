@@ -145,6 +145,13 @@ lr_recipe_list() {
     ls "$REPO_DIR"/configs/lr_*/*.yaml 2>/dev/null
 }
 
+# print the generated ablation finetune recipe paths (configs/ablation_<name>__s<seed>[__<mode>]/),
+# one per line, for the finetune array in run_ablations.sh. ablation_finetune.sbatch and
+# submit_batched.sh both enumerate through this so their array-index-to-recipe order agrees.
+ablation_recipe_list() {
+    ls "$REPO_DIR"/configs/ablation_*/*.yaml 2>/dev/null
+}
+
 # print the generated ablation result labels (config dir basenames), one per line: every
 # (ablation, seed) variant and its finetune-protocol variants (ablation_<name>__s<seed>, plus
 # the __reduced/__unlocked suffixes the MPNN-LR sweep adds). This mirrors ablation_finetune's
