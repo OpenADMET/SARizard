@@ -561,6 +561,18 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   --exclude=iscn008,iscf008 --time=12:00:00`, the longer wall-clock for the whim timeouts,
   `REPO_DIR` exported explicitly to dodge the stale interactive `SLURM_SUBMIT_DIR`) as
   finetune job 749348, re-chained analyze job 749349 (`afterok`, also `--exclude=iscn008,iscf008`).
+  **Reduced flavor leg launched via the batched driver (2026-07-10).** Frozen leg complete (75/75
+  result dirs). Started the reduced protocol only (unlocked held for a later call) off the s42
+  foundations: `REPO_DIR=... FOUNDATION_SEED=42 FLAVOR_SEEDS="1 2 3 4 5" LR_MODES="reduced" bash
+  slurm/run_lr_experiments.sh`, which now drives the finetune through `slurm/submit_batched.sh` at
+  `BATCH_SIZE=50` (submit 50, wait, rerun casualties, next 50; `iscn008,iscf008` excluded), rather
+  than one 1800-task array. Cleared the stale single-seed `configs/lr_reduced__*__s42` dirs first so
+  the recipe glob and `lr_analyze`'s `configs/lr_*/` enumeration cover exactly the 1800 reduced
+  5-seed recipes (15 flavors x 24 endpoints x 5 seeds = 36 batches of 50); the historical single-seed
+  `results/lr_*__s42` dirs are left in place (different paths, not enumerated once their configs are
+  gone). First batch is finetune job 795717 (50 tasks); the driver blocks until all 1800 finish, then
+  submits `lr_analyze` with no dependency. Runner log at `lr_reduced_5seed.log`. Unlocked still to
+  launch the same way; the Milestone-8 reduced/unlocked report cards remain gated on both.
 - [x] **Blocker for Milestone 7, raised in urgency:** target-dropout fraction for small
   flavors. The masked-pretext dropout in `losses.py` (`DROPOUT_FRACTION`, applied per target
   element to every flavor) keeps a fixed fraction, not a fixed count. Its rationale (stop the
