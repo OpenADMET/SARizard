@@ -490,6 +490,19 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   **Submitted so far:** flavors frozen only, `FOUNDATION_SEED=42 FLAVOR_SEEDS="1 2 3 4 5" bash
   slurm/run_all.sh` (finetune job 641124, array 0-1799; analyze job 641126 chained). The LR and
   ablation legs are wired but not yet launched (held pending the frozen leg completing).
+  **Bad-node fallout on the frozen leg; 144 casualties rerun (2026-07-10).** 641124 finished
+  1656/1800 clean; the 144 non-completions were all node hardware faults, not code faults:
+  ~97 on `iscn008` (`CUDA driver initialization failed`, the same node that killed the frozen
+  analyze 509950 and reduced finetune 605427), ~45 on `iscf008` (`CUDA error: uncorrectable ECC
+  error`), and 2 `whim__s3` tasks (897, 898) that hit the 6h wall-clock TIMEOUT on `iscn013`
+  (whim is a slow flavor, not a node fault). The failures tripped analyze 641126's `afterok`,
+  leaving it `DependencyNeverSatisfied`. Each crashed task had left a partial
+  `results/<flavor>__s<seed>/<endpoint>/` dir (dataloaders only, no `model.pth`) that the
+  `[[ -d "$OUT" ]]` skip guard in `finetune.sbatch` would have silently no-op'd, so removed all
+  144 first. Cancelled 641126, resubmitted the 144 casualty indices (`sbatch --array=<indices>
+  --exclude=iscn008,iscf008 --time=12:00:00`, the longer wall-clock for the whim timeouts,
+  `REPO_DIR` exported explicitly to dodge the stale interactive `SLURM_SUBMIT_DIR`) as
+  finetune job 749348, re-chained analyze job 749349 (`afterok`, also `--exclude=iscn008,iscf008`).
 - [x] **Blocker for Milestone 7, raised in urgency:** target-dropout fraction for small
   flavors. The masked-pretext dropout in `losses.py` (`DROPOUT_FRACTION`, applied per target
   element to every flavor) keeps a fixed fraction, not a fixed count. Its rationale (stop the
