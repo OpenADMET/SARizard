@@ -387,6 +387,20 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   config/result dirs, run `run_stock_baseline.sh` per protocol, and point each card's
   stock-baseline reference at the matching protocol's `chemeleon_stock` results. This adds two
   stock-baseline finetune runs (reduced, unlocked) on top of the existing frozen one.
+  **Two-card design redefined (2026-07-10).** The earlier "two color modes" (`absolute` and
+  `baseline-diverging`) are replaced by two fixed cards per setup, both in `report_card.py`
+  (rewritten): (a) an **R-squared card** on a fixed red-to-green scale (red=0, green=1) with the
+  stock-CheMeleon baseline as the FIRST column and the LGBM meta-model as the LAST column, each
+  behind a blank spacer, plus a final AVERAGE row that means each column across all endpoints;
+  (b) a **MAE %-change card** whose cells are `100*(mae_flavor-mae_baseline)/mae_baseline`
+  (green = lower MAE than baseline, red = worse, white at 0%), flavor columns only (no baseline
+  column, it is 0% by definition; no meta-model column, the meta-model has no MAE), with the same
+  AVERAGE row. Both group the endpoint rows by source dataset with a bold black separator line and
+  a bold source label per group. `report_card.py` no longer takes `--metric`/`--color-mode`; it
+  renders both cards per call (`report_card_r2[.__mode].png` and `report_card_mae_delta[...]`),
+  still filtered per protocol via `--lr-mode`. `analyze.sbatch` updated. The frozen pair is
+  regenerated on the live 5-seed data; the reduced/unlocked pairs still gate on those protocols'
+  per-mode metrics, stock baseline, and meta-model (below).
   **All three code gaps are now wired (commit 4dd1ed1), data not yet generated.** (1)
   `report_card.py` gained `--lr-mode {reduced,unlocked}`: it filters `--metrics-csv` (point it
   at `results/lr_metrics.csv`) to that protocol's `lr_<mode>__<flavor>` rows and strips the
