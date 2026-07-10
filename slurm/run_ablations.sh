@@ -122,20 +122,20 @@ if [[ -z "$FINETUNE_ONLY" ]]; then
     FINETUNE_DEPENDENCY="--dependency=afterok:$JOB_PRETRAIN"
 fi
 
-JOB_FINETUNE=$(sbatch --parsable \
-    $FINETUNE_DEPENDENCY \
-    --array=0-$((N_RECIPES - 1)) \
-    "$SCRIPT_DIR/ablation_finetune.sbatch")
-if [[ -n "$FINETUNE_ONLY" ]]; then
-    echo "finetune   job=$JOB_FINETUNE  ($N_RECIPES recipes off the s$FOUNDATION_SEED ablation foundations)"
-else
-    echo "finetune   job=$JOB_FINETUNE  (after pretrain $JOB_PRETRAIN)"
-fi
+# run the finetune array in batches of BATCH_SIZE (default 50) via submit_batched.sh: submit a
+# batch, wait for it, rerun its failures, then the next. It blocks until every ablation recipe has
+# a trained model.pth (or exits nonzero, stopping set -e before analyze), so this runs for hours;
+# launch this script from a persistent shell (interactive allocation or nohup). $FINETUNE_DEPENDENCY
+# gates the first batch on pretrain in the legacy path and is empty in finetune-only mode.
+echo "finetune   running in batches (submit_batched.sh)..."
+"$SCRIPT_DIR/submit_batched.sh" "$SCRIPT_DIR/ablation_finetune.sbatch" ablation_recipe_list \
+    $FINETUNE_DEPENDENCY
+echo "finetune   complete ($N_RECIPES recipes)"
 
+# every finetune is verified complete, so analyze needs no SLURM dependency
 JOB_ANALYZE=$(sbatch --parsable \
-    --dependency=afterok:"$JOB_FINETUNE" \
     "$SCRIPT_DIR/ablation_analyze.sbatch")
-echo "analyze    job=$JOB_ANALYZE  (after finetune $JOB_FINETUNE)"
+echo "analyze    job=$JOB_ANALYZE"
 
 echo ""
 echo "ablation triage submitted; monitor with:"

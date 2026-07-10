@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# Submit the full SARizard pipeline as a SLURM dependency chain.
+# Submit the full SARizard pipeline. The pre-finetune stages (corpus -> targets -> split ->
+# pretrain) run as a SLURM dependency chain; the finetune stage then runs in batches of
+# BATCH_SIZE (default 50) via submit_batched.sh, which submits a batch, waits for it, reruns any
+# failures, and only then submits the next. That call BLOCKS for hours, so run this from a
+# persistent shell: an interactive allocation, or `nohup bash slurm/run_all.sh >run.log 2>&1 &`.
+# Analyze is submitted (no dependency) once every finetune is verified complete.
 # Run this once from the repo root; every stage is resumable (existing outputs are skipped).
 #
 # Required before running:
@@ -135,24 +140,24 @@ print('1' if any(get_flavor(f).derived_from for f in flavor_names()) else '')
     FINETUNE_DEPENDENCY="--dependency=afterok:$JOB_PRETRAIN"
 fi
 
-JOB_FINETUNE=$(sbatch --parsable \
-    $FINETUNE_DEPENDENCY \
-    --array=0-$((N_RECIPES - 1)) \
-    --export=ALL,FLAVOR_SEEDS="$FLAVOR_SEEDS" \
-    "$SCRIPT_DIR/finetune.sbatch")
-if [[ -n "$FINETUNE_ONLY" ]]; then
-    echo "finetune   job=$JOB_FINETUNE  ($N_RECIPES recipes off the s$FOUNDATION_SEED foundations)"
-else
-    echo "finetune   job=$JOB_FINETUNE  (after pretrain $JOB_PRETRAIN)"
-fi
+# run the finetune array in batches of BATCH_SIZE (default 50), waiting for each batch and
+# rerunning its failures before the next, rather than submitting all $N_RECIPES tasks at once.
+# submit_batched.sh blocks until every recipe has a trained model.pth (or a batch exhausts its
+# retries, exiting nonzero so set -e stops us before analyze), so this call runs for hours; launch
+# run_all.sh from a persistent shell (interactive allocation or nohup). $FINETUNE_DEPENDENCY gates
+# the first batch on pretrain in the legacy path and is empty in finetune-only mode.
+echo "finetune   running in batches (submit_batched.sh)..."
+"$SCRIPT_DIR/submit_batched.sh" "$SCRIPT_DIR/finetune.sbatch" flavor_recipe_list \
+    --export=ALL,FLAVOR_SEEDS="$FLAVOR_SEEDS" $FINETUNE_DEPENDENCY
+echo "finetune   complete (all $N_RECIPES recipes)"
 
+# every finetune is verified complete, so analyze needs no SLURM dependency
 JOB_ANALYZE=$(sbatch --parsable \
-    --dependency=afterok:"$JOB_FINETUNE" \
     --export=ALL,FLAVOR_SEEDS="$FLAVOR_SEEDS" \
     "$SCRIPT_DIR/analyze.sbatch")
-echo "analyze    job=$JOB_ANALYZE  (after finetune $JOB_FINETUNE)"
+echo "analyze    job=$JOB_ANALYZE"
 
 echo ""
-echo "all stages submitted; monitor with:"
+echo "finetune done; analyze submitted; monitor with:"
 echo "  watch squeue -u \$USER"
 echo "  tail -f $REPO_DIR/slurm/logs/analyze_${JOB_ANALYZE}.out"

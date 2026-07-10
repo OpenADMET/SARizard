@@ -68,18 +68,21 @@ fi
 echo "  $N_RECIPES LR recipes (finetune array 0-$((N_RECIPES - 1)))"
 echo ""
 
-# submit finetune then analyze; analyze also reads the frozen sweep's existing results
-JOB_FINETUNE=$(sbatch --parsable \
-    --array=0-$((N_RECIPES - 1)) \
-    --export=ALL,FLAVOR_SEEDS="$FLAVOR_SEEDS",LR_MODES="$LR_MODES" \
-    "$SCRIPT_DIR/lr_finetune.sbatch")
-echo "lr-finetune   job=$JOB_FINETUNE  ($N_RECIPES recipes)"
+# run the finetune array in batches of BATCH_SIZE (default 50) via submit_batched.sh: submit a
+# batch, wait for it, rerun its failures, then the next. It blocks until every LR recipe has a
+# trained model.pth (or exits nonzero, stopping set -e before analyze), so this runs for hours;
+# launch this script from a persistent shell (interactive allocation or nohup). The LR recipes
+# point at foundations that already exist, so no upstream SLURM dependency is passed.
+echo "lr-finetune   running in batches (submit_batched.sh)..."
+"$SCRIPT_DIR/submit_batched.sh" "$SCRIPT_DIR/lr_finetune.sbatch" lr_recipe_list \
+    --export=ALL,FLAVOR_SEEDS="$FLAVOR_SEEDS",LR_MODES="$LR_MODES"
+echo "lr-finetune   complete ($N_RECIPES recipes)"
 
+# every finetune is verified complete, so analyze needs no SLURM dependency
 JOB_ANALYZE=$(sbatch --parsable \
-    --dependency=afterok:"$JOB_FINETUNE" \
     --export=ALL,FLAVOR_SEEDS="$FLAVOR_SEEDS",LR_MODES="$LR_MODES" \
     "$SCRIPT_DIR/lr_analyze.sbatch")
-echo "lr-analyze    job=$JOB_ANALYZE  (after lr-finetune $JOB_FINETUNE)"
+echo "lr-analyze    job=$JOB_ANALYZE"
 
 echo ""
 echo "LR experiments submitted; when done, read plots/lr_ranking_r2.csv"

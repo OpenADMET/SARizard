@@ -635,3 +635,20 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   precision). Treat that sibling as the reference for any future regime question; a
   divergence from it is now a deliberate choice, not an oversight, and should be commented
   as such.
+- **Finetune arrays now submit in batches of 50, waiting and rerunning failures per batch**
+  (`slurm/submit_batched.sh`). Repeated bad-node hardware faults (`iscn008` CUDA-init,
+  `iscf008` ECC) kept poisoning large finetune arrays and cascade-cancelling the `afterok`
+  analyze. The three runners (`run_all.sh`, `run_lr_experiments.sh`, `run_ablations.sh`) no
+  longer submit one big finetune array; they call `submit_batched.sh`, which submits a batch,
+  waits for it, reruns any casualty (a task whose result dir lacks `model.pth`, cleaning the
+  partial dir first so the skip-guard reruns it), and only then submits the next batch. It
+  blocks until every recipe is complete (or a batch exhausts `MAX_RETRIES=3`, exiting nonzero
+  so the runner's `set -e` stops before analyze), so the runners now run for hours and must be
+  launched from a persistent shell (interactive allocation or `nohup`). Analyze is submitted
+  with no SLURM dependency once every finetune is verified complete. Knobs: `BATCH_SIZE=50`,
+  `MAX_RETRIES=3`, `EXCLUDE_NODES=iscn008,iscf008` (both bad GPU nodes excluded by default),
+  `POLL_INTERVAL=30`. The finetune array tasks were also trimmed from `--mem=32G` to `20G`
+  (observed peak 12.8 GB, typical 3-8 GB) and `finetune`/`lr_finetune` bumped to `--time=12h`
+  to cover the slow `whim` flavor that timed out at 6h. This rewire governs every future
+  finetune submission (the pending 5-seed LR and ablation legs included); the in-flight
+  manually-resubmitted rerun 749348 predates it and is unaffected.

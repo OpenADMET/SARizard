@@ -12,15 +12,16 @@
 #SBATCH --time=06:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
+#SBATCH --mem=20G
 #SBATCH --array=0-167
 #SBATCH --output=slurm/logs/abl_finetune_%A_%a.out
 
 source "${SLURM_SUBMIT_DIR:-$(pwd)}/slurm/env.sh"
 conda activate "$OPENADMET_ENV"
 
-# enumerate generated ablation recipes (deterministic sorted order)
-mapfile -t RECIPES < <(ls configs/ablation_*/*.yaml 2>/dev/null)
+# enumerate generated ablation recipes (deterministic sorted order); the same env.sh function
+# submit_batched.sh uses, so the array-index-to-recipe mapping matches when driven in batches
+mapfile -t RECIPES < <(ablation_recipe_list)
 if [[ ${#RECIPES[@]} -eq 0 ]]; then
     echo "no ablation recipes found; run run_ablations.sh (it calls configs.generate)" >&2
     exit 1
