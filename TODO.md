@@ -390,17 +390,20 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   **Two-card design redefined (2026-07-10).** The earlier "two color modes" (`absolute` and
   `baseline-diverging`) are replaced by two fixed cards per setup, both in `report_card.py`
   (rewritten): (a) an **R-squared card** on a fixed red-to-green scale (red=0, green=1) with the
-  stock-CheMeleon baseline as the FIRST column and the LGBM meta-model as the LAST column, each
-  behind a blank spacer, plus a final AVERAGE row that means each column across all endpoints;
-  (b) a **MAE %-change card** whose cells are `100*(mae_flavor-mae_baseline)/mae_baseline`
-  (green = lower MAE than baseline, red = worse, white at 0%), flavor columns only (no baseline
-  column, it is 0% by definition; no meta-model column, the meta-model has no MAE), with the same
-  AVERAGE row. Both group the endpoint rows by source dataset with a bold black separator line and
-  a bold source label per group. `report_card.py` no longer takes `--metric`/`--color-mode`; it
-  renders both cards per call (`report_card_r2[.__mode].png` and `report_card_mae_delta[...]`),
-  still filtered per protocol via `--lr-mode`. `analyze.sbatch` updated. The frozen pair is
-  regenerated on the live 5-seed data; the reduced/unlocked pairs still gate on those protocols'
-  per-mode metrics, stock baseline, and meta-model (below).
+  stock-CheMeleon baseline as the FIRST column (behind a blank spacer) and a final AVERAGE row
+  that means each column across all endpoints; the LGBM meta-model is not shown on this card
+  (removed on explicit call). (b) a **MAE %-change card** whose cells are
+  `100*(mae_flavor-mae_baseline)/mae_baseline` (green = lower MAE than baseline, red = worse,
+  white at 0%), flavor columns only (no baseline column, it is 0% by definition; no meta-model
+  column, the meta-model has no MAE), on a symmetric colorbar (±the largest absolute delta in the
+  data, so 0% sits at the exact white center), with the same AVERAGE row. Both group the endpoint
+  rows by source dataset with a bold black separator line and a bold source label per group.
+  `report_card.py` no longer takes `--metric`/`--color-mode`/`--meta-model-csv` (the meta-model
+  is off both cards) and no longer exposes `meta_model_series`; it renders both cards per call
+  (`report_card_r2[_<mode>].png` and `report_card_mae_delta[...]` under `--out-dir`), still
+  filtered per protocol via `--lr-mode`. `analyze.sbatch` and the one-off `report_card_250k.sbatch`
+  are updated to the new CLI. The frozen pair is regenerated on the live 5-seed data; the
+  reduced/unlocked pairs still gate on those protocols' per-mode metrics and stock baseline (below).
   **All three code gaps are now wired (commit 4dd1ed1), data not yet generated.** (1)
   `report_card.py` gained `--lr-mode {reduced,unlocked}`: it filters `--metrics-csv` (point it
   at `results/lr_metrics.csv`) to that protocol's `lr_<mode>__<flavor>` rows and strips the
