@@ -404,6 +404,21 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   filtered per protocol via `--lr-mode`. `analyze.sbatch` and the one-off `report_card_250k.sbatch`
   are updated to the new CLI. The frozen pair is regenerated on the live 5-seed data; the
   reduced/unlocked pairs still gate on those protocols' per-mode metrics and stock baseline (below).
+  **CYP dataset regrouped and rows disambiguated (2026-07-10).** `metrics_spec.dataset_of` now
+  maps both the single-task cyp1a2 recipe (`cyp1a2_st`) and the multi-task CYP recipe (`cyp_mt`)
+  to one `openadmet_cyp` dataset (renamed from `cyp`, dropping the separate `cyp1a2` group), via
+  an explicit `(recipe-prefix -> dataset)` rule table instead of assuming the dataset name is a
+  recipe prefix. `report_card.prepare_rows` re-derives the dataset from the recipe (so the cards
+  reflect the new grouping without re-running the GPU evaluate) and appends the recipe to a row's
+  label (`endpoint (recipe)`) wherever one `(dataset, endpoint)` is produced by more than one
+  recipe, so a single-task and a multi-task model of the same endpoint stay separate labeled rows
+  instead of silently averaging: this splits cyp1a2 (`cyp1a2_st` vs `cyp_mt`), chembl
+  `LOG_CLint_HLM`/`LOG_CLint_RLM` (single-task vs `chembl_clint_mt`), and expansionrx `LogD`
+  (`logd_st_rand` vs `physchem_mt`), which were previously collapsed by mean. The ablation report
+  (`prescaling_report.py`) kept its flexible per-mode heatmap, which the two-card rewrite had
+  removed from `report_card`; that plotting (`plot_report_card`, `COLOR_MODES`, `_row_relative`)
+  now lives in `prescaling_report` itself, and `build_matrix` falls back to a plain
+  `dataset · endpoint` row for an unprepared (ablation) frame.
   **All three code gaps are now wired (commit 4dd1ed1), data not yet generated.** (1)
   `report_card.py` gained `--lr-mode {reduced,unlocked}`: it filters `--metrics-csv` (point it
   at `results/lr_metrics.csv`) to that protocol's `lr_<mode>__<flavor>` rows and strips the

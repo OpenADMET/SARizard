@@ -33,7 +33,7 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm  # noqa: E402
 
-from sarizard.analysis.metrics_spec import DATASETS  # noqa: E402
+from sarizard.analysis.metrics_spec import DATASETS, dataset_of  # noqa: E402
 from sarizard.analysis.paths import METRICS_CSV, PLOTS_DIR, parse_seed_variant  # noqa: E402
 from sarizard.pretraining.flavors import flavor_names  # noqa: E402
 
@@ -94,15 +94,47 @@ def filter_lr_mode(frame: pd.DataFrame, mode: str, column: str = "flavor") -> pd
     return kept
 
 
-def build_matrix(
-    frame: pd.DataFrame, metric: str, columns: list[str] | None = None
-) -> pd.DataFrame:
-    """Pivot the tidy metrics into an endpoints-by-columns matrix for one metric.
+def prepare_rows(frame: pd.DataFrame) -> pd.DataFrame:
+    """Re-derive the dataset from the recipe and build a disambiguated per-row identity.
+
+    The ``dataset`` column is recomputed from ``recipe`` via ``metrics_spec.dataset_of`` so the
+    grouping always matches the current rules regardless of what an older metrics CSV stored
+    (e.g. the CYP recipes now group under ``openadmet_cyp``). The row identity is
+    ``"<dataset> · <endpoint>"``, with the recipe appended as ``" (<recipe>)"`` wherever the same
+    ``(dataset, endpoint)`` is produced by more than one recipe, so a single-task and a
+    multi-task model of the same endpoint (e.g. cyp1a2 under ``cyp1a2_st`` and ``cyp_mt``, or
+    ``LOG_CLint_HLM`` under a chembl single-task and multi-task recipe) stay separate, labeled
+    rows instead of silently averaging together.
 
     Parameters
     ----------
     frame : pandas.DataFrame
-        Tidy metrics with columns flavor, dataset, endpoint, and the metric columns.
+        Tidy metrics with at least ``recipe`` and ``endpoint`` columns.
+
+    Returns
+    -------
+    pandas.DataFrame
+        A copy with the recomputed ``dataset`` column and a new ``row`` identity column.
+    """
+    frame = frame.copy()
+    frame["dataset"] = frame["recipe"].map(dataset_of)
+    frame["row"] = frame["dataset"] + " · " + frame["endpoint"]
+    # tag only the rows whose (dataset, endpoint) is produced by more than one recipe
+    ambiguous = frame.groupby("row")["recipe"].transform("nunique") > 1
+    frame.loc[ambiguous, "row"] = frame["row"] + " (" + frame["recipe"] + ")"
+    return frame
+
+
+def build_matrix(
+    frame: pd.DataFrame, metric: str, columns: list[str] | None = None
+) -> pd.DataFrame:
+    """Pivot the prepared metrics into an endpoints-by-columns matrix for one metric.
+
+    Parameters
+    ----------
+    frame : pandas.DataFrame
+        Metrics already run through ``prepare_rows`` (carries ``dataset``, ``endpoint``, ``row``,
+        ``flavor``, and the metric columns).
     metric : str
         Which metric column to display.
     columns : list of str, optional
@@ -113,17 +145,20 @@ def build_matrix(
     Returns
     -------
     pandas.DataFrame
-        Rows are ``"<dataset> · <endpoint>"`` ordered by dataset then endpoint; columns are
+        Rows are the ``row`` identities ordered by dataset then endpoint; columns are
         ``columns`` (or registry flavors) that appear in ``frame``.
     """
     frame = frame.copy()
-    frame["row"] = frame["dataset"] + " · " + frame["endpoint"]
+    if "row" not in frame.columns:
+        # an unprepared frame (e.g. the ablation report) keys rows by dataset and endpoint
+        # directly, without the recipe disambiguation prepare_rows adds
+        frame["row"] = frame["dataset"] + " · " + frame["endpoint"]
     rank = {dataset: i for i, dataset in enumerate(DATASETS)}
     ordered = (
         frame[["dataset", "endpoint", "row"]]
         .drop_duplicates()
         .assign(_rank=lambda d: d["dataset"].map(lambda x: rank.get(x, len(DATASETS))))
-        .sort_values(["_rank", "endpoint"])
+        .sort_values(["_rank", "endpoint", "row"])
     )
     order = columns if columns is not None else flavor_names()
     present = set(frame["flavor"])
@@ -142,7 +177,8 @@ def build_reference_series(frame: pd.DataFrame, flavor: str, metric: str) -> pd.
     Parameters
     ----------
     frame : pandas.DataFrame
-        Tidy metrics with columns flavor, dataset, endpoint, and the metric columns.
+        Metrics already run through ``prepare_rows`` (carries the ``row`` identity and the
+        metric columns).
     flavor : str
         The flavor label to extract (a value of the ``flavor`` column).
     metric : str
@@ -151,15 +187,19 @@ def build_reference_series(frame: pd.DataFrame, flavor: str, metric: str) -> pd.
     Returns
     -------
     pandas.Series
-        Indexed like ``build_matrix``'s rows; empty if ``flavor`` has no rows in ``frame``.
+        Indexed by the ``row`` identity like ``build_matrix``'s rows; empty if ``flavor`` has no
+        rows in ``frame``.
     """
     subset = frame[frame["flavor"] == flavor]
     if subset.empty:
         return pd.Series(dtype=float)
-    row = subset["dataset"] + " · " + subset["endpoint"]
-    # collapse a dataset+endpoint that appears under more than one recipe (single-task and
-    # multi-task variants share an endpoint) by mean, matching build_matrix's aggfunc="mean"
-    # pivot; without this the index carries duplicate labels and reindex onto the pivot fails
+    # the prepared row identity separates single-task and multi-task variants; fall back to the
+    # plain dataset+endpoint key for an unprepared frame, collapsing any duplicate by mean so the
+    # index stays unique and aligned to the pivot
+    if "row" in subset.columns:
+        row = subset["row"]
+    else:
+        row = subset["dataset"] + " · " + subset["endpoint"]
     return pd.Series(subset[metric].to_numpy(), index=row).groupby(level=0).mean()
 
 
@@ -458,7 +498,9 @@ def main() -> None:
 
     if not args.metrics_csv.exists():
         raise SystemExit(f"{args.metrics_csv} not found; run analysis.evaluate first")
-    frame = collapse_seed_variants(pd.read_csv(args.metrics_csv))
+    # re-derive the dataset from the recipe and build the disambiguated row identity once on the
+    # full frame, so build_matrix and the reference series share one consistent set of row labels
+    frame = prepare_rows(collapse_seed_variants(pd.read_csv(args.metrics_csv)))
     # for a reduced/unlocked setup, keep only that protocol's rows as bare-flavor columns; the
     # references still read from the full frame so the mode's stock baseline survives
     matrix_frame = frame

@@ -4,8 +4,8 @@ Reads the tidy metrics CSV produced by ``analysis.evaluate`` for the ablation re
 ``flavor`` column holds ``ablation_<name>__s<seed>`` labels, optionally with a ``__reduced`` or
 ``__unlocked`` finetune-protocol suffix) and renders, per finetune LR protocol:
 
-- a report-card heatmap, endpoints (rows) by ablation (columns), reusing the row-relative
-  coloring from ``analysis.report_card``;
+- a report-card heatmap, endpoints (rows) by ablation (columns), with a selectable color mode
+  (row-relative, absolute, or baseline-diverging);
 - a summary CSV and bar chart ranking each ablation by its mean metric across endpoints and
   the number of endpoints it wins, the read used to pick the production prescaling recipe.
 
@@ -34,6 +34,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402 - set backend before importing pyplot
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
+from matplotlib.colors import TwoSlopeNorm  # noqa: E402
 
 from sarizard.analysis.metrics_spec import (  # noqa: E402
     HIGHER_IS_BETTER,
@@ -48,15 +49,133 @@ from sarizard.analysis.paths import (  # noqa: E402
     ablation_label,
     parse_lr_mode,
 )
-from sarizard.analysis.report_card import (  # noqa: E402
-    COLOR_MODES,
-    build_matrix,
-    collapse_seed_variants,
-    plot_report_card,
-)
+from sarizard.analysis.report_card import build_matrix, collapse_seed_variants  # noqa: E402
 from sarizard.pretraining.prescaling import ablation_names  # noqa: E402
 
 logger = logging.getLogger(__name__)
+
+# heatmap coloring strategies for the ablation cards (this report keeps the flexible per-mode
+# coloring the flavor report cards dropped when they moved to two fixed cards):
+#   row-relative       min-max normalize each endpoint so its best ablation is greenest
+#   absolute           color by the raw metric value on a fixed [0, 1] scale
+#   baseline-diverging red-blue diverging around each row's chemeleon-baseline value
+COLOR_MODES = ("row-relative", "absolute", "baseline-diverging")
+
+
+def _row_relative(values: np.ndarray, higher_better: bool) -> np.ndarray:
+    """Min-max normalize each row to [0, 1] so the best ablation per endpoint maps to 1."""
+    normed = np.full(values.shape, np.nan, dtype=float)
+    for i in range(values.shape[0]):
+        row = values[i]
+        finite = np.isfinite(row)
+        if finite.sum() == 0:
+            continue
+        lo, hi = np.nanmin(row[finite]), np.nanmax(row[finite])
+        if hi == lo:
+            normed[i, finite] = 0.5
+            continue
+        unit = (row - lo) / (hi - lo)
+        normed[i] = unit if higher_better else 1.0 - unit
+    return normed
+
+
+def plot_report_card(
+    pivot: pd.DataFrame,
+    metric: str,
+    out_png: Path,
+    out_csv: Path,
+    *,
+    color_mode: str = "row-relative",
+    baseline_row: np.ndarray | None = None,
+) -> None:
+    """Render an ablation heatmap (endpoints by ablation) under one color mode, and its CSV.
+
+    Parameters
+    ----------
+    pivot : pandas.DataFrame
+        Endpoints (rows) by ablation (columns) matrix for one metric.
+    metric : str
+        Which metric ``pivot`` holds (drives the title and color direction).
+    out_png, out_csv : pathlib.Path
+        Heatmap image and metric-matrix CSV output paths.
+    color_mode : {"row-relative", "absolute", "baseline-diverging"}, optional
+        Cell coloring (see ``COLOR_MODES``).
+    baseline_row : numpy.ndarray, optional
+        Per-row baseline metric values (aligned to ``pivot``'s rows), required when
+        ``color_mode`` is ``baseline-diverging`` and ignored otherwise.
+    """
+    if color_mode not in COLOR_MODES:
+        raise ValueError(f"unknown color_mode {color_mode!r}; expected one of {COLOR_MODES}")
+    values = pivot.to_numpy(dtype=float)
+    higher_better = metric in HIGHER_IS_BETTER
+    n_rows, n_cols = values.shape
+
+    # per-mode cell values, colormap, and norm; baseline-diverging colors the signed gap to each
+    # row's baseline on one shared min-to-max delta scale (white = baseline)
+    norm = None
+    diverging_bounds: tuple[float, float] | None = None
+    if color_mode == "baseline-diverging":
+        if baseline_row is None:
+            raise ValueError("baseline-diverging color_mode requires baseline_row")
+        color_values = values - baseline_row[:, None]
+        finite = color_values[np.isfinite(color_values)]
+        lo = float(finite.min()) if finite.size else -1.0
+        hi = float(finite.max()) if finite.size else 1.0
+        norm = TwoSlopeNorm(vcenter=0.0, vmin=min(lo, -1e-9), vmax=max(hi, 1e-9))
+        diverging_bounds = (lo, hi)
+        cmap = plt.get_cmap("RdBu" if higher_better else "RdBu_r").copy()
+    elif color_mode == "absolute":
+        color_values = values
+        cmap = plt.get_cmap("RdYlGn" if higher_better else "RdYlGn_r").copy()
+    else:
+        color_values = _row_relative(values, higher_better)
+        cmap = plt.get_cmap("RdYlGn").copy()
+    cmap.set_bad("lightgrey")
+
+    fig, ax = plt.subplots(
+        figsize=(1.15 * n_cols + 3.0, 0.42 * n_rows + 2.0), constrained_layout=True
+    )
+    imshow_kwargs = {"norm": norm} if norm is not None else {"vmin": 0.0, "vmax": 1.0}
+    im = ax.imshow(np.ma.masked_invalid(color_values), aspect="auto", cmap=cmap, **imshow_kwargs)
+
+    ax.set_xticks(np.arange(n_cols))
+    ax.set_xticklabels(pivot.columns, rotation=45, ha="left", fontsize=9)
+    ax.xaxis.set_label_position("top")
+    ax.xaxis.tick_top()
+    ax.set_yticks(np.arange(n_rows))
+    ax.set_yticklabels(pivot.index, fontsize=8)
+
+    for i in range(n_rows):
+        for j in range(n_cols):
+            value = values[i, j]
+            if np.isfinite(value):
+                ax.text(j, i, f"{value:.3f}", ha="center", va="center", fontsize=7, color="black")
+
+    label = METRIC_LABELS.get(metric, metric)
+    direction = "higher better" if higher_better else "lower better"
+    scale_desc = {
+        "absolute": f"color is absolute {label} in [0, 1]",
+        "baseline-diverging": f"color is {label} minus the chemeleon baseline per row",
+        "row-relative": "color is row-relative",
+    }[color_mode]
+    ax.set_title(f"Ablation report card: {label} ({direction}); {scale_desc}", fontsize=11, pad=28)
+    cbar = fig.colorbar(im, ax=ax, shrink=0.5, pad=0.02)
+    if color_mode == "baseline-diverging" and diverging_bounds is not None:
+        lo, hi = diverging_bounds
+        cbar.set_ticks([lo, 0.0, hi])
+        cbar.set_ticklabels([f"{lo:+.2f}", "0 (baseline)", f"{hi:+.2f}"], fontsize=7)
+    elif color_mode == "absolute":
+        cbar.set_ticks([0.0, 0.5, 1.0])
+        cbar.set_ticklabels(["0.0", "0.5", "1.0"], fontsize=7)
+    else:
+        cbar.set_ticks([0.0, 1.0])
+        cbar.set_ticklabels(["worst for endpoint", "best for endpoint"], fontsize=7)
+
+    out_png.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_png, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    pivot.to_csv(out_csv)
+    logger.info("wrote %s and %s", out_png, out_csv)
 
 ABLATION_METRICS_CSV = RESULTS_DIR / "ablation_metrics.csv"
 
@@ -175,9 +294,9 @@ def report_one_mode(
         The protocol these rows belong to, one of :data:`sarizard.analysis.paths.LR_MODES`; sets
         the output-filename suffix.
     color_modes : list of str
-        Report-card color schemes to render, each one of
-        :data:`sarizard.analysis.report_card.COLOR_MODES`; ``baseline-diverging`` centers each
-        row on the ``chemeleon_baseline`` recipe and is skipped when that column is absent.
+        Report-card color schemes to render, each one of :data:`COLOR_MODES`;
+        ``baseline-diverging`` centers each row on the ``chemeleon_baseline`` recipe and is
+        skipped when that column is absent.
     out_dir : pathlib.Path
         Directory the cards, ranking CSV, and bar chart are written to; lets an archived run
         render into its own plots dir instead of clobbering the live one.
