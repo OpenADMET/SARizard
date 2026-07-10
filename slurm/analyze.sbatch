@@ -38,8 +38,9 @@ fi
 # reload test-set predictions and write metrics.csv
 python -m sarizard.analysis.evaluate --accelerator "$ACCELERATOR" --flavors "${LABELS[@]}"
 
-# report-card heatmap (endpoints x flavors, R²); collapses the seed variants
-python -m sarizard.analysis.report_card --metric r2
+# two report cards (endpoints x flavors), seed variants collapsed: an R² card (red=0, green=1)
+# with the stock baseline first and the meta-model last, and a MAE %-change-vs-baseline card
+python -m sarizard.analysis.report_card
 
 # stacking meta-model vs best single flavor (scored per seed on that seed's aligned split,
 # then averaged across seeds; seeds are not stacked at the raw-prediction level because the

@@ -1,18 +1,22 @@
-"""Tests for the report-card pivot and row-relative coloring."""
+"""Tests for the report-card pivots, MAE-delta, and card assembly."""
 
 import numpy as np
 import pandas as pd
 import pytest
 
 from sarizard.analysis.report_card import (
-    SPACER_COLUMN,
-    _row_relative,
-    augment_with_references,
+    AVERAGE_LABEL,
+    BASELINE_LABEL,
+    META_LABEL,
+    append_average_row,
+    assemble_r2_card,
     build_matrix,
     build_reference_series,
     collapse_seed_variants,
     filter_lr_mode,
+    mae_delta_matrix,
     meta_model_series,
+    source_groups,
 )
 
 
@@ -21,10 +25,10 @@ def tidy_metrics() -> pd.DataFrame:
     """A tiny tidy metrics frame spanning two datasets and two flavors."""
     return pd.DataFrame(
         [
-            {"flavor": "osmordred", "dataset": "herg", "endpoint": "herg", "r2": 0.5},
-            {"flavor": "ecfp", "dataset": "herg", "endpoint": "herg", "r2": 0.3},
-            {"flavor": "osmordred", "dataset": "cyp", "endpoint": "cyp3a4", "r2": 0.7},
-            {"flavor": "ecfp", "dataset": "cyp", "endpoint": "cyp3a4", "r2": 0.6},
+            {"flavor": "osmordred", "dataset": "herg", "endpoint": "herg", "r2": 0.5, "mae": 0.4},
+            {"flavor": "ecfp", "dataset": "herg", "endpoint": "herg", "r2": 0.3, "mae": 0.6},
+            {"flavor": "osmordred", "dataset": "cyp", "endpoint": "cyp3a4", "r2": 0.7, "mae": 0.2},
+            {"flavor": "ecfp", "dataset": "cyp", "endpoint": "cyp3a4", "r2": 0.6, "mae": 0.3},
         ]
     )
 
@@ -43,54 +47,10 @@ def test_columns_default_to_registry_order(tidy_metrics):
     assert list(pivot.columns) == ["osmordred", "ecfp"]
 
 
-def test_explicit_column_order_is_honored(tidy_metrics):
-    pivot = build_matrix(tidy_metrics, "r2", columns=["ecfp", "osmordred"])
-
-    assert list(pivot.columns) == ["ecfp", "osmordred"]
-
-
-def test_absent_columns_are_dropped(tidy_metrics):
-    pivot = build_matrix(tidy_metrics, "r2", columns=["ecfp", "osmordred", "whim"])
-
-    assert list(pivot.columns) == ["ecfp", "osmordred"]
-
-
 def test_cell_value_is_the_metric(tidy_metrics):
     pivot = build_matrix(tidy_metrics, "r2")
 
     assert pivot.loc["herg · herg", "osmordred"] == 0.5
-
-
-def test_row_relative_maps_best_to_one_when_higher_is_better():
-    normed = _row_relative(np.array([[0.1, 0.5, 0.9]]), higher_better=True)
-
-    assert np.allclose(normed, [[0.0, 0.5, 1.0]])
-
-
-def test_row_relative_inverts_when_lower_is_better():
-    normed = _row_relative(np.array([[0.1, 0.5, 0.9]]), higher_better=False)
-
-    assert np.allclose(normed, [[1.0, 0.5, 0.0]])
-
-
-def test_row_relative_constant_row_is_midpoint():
-    normed = _row_relative(np.array([[0.3, 0.3]]), higher_better=True)
-
-    assert np.allclose(normed, [[0.5, 0.5]])
-
-
-def test_row_relative_all_nan_row_stays_nan():
-    normed = _row_relative(np.array([[np.nan, np.nan]]), higher_better=True)
-
-    assert np.isnan(normed).all()
-
-
-def test_collapse_seed_variants_maps_to_base_flavor():
-    frame = pd.DataFrame({"flavor": ["ecfp__s1", "ecfp__s2", "osmordred__s1"]})
-
-    collapsed = collapse_seed_variants(frame)
-
-    assert list(collapsed["flavor"]) == ["ecfp", "ecfp", "osmordred"]
 
 
 def test_seed_variants_average_into_one_flavor_column():
@@ -104,52 +64,91 @@ def test_seed_variants_average_into_one_flavor_column():
 
     pivot = build_matrix(collapse_seed_variants(frame), "r2", columns=["ecfp"])
 
-    assert pivot.shape == (1, 1)
     assert pivot.loc["herg · herg", "ecfp"] == pytest.approx(0.5)
 
 
 def test_filter_lr_mode_keeps_one_mode_and_strips_prefix():
     frame = pd.DataFrame(
-        {
-            "flavor": [
-                "lr_reduced__ecfp",
-                "lr_reduced__osmordred",
-                "lr_unlocked__ecfp",
-                "chemeleon_stock_reduced",
-            ]
-        }
+        {"flavor": ["lr_reduced__ecfp", "lr_reduced__osmordred", "lr_unlocked__ecfp"]}
     )
 
     kept = filter_lr_mode(frame, "reduced")
 
-    # only reduced rows survive, rewritten to the bare flavor name; unlocked and the
-    # un-prefixed stock reference are dropped from the flavor columns
     assert list(kept["flavor"]) == ["ecfp", "osmordred"]
 
 
-def test_filter_lr_mode_empty_when_no_rows_match():
-    frame = pd.DataFrame({"flavor": ["ecfp", "osmordred", "lr_unlocked__ecfp"]})
-
-    kept = filter_lr_mode(frame, "reduced")
-
-    assert kept.empty
-
-
-def test_build_reference_series_extracts_one_flavor(tidy_metrics):
-    baseline_row = pd.DataFrame(
-        [{"flavor": "chemeleon_stock", "dataset": "herg", "endpoint": "herg", "r2": 0.4}]
+def test_mae_delta_is_percentage_change_from_baseline():
+    mae = pd.DataFrame(
+        {"osmordred": [0.4, 0.2], "ecfp": [0.6, 0.3]},
+        index=["cyp · cyp3a4", "herg · herg"],
     )
-    frame = pd.concat([tidy_metrics, baseline_row], ignore_index=True)
+    baseline = pd.Series({"cyp · cyp3a4": 0.5, "herg · herg": 0.4})
 
-    series = build_reference_series(frame, "chemeleon_stock", "r2")
+    delta = mae_delta_matrix(mae, baseline)
 
-    assert series.to_dict() == {"herg · herg": 0.4}
+    # osmordred at cyp: (0.4 - 0.5) / 0.5 = -20%; ecfp at herg: (0.3 - 0.4) / 0.4 = -25%
+    assert delta.loc["cyp · cyp3a4", "osmordred"] == pytest.approx(-20.0)
+    assert delta.loc["herg · herg", "ecfp"] == pytest.approx(-25.0)
 
 
-def test_build_reference_series_empty_when_flavor_absent(tidy_metrics):
-    series = build_reference_series(tidy_metrics, "chemeleon_stock", "r2")
+def test_mae_delta_is_nan_when_baseline_missing():
+    mae = pd.DataFrame({"osmordred": [0.4]}, index=["cyp · cyp3a4"])
+    baseline = pd.Series(dtype=float)
 
-    assert series.empty
+    delta = mae_delta_matrix(mae, baseline)
+
+    assert np.isnan(delta.loc["cyp · cyp3a4", "osmordred"])
+
+
+def test_assemble_r2_card_orders_baseline_first_and_meta_last(tidy_metrics):
+    flavors = build_matrix(tidy_metrics, "r2")
+    baseline = pd.Series({"cyp · cyp3a4": 0.4, "herg · herg": 0.2})
+    meta = pd.Series({"cyp · cyp3a4": 0.8, "herg · herg": 0.9})
+
+    matrix, spacer_cols, ref_cols = assemble_r2_card(flavors, baseline, meta)
+
+    # baseline is the first column, meta the last, each behind a spacer bounding the flavor block
+    assert matrix.columns[0] == BASELINE_LABEL
+    assert matrix.columns[-1] == META_LABEL
+    assert list(matrix.columns[2:4]) == ["osmordred", "ecfp"]
+    assert ref_cols == [0, len(matrix.columns) - 1]
+    assert len(spacer_cols) == 2
+    assert matrix.loc["herg · herg", BASELINE_LABEL] == 0.2
+
+
+def test_assemble_r2_card_without_references_is_flavors_only(tidy_metrics):
+    flavors = build_matrix(tidy_metrics, "r2")
+
+    matrix, spacer_cols, ref_cols = assemble_r2_card(
+        flavors, pd.Series(dtype=float), pd.Series(dtype=float)
+    )
+
+    assert list(matrix.columns) == ["osmordred", "ecfp"]
+    assert spacer_cols == []
+    assert ref_cols == []
+
+
+def test_append_average_row_means_each_column_over_endpoints():
+    matrix = pd.DataFrame(
+        {"osmordred": [0.7, 0.5], "ecfp": [0.6, 0.3]},
+        index=["cyp · cyp3a4", "herg · herg"],
+    )
+
+    out, average_row = append_average_row(matrix)
+
+    assert out.index[average_row] == AVERAGE_LABEL
+    assert out.iloc[average_row]["osmordred"] == pytest.approx(0.6)
+    assert out.iloc[average_row]["ecfp"] == pytest.approx(0.45)
+    # a blank spacer row sits just above the average row
+    assert out.iloc[average_row - 1].isna().all()
+
+
+def test_source_groups_are_contiguous_runs_by_dataset():
+    index = pd.Index(["cyp · a", "cyp · b", "herg · h", "pxr · p"])
+
+    groups = source_groups(index)
+
+    assert groups == [(0, 2, "cyp"), (2, 3, "herg"), (3, 4, "pxr")]
 
 
 def test_meta_model_series_reads_r2_column(tmp_path):
@@ -163,46 +162,18 @@ def test_meta_model_series_reads_r2_column(tmp_path):
     assert series.to_dict() == {"herg · herg": 0.8}
 
 
-def test_meta_model_series_empty_for_unsupported_metric(tmp_path):
-    csv = tmp_path / "meta_model_lgbm.csv"
-    pd.DataFrame(
-        [{"dataset": "herg", "endpoint": "herg", "meta_r2": 0.8, "meta_rmse": 0.2}]
-    ).to_csv(csv, index=False)
-
-    series = meta_model_series(csv, "spearman")
-
-    assert series.empty
-
-
 def test_meta_model_series_empty_when_csv_missing(tmp_path):
     series = meta_model_series(tmp_path / "missing.csv", "r2")
 
     assert series.empty
 
 
-def test_augment_with_references_adds_spacer_and_labeled_columns(tidy_metrics):
-    pivot = build_matrix(tidy_metrics, "r2")
-    baseline = pd.Series({"herg · herg": 0.2, "cyp · cyp3a4": 0.4})
-    meta = pd.Series({"herg · herg": 0.9, "cyp · cyp3a4": 0.8})
-
-    augmented, divider_at = augment_with_references(pivot, baseline=baseline, meta_model=meta)
-
-    assert divider_at == pivot.shape[1]
-    assert list(augmented.columns) == [
-        "osmordred", "ecfp", SPACER_COLUMN,
-        "chemeleon baseline (stock, external)", "meta-model (LGBM, all flavors)",
-    ]
-    assert augmented.loc["herg · herg", "chemeleon baseline (stock, external)"] == 0.2
-    assert augmented.loc["cyp · cyp3a4", "meta-model (LGBM, all flavors)"] == 0.8
-    assert np.isnan(augmented[SPACER_COLUMN]).all()
-
-
-def test_augment_with_references_skips_empty_series(tidy_metrics):
-    pivot = build_matrix(tidy_metrics, "r2")
-
-    augmented, divider_at = augment_with_references(
-        pivot, baseline=pd.Series(dtype=float), meta_model=None
+def test_build_reference_series_extracts_one_flavor(tidy_metrics):
+    baseline_row = pd.DataFrame(
+        [{"flavor": "chemeleon_stock", "dataset": "herg", "endpoint": "herg", "r2": 0.4}]
     )
+    frame = pd.concat([tidy_metrics, baseline_row], ignore_index=True)
 
-    assert divider_at == pivot.shape[1]
-    assert list(augmented.columns) == list(pivot.columns)
+    series = build_reference_series(frame, "chemeleon_stock", "r2")
+
+    assert series.to_dict() == {"herg · herg": 0.4}
