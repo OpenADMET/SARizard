@@ -570,9 +570,21 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   the recipe glob and `lr_analyze`'s `configs/lr_*/` enumeration cover exactly the 1800 reduced
   5-seed recipes (15 flavors x 24 endpoints x 5 seeds = 36 batches of 50); the historical single-seed
   `results/lr_*__s42` dirs are left in place (different paths, not enumerated once their configs are
-  gone). First batch is finetune job 795717 (50 tasks); the driver blocks until all 1800 finish, then
-  submits `lr_analyze` with no dependency. Runner log at `lr_reduced_5seed.log`. Unlocked still to
-  launch the same way; the Milestone-8 reduced/unlocked report cards remain gated on both.
+  gone). Unlocked still to launch the same way; the Milestone-8 reduced/unlocked report cards remain
+  gated on both.
+  **Driver made session-independent (2026-07-10).** First launched the driver as a session-bound
+  background process (batch 795717), but that process is a child of the shell that started it, so
+  closing the session or ending the interactive allocation would stop it submitting further batches
+  (already-submitted SLURM jobs finish regardless; it is fully resumable). Converted it to run as its
+  own long-lived SLURM job so it survives both: killed the background driver, `scancel`ed the pending
+  795717 (one task, index 0 `lr_reduced__atompair__s1/asap_clint_hlm_st_rand`, had already finished
+  and its `model.pth` is kept; the rest were pending), and resubmitted the whole thing as
+  `sbatch --partition=cpu --time=3-00:00:00 --wrap="bash slurm/run_lr_experiments.sh"` (driver job
+  799014, `--export=ALL` with `REPO_DIR`/`FOUNDATION_SEED=42`/`FLAVOR_SEEDS="1 2 3 4 5"`/
+  `LR_MODES=reduced`). It re-ran cleanly, skipped the one completed recipe, and is driving the
+  remaining 1799 in batches of 50 (batch job 799147, 49 tasks). Log: `slurm/logs/lr_driver_799014.out`.
+  This is the durable pattern for future batched runs: submit `submit_batched.sh`'s runner as a cpu
+  job rather than a session-bound process.
 - [x] **Blocker for Milestone 7, raised in urgency:** target-dropout fraction for small
   flavors. The masked-pretext dropout in `losses.py` (`DROPOUT_FRACTION`, applied per target
   element to every flavor) keeps a fixed fraction, not a fixed count. Its rationale (stop the
