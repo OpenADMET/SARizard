@@ -41,7 +41,9 @@ python -m sarizard.analysis.evaluate --accelerator "$ACCELERATOR" --flavors "${L
 # report-card heatmap (endpoints x flavors, R²); collapses the seed variants
 python -m sarizard.analysis.report_card --metric r2
 
-# stacking meta-model vs best single flavor (seed predictions averaged per flavor)
+# stacking meta-model vs best single flavor (scored per seed on that seed's aligned split,
+# then averaged across seeds; seeds are not stacked at the raw-prediction level because the
+# multi-task endpoints resample their test set per finetune seed)
 python -m sarizard.analysis.meta_model --flavors "${LABELS[@]}"
 
 echo "analysis complete; results in plots/ and results/metrics.csv"

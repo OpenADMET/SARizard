@@ -67,7 +67,7 @@ def _make_estimator(name: str, seed: int):
 def collect_predictions(
     results_root: Path, flavors: list[str], *, strip_prefix: str = ""
 ) -> dict:
-    """Gather per-flavor test predictions, keyed by (dataset, recipe, endpoint).
+    """Gather per-flavor test predictions, grouped by (dataset, recipe, endpoint) then seed.
 
     Parameters
     ----------
@@ -85,16 +85,18 @@ def collect_predictions(
     Returns
     -------
     dict
-        ``{(dataset, recipe, endpoint): {"y": ndarray, "preds": {flavor: ndarray}}}``. The
-        test split is identical across flavors of the same recipe (only the foundation
-        differs), so the per-flavor vectors for an endpoint are molecule-aligned. Seed variants
-        (``<flavor>__s<seed>``) of one flavor are averaged into a single per-flavor vector, so
-        the stacker sees one feature per flavor rather than one per (flavor, seed).
+        ``{(dataset, recipe, endpoint): {seed: {"y": ndarray, "preds": {flavor: ndarray}}}}``.
+        At one finetune seed every flavor shares the same train/val/test split (only the
+        foundation differs), so that seed's per-flavor vectors are molecule-aligned and
+        stackable. Across seeds the split is reseeded (the multi-task endpoints resample the
+        test set per seed), so seeds are kept in separate buckets here and combined only at the
+        metric level by ``run``, never by averaging raw predictions of differing length.
+        Non-seeded labels (e.g. ``chemeleon_stock``) land under seed ``None``.
     """
-    # accumulate seed replicates per base flavor, then average them below
+    # accumulate one bucket per (endpoint, seed); flavors within a bucket share the split
     store: dict[tuple[str, str, str], dict] = {}
     for flavor in flavors:
-        base = parse_seed_variant(flavor)[0]
+        base, seed = parse_seed_variant(flavor)
         # map a protocol-namespaced label (lr_<mode>__<flavor>) back to the bare flavor key so
         # the registry filter in _evaluate_endpoint matches it as it does the frozen sweep
         if strip_prefix and base.startswith(strip_prefix):
@@ -122,15 +124,9 @@ def collect_predictions(
                 if mask.sum() == 0:
                     continue
                 key = (dataset_of(result_dir.name), result_dir.name, col)
-                entry = store.setdefault(key, {"y": y_test[col].to_numpy()[mask], "preds": {}})
-                entry["preds"].setdefault(base, []).append(preds[mask, i])
-
-    # collapse each base flavor's seed replicates to their molecule-wise mean prediction
-    for entry in store.values():
-        entry["preds"] = {
-            base: np.mean(np.stack(arrays, axis=0), axis=0)
-            for base, arrays in entry["preds"].items()
-        }
+                by_seed = store.setdefault(key, {})
+                entry = by_seed.setdefault(seed, {"y": y_test[col].to_numpy()[mask], "preds": {}})
+                entry["preds"][base] = preds[mask, i]
     return store
 
 
@@ -179,6 +175,36 @@ def _evaluate_endpoint(entry: dict, estimator: str, n_splits: int, seed: int) ->
     }
 
 
+def _aggregate_seeds(seed_results: list[dict], estimator: str) -> dict:
+    """Average an endpoint's per-seed stacker scores into one row with seed error bars.
+
+    Each element of ``seed_results`` is one finetune seed's ``_evaluate_endpoint`` output. The
+    seeds reuse different random test splits (the multi-task endpoints resample per seed), so
+    their raw predictions are not comparable row-for-row; combining them at the metric level (a
+    mean with a standard deviation) is what makes the stacker's score a seed average with error
+    bars, like every other report-card cell. The single-flavor baseline is averaged the same
+    way, and the representative winner is the flavor chosen in the most seeds.
+    """
+    meta = np.array([r["meta_r2"] for r in seed_results], dtype=float)
+    delta = np.array([r["delta_r2"] for r in seed_results], dtype=float)
+    winners = [r["best_single_flavor"] for r in seed_results]
+    # sample std across seeds; a single seed has no spread, so report 0.0 rather than nan
+    single_seed = len(seed_results) < 2
+    return {
+        "n_seeds": len(seed_results),
+        "n_flavors": max(r["n_flavors"] for r in seed_results),
+        "n_test": int(round(float(np.mean([r["n_test"] for r in seed_results])))),
+        "estimator": estimator,
+        "meta_r2": float(meta.mean()),
+        "meta_r2_std": 0.0 if single_seed else float(meta.std(ddof=1)),
+        "meta_rmse": float(np.mean([r["meta_rmse"] for r in seed_results])),
+        "best_single_flavor": max(set(winners), key=winners.count),
+        "best_single_r2": float(np.mean([r["best_single_r2"] for r in seed_results])),
+        "delta_r2": float(delta.mean()),
+        "delta_r2_std": 0.0 if single_seed else float(delta.std(ddof=1)),
+    }
+
+
 def run(
     results_root: Path,
     flavors: list[str],
@@ -188,15 +214,28 @@ def run(
     *,
     strip_prefix: str = "",
 ) -> pd.DataFrame:
-    """Evaluate the stacker against the best single flavor for every endpoint."""
+    """Score the stacker per finetune seed and average across seeds, for every endpoint."""
     store = collect_predictions(results_root, flavors, strip_prefix=strip_prefix)
     rows: list[dict] = []
-    for (dataset, recipe, endpoint), entry in store.items():
-        result = _evaluate_endpoint(entry, estimator, n_splits, seed)
-        if result is None:
+    for (dataset, recipe, endpoint), by_seed in store.items():
+        # evaluate each seed on its own aligned split, then average the scores across seeds;
+        # None sorts last so a stray non-seeded bucket never orders against an int seed
+        seed_results = []
+        for seed_key in sorted(by_seed, key=lambda s: (s is None, s)):
+            result = _evaluate_endpoint(by_seed[seed_key], estimator, n_splits, seed)
+            if result is not None:
+                seed_results.append(result)
+        if not seed_results:
             logger.info("skipping %s:%s (need >=2 flavors and enough rows)", recipe, endpoint)
             continue
-        rows.append({"dataset": dataset, "recipe": recipe, "endpoint": endpoint, **result})
+        rows.append(
+            {
+                "dataset": dataset,
+                "recipe": recipe,
+                "endpoint": endpoint,
+                **_aggregate_seeds(seed_results, estimator),
+            }
+        )
     return pd.DataFrame(rows)
 
 
@@ -206,8 +245,13 @@ def plot_delta(frame: pd.DataFrame, estimator: str, out_png: Path) -> None:
     labels = ordered["dataset"] + " · " + ordered["endpoint"]
     colors = ["tab:green" if d > 0 else "tab:red" for d in ordered["delta_r2"]]
 
+    # seed spread as x error bars when the CSV carries it (single-seed rows report 0.0)
+    xerr = ordered["delta_r2_std"] if "delta_r2_std" in ordered else None
     fig, ax = plt.subplots(figsize=(8, 0.4 * len(ordered) + 2.0), constrained_layout=True)
-    ax.barh(np.arange(len(ordered)), ordered["delta_r2"], color=colors)
+    ax.barh(
+        np.arange(len(ordered)), ordered["delta_r2"], color=colors,
+        xerr=xerr, error_kw={"elinewidth": 0.8, "ecolor": "0.3"},
+    )
     ax.axvline(0.0, color="black", linewidth=0.8)
     ax.set_yticks(np.arange(len(ordered)))
     ax.set_yticklabels(labels, fontsize=8)
@@ -250,9 +294,11 @@ def main() -> None:
     plot_delta(frame, args.estimator, PLOTS_DIR / f"meta_model_{args.estimator}{suffix}.png")
 
     wins = int((frame["delta_r2"] > 0).sum())
+    mean_seeds = float(frame["n_seeds"].mean()) if "n_seeds" in frame else 1.0
     logger.info(
-        "%s: meta beats best single on %d/%d endpoints; mean delta R2 = %+.4f; wrote %s",
-        args.estimator, wins, len(frame), float(frame["delta_r2"].mean()), out_csv,
+        "%s: meta beats best single on %d/%d endpoints (scores averaged over ~%.1f seeds); "
+        "mean delta R2 = %+.4f; wrote %s",
+        args.estimator, wins, len(frame), mean_seeds, float(frame["delta_r2"].mean()), out_csv,
     )
 
 
