@@ -416,6 +416,26 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   `meta_model.py` three times, once against each protocol's mode-scoped prediction dirs, and
   write three distinct output CSVs (the default `meta_model_<estimator>.csv` name collides
   across runs); feed each into the matching protocol's two report cards.
+  **Meta-model reworked to score per seed, then average (bug fix, 2026-07-10).** The 5-seed
+  frozen analyze (job 749349) completed its predictions and report card but the meta-model stage
+  crashed at `meta_model.py` `collect_predictions` with `ValueError: all input arrays must have
+  the same shape`. Cause: it averaged each flavor's per-seed predictions with `np.stack`,
+  assuming every finetune seed shares one test split; that holds for the predefined-split
+  endpoints but not for the multi-task, seed-randomized-split datasets (`chembl_clint_mt`,
+  `cyp_mt`), whose test set is resampled per finetune seed, so the seeds' prediction vectors
+  differ in length (105 flavor/endpoint/column combinations). Fixed by grouping predictions by
+  seed (within a seed every flavor shares the split, so the vectors align), scoring the stacker
+  independently per seed, and averaging its R-squared across seeds with a standard deviation, so
+  the meta-model column carries the same seed error bars every report-card cell does
+  (`meta_r2_std`/`delta_r2_std`/`n_seeds` added to the CSV, x error bars added to the delta
+  plot). `_evaluate_endpoint` and the report card's `meta_r2`/`meta_rmse` columns are unchanged,
+  so `report_card.py` reads it as before. Regenerated on the real 5-seed data: LGBM beats the
+  best single flavor on 21 of 32 endpoints (mean delta R-squared +0.082, averaged over 5 seeds);
+  `results/meta_model_lgbm.csv` and `plots/report_card_r2.png`/`.csv` re-rendered so the live
+  report card's meta-model column reflects the 5-seed numbers, not the stale single-seed CSV
+  `report_card` had used (it renders before `meta_model` in `analyze.sbatch`). Regression test
+  added (`test_run_handles_seeds_with_different_test_lengths`). The per-protocol meta-models
+  above inherit this per-seed-then-average behavior.
 - [ ] 10. (GATED on 8, and only if any flavor beats baseline) Scale the flavors that show
   utility up to the full 1M-molecule corpus to produce the final foundation-model artifacts.
   **Folded into Milestones 6-9's full-corpus rerun (Milestone 2's supersede note):** rather
