@@ -36,20 +36,12 @@ frame.to_csv(out, index=False)
 print(f"wrote {out} ({len(frame)} rows, {frame['flavor'].nunique()} flavors)")
 PY
 
-# render the 250K report card: the 10 archived flavors, plus the stock-CheMeleon baseline
-# and the archived meta-model as labeled reference columns. color on a fixed [0, 1] r2 scale
-# (--color-mode absolute) rather than row-relative, so a cell's color reads as the actual r2
-python -m sarizard.analysis.report_card --metric r2 --color-mode absolute \
+# render the two report cards for the 250K archive (the 10 archived flavors plus the
+# stock-CheMeleon baseline) into their own subdir so the fixed basenames do not clobber the
+# live full-corpus cards: an R² card (red=0, green=1, baseline as the first column) and a
+# MAE %-change-vs-baseline card
+python -m sarizard.analysis.report_card \
     --metrics-csv archive/flavor_sweep_250k/results/metrics_with_references.csv \
-    --meta-model-csv archive/flavor_sweep_250k/results/meta_model_lgbm.csv \
-    --out plots/report_card_250k_r2.png
+    --out-dir plots/report_card_250k
 
-# also render a baseline-relative variant: a red-blue diverging map centered (white) on each
-# row's stock-CheMeleon baseline r2, on one shared min-to-max gap scale, so a cell's color
-# reads as how far that (flavor, endpoint) beats or trails the baseline, comparably across rows
-python -m sarizard.analysis.report_card --metric r2 --color-mode baseline-diverging \
-    --metrics-csv archive/flavor_sweep_250k/results/metrics_with_references.csv \
-    --meta-model-csv archive/flavor_sweep_250k/results/meta_model_lgbm.csv \
-    --out plots/report_card_250k_r2_vs_baseline.png
-
-echo "wrote plots/report_card_250k_r2.png, plots/report_card_250k_r2_vs_baseline.png, and their CSVs"
+echo "wrote plots/report_card_250k/report_card_r2.png and report_card_mae_delta.png (+ CSVs)"

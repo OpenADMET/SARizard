@@ -3,9 +3,8 @@
 Two cards are rendered per setup from the tidy metrics CSV written by ``analysis.evaluate``:
 
 - an R-squared card colored on a fixed red-to-green scale (red = 0, green = 1), with the
-  stock-CheMeleon baseline as the first column and the LGBM meta-model as the last column,
-  each separated from the flavor block by a blank spacer, and a final AVERAGE row that means
-  each column across all endpoints;
+  stock-CheMeleon baseline as the first column (separated from the flavor block by a blank
+  spacer) and a final AVERAGE row that means each column across all endpoints;
 - a delta card whose cells are the percentage change in MAE relative to the stock-CheMeleon
   baseline (green where a flavor's MAE beats the baseline, red where it is worse, white at no
   change), flavor columns only, with the same AVERAGE row.
@@ -43,10 +42,8 @@ logger = logging.getLogger(__name__)
 # reference-column labels and the blank labels used for the spacer column(s) and spacer row;
 # the spacers carry no data (painted white) and their tick labels are blanked at render
 BASELINE_LABEL = "chemeleon\nbaseline"
-META_LABEL = "meta-model\n(LGBM)"
 AVERAGE_LABEL = "AVERAGE"
 _SPACER_LEFT = " "  # figure space: a unique, blank column label before the flavor block
-_SPACER_RIGHT = "  "  # after the flavor block
 _SPACER_ROW = " "
 
 # green-white-red diverging map for the MAE-delta card: green = MAE below baseline (better),
@@ -166,34 +163,6 @@ def build_reference_series(frame: pd.DataFrame, flavor: str, metric: str) -> pd.
     return pd.Series(subset[metric].to_numpy(), index=row).groupby(level=0).mean()
 
 
-def meta_model_series(meta_model_csv: Path, metric: str) -> pd.Series:
-    """Read a ``meta_model.py`` output CSV into a ``"<dataset> · <endpoint>"``-indexed Series.
-
-    Parameters
-    ----------
-    meta_model_csv : pathlib.Path
-        Output of ``sarizard.analysis.meta_model`` (columns include dataset, endpoint,
-        meta_r2, meta_rmse).
-    metric : str
-        Report-card metric being displayed. The meta-model reports r2 and rmse (see
-        ``meta_model._evaluate_endpoint``); any other metric returns an empty Series.
-
-    Returns
-    -------
-    pandas.Series
-        Indexed like ``build_matrix``'s rows; empty if the metric isn't one the meta-model
-        reports, or the CSV doesn't exist.
-    """
-    column = {"r2": "meta_r2", "rmse": "meta_rmse"}.get(metric)
-    if column is None or not meta_model_csv.exists():
-        return pd.Series(dtype=float)
-    frame = pd.read_csv(meta_model_csv)
-    row = frame["dataset"] + " · " + frame["endpoint"]
-    # collapse duplicate dataset+endpoint labels (same endpoint under single-task and
-    # multi-task recipes) by mean, matching build_matrix, so the index stays unique
-    return pd.Series(frame[column].to_numpy(), index=row).groupby(level=0).mean()
-
-
 def mae_delta_matrix(mae_matrix: pd.DataFrame, baseline_mae: pd.Series) -> pd.DataFrame:
     """Percentage change in MAE relative to the baseline, per (endpoint, flavor).
 
@@ -221,24 +190,23 @@ def mae_delta_matrix(mae_matrix: pd.DataFrame, baseline_mae: pd.Series) -> pd.Da
 
 
 def assemble_r2_card(
-    flavor_matrix: pd.DataFrame, baseline: pd.Series, meta: pd.Series
+    flavor_matrix: pd.DataFrame, baseline: pd.Series
 ) -> tuple[pd.DataFrame, list[int], list[int]]:
-    """Order the R-squared card columns: baseline first, flavors, meta-model last, with spacers.
+    """Order the R-squared card columns: baseline first (behind a spacer), then the flavors.
 
     Parameters
     ----------
     flavor_matrix : pandas.DataFrame
         Per-flavor R-squared matrix from ``build_matrix``.
     baseline : pandas.Series
-        Stock-CheMeleon baseline per endpoint; a non-empty series becomes the first column.
-    meta : pandas.Series
-        Meta-model per endpoint; a non-empty series becomes the last column.
+        Stock-CheMeleon baseline per endpoint; a non-empty series becomes the first column,
+        separated from the flavor block by a blank spacer column.
 
     Returns
     -------
     tuple of (pandas.DataFrame, list of int, list of int)
         The assembled matrix, the column indices of the blank spacer columns, and the column
-        indices of the reference columns (baseline, meta-model) so the caller can bold them.
+        indices of the reference columns (the baseline) so the caller can bold them.
     """
     index = flavor_matrix.index
     # (name, series, is_reference, is_spacer) in final left-to-right order
@@ -248,9 +216,6 @@ def assemble_r2_card(
         entries.append((_SPACER_LEFT, pd.Series(np.nan, index=index), False, True))
     for col in flavor_matrix.columns:
         entries.append((col, flavor_matrix[col], False, False))
-    if not meta.empty:
-        entries.append((_SPACER_RIGHT, pd.Series(np.nan, index=index), False, True))
-        entries.append((META_LABEL, meta.reindex(index), True, False))
 
     matrix = pd.concat([series.rename(name) for name, series, _, _ in entries], axis=1)
     spacer_cols = [i for i, (_, _, _, is_spacer) in enumerate(entries) if is_spacer]
@@ -416,17 +381,12 @@ def plot_card(
 
 
 def _render_r2_card(
-    matrix_frame: pd.DataFrame,
-    frame: pd.DataFrame,
-    baseline_flavor: str,
-    meta_csv: Path,
-    out_png: Path,
+    matrix_frame: pd.DataFrame, frame: pd.DataFrame, baseline_flavor: str, out_png: Path
 ) -> None:
-    """Assemble and render the R-squared card (red = 0, green = 1) with baseline and meta refs."""
+    """Assemble and render the R-squared card (red = 0, green = 1) with the baseline column."""
     flavor_r2 = build_matrix(matrix_frame, "r2")
     baseline = build_reference_series(frame, baseline_flavor, "r2")
-    meta = meta_model_series(meta_csv, "r2")
-    matrix, spacer_cols, ref_cols = assemble_r2_card(flavor_r2, baseline, meta)
+    matrix, spacer_cols, ref_cols = assemble_r2_card(flavor_r2, baseline)
     groups = source_groups(flavor_r2.index)
     matrix, average_row = append_average_row(matrix)
     plot_card(
@@ -455,17 +415,19 @@ def _render_mae_delta_card(
 
     finite = matrix.to_numpy(dtype=float)
     finite = finite[np.isfinite(finite)]
-    lo = float(finite.min()) if finite.size else -1.0
-    hi = float(finite.max()) if finite.size else 1.0
-    # TwoSlopeNorm needs vmin < 0 < vmax; nudge if every cell sits on one side of the baseline
-    norm = TwoSlopeNorm(vcenter=0.0, vmin=min(lo, -1e-6), vmax=max(hi, 1e-6))
+    # symmetric scale: the same magnitude in both directions, set to the largest absolute delta
+    # in the data, so 0% (the baseline) sits at the exact center (white) and green/red are
+    # directly comparable
+    extent = max(float(np.abs(finite).max()) if finite.size else 1.0, 1e-6)
+    norm = TwoSlopeNorm(vcenter=0.0, vmin=-extent, vmax=extent)
     plot_card(
         matrix, out_png, out_png.with_suffix(".csv"),
         cmap=_DELTA_CMAP, norm=norm,
         annotate=lambda v: f"{v:+.0f}%",
         title="Report card: MAE % change vs chemeleon baseline "
         "(green = lower MAE / better, red = worse)",
-        cbar_ticks=[lo, 0.0, hi], cbar_labels=[f"{lo:+.0f}%", "0% (baseline)", f"{hi:+.0f}%"],
+        cbar_ticks=[-extent, 0.0, extent],
+        cbar_labels=[f"-{extent:.0f}%", "0% (baseline)", f"+{extent:.0f}%"],
         spacer_cols=[], ref_cols=[], groups=groups, average_row=average_row,
     )
 
@@ -482,12 +444,6 @@ def main() -> None:
         help="flavor label for the stock-CheMeleon reference / MAE-delta baseline (see "
         "slurm/run_stock_baseline.sh); the R² baseline column and the whole MAE-delta card are "
         "skipped if it is absent from --metrics-csv",
-    )
-    parser.add_argument(
-        "--meta-model-csv", type=Path, default=None,
-        help="meta_model.py output CSV for the R² meta-model column "
-        "(default results/meta_model_lgbm.csv next to --metrics-csv's results dir); "
-        "the column is skipped if it doesn't exist",
     )
     parser.add_argument(
         "--lr-mode", choices=("reduced", "unlocked"), default=None,
@@ -515,9 +471,8 @@ def main() -> None:
             )
 
     suffix = f"_{args.lr_mode}" if args.lr_mode else ""
-    meta_csv = args.meta_model_csv or (args.metrics_csv.parent / "meta_model_lgbm.csv")
     _render_r2_card(
-        matrix_frame, frame, args.baseline_flavor, meta_csv,
+        matrix_frame, frame, args.baseline_flavor,
         args.out_dir / f"report_card_r2{suffix}.png",
     )
     _render_mae_delta_card(

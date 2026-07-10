@@ -7,7 +7,6 @@ import pytest
 from sarizard.analysis.report_card import (
     AVERAGE_LABEL,
     BASELINE_LABEL,
-    META_LABEL,
     append_average_row,
     assemble_r2_card,
     build_matrix,
@@ -15,7 +14,6 @@ from sarizard.analysis.report_card import (
     collapse_seed_variants,
     filter_lr_mode,
     mae_delta_matrix,
-    meta_model_series,
     source_groups,
 )
 
@@ -100,28 +98,24 @@ def test_mae_delta_is_nan_when_baseline_missing():
     assert np.isnan(delta.loc["cyp · cyp3a4", "osmordred"])
 
 
-def test_assemble_r2_card_orders_baseline_first_and_meta_last(tidy_metrics):
+def test_assemble_r2_card_orders_baseline_first_then_flavors(tidy_metrics):
     flavors = build_matrix(tidy_metrics, "r2")
     baseline = pd.Series({"cyp · cyp3a4": 0.4, "herg · herg": 0.2})
-    meta = pd.Series({"cyp · cyp3a4": 0.8, "herg · herg": 0.9})
 
-    matrix, spacer_cols, ref_cols = assemble_r2_card(flavors, baseline, meta)
+    matrix, spacer_cols, ref_cols = assemble_r2_card(flavors, baseline)
 
-    # baseline is the first column, meta the last, each behind a spacer bounding the flavor block
+    # baseline is the first column, behind one spacer that bounds the flavor block; no meta column
     assert matrix.columns[0] == BASELINE_LABEL
-    assert matrix.columns[-1] == META_LABEL
-    assert list(matrix.columns[2:4]) == ["osmordred", "ecfp"]
-    assert ref_cols == [0, len(matrix.columns) - 1]
-    assert len(spacer_cols) == 2
+    assert list(matrix.columns[2:]) == ["osmordred", "ecfp"]
+    assert ref_cols == [0]
+    assert spacer_cols == [1]
     assert matrix.loc["herg · herg", BASELINE_LABEL] == 0.2
 
 
-def test_assemble_r2_card_without_references_is_flavors_only(tidy_metrics):
+def test_assemble_r2_card_without_baseline_is_flavors_only(tidy_metrics):
     flavors = build_matrix(tidy_metrics, "r2")
 
-    matrix, spacer_cols, ref_cols = assemble_r2_card(
-        flavors, pd.Series(dtype=float), pd.Series(dtype=float)
-    )
+    matrix, spacer_cols, ref_cols = assemble_r2_card(flavors, pd.Series(dtype=float))
 
     assert list(matrix.columns) == ["osmordred", "ecfp"]
     assert spacer_cols == []
@@ -149,23 +143,6 @@ def test_source_groups_are_contiguous_runs_by_dataset():
     groups = source_groups(index)
 
     assert groups == [(0, 2, "cyp"), (2, 3, "herg"), (3, 4, "pxr")]
-
-
-def test_meta_model_series_reads_r2_column(tmp_path):
-    csv = tmp_path / "meta_model_lgbm.csv"
-    pd.DataFrame(
-        [{"dataset": "herg", "endpoint": "herg", "meta_r2": 0.8, "meta_rmse": 0.2}]
-    ).to_csv(csv, index=False)
-
-    series = meta_model_series(csv, "r2")
-
-    assert series.to_dict() == {"herg · herg": 0.8}
-
-
-def test_meta_model_series_empty_when_csv_missing(tmp_path):
-    series = meta_model_series(tmp_path / "missing.csv", "r2")
-
-    assert series.empty
 
 
 def test_build_reference_series_extracts_one_flavor(tidy_metrics):
