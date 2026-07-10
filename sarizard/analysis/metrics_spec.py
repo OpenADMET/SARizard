@@ -6,11 +6,25 @@ light ``report_card`` step import the same definitions without dragging the trai
 
 from __future__ import annotations
 
-# dataset groups in report-card row order; longest-prefix first so "asap_potency" matches
-# before "asap" and "cyp1a2" before "cyp" when parsing a recipe name
-DATASETS = (
-    "asap_potency", "asap", "biogen", "chembl", "cyp1a2", "cyp", "expansionrx", "herg", "pxr",
+# ordered (recipe-prefix -> dataset) rules, most-specific prefix first so "asap_potency" matches
+# before "asap" and the single-task cyp1a2 recipe (cyp1a2_st) matches before the multi-task cyp
+# recipe (cyp_mt). Both CYP recipes map to the one openadmet_cyp group: cyp1a2 is scored both by
+# a dedicated single-task model and as one head of the multi-task model, and both belong to the
+# same openadmet CYP source
+_DATASET_RULES = (
+    ("asap_potency", "asap_potency"),
+    ("asap", "asap"),
+    ("biogen", "biogen"),
+    ("chembl", "chembl"),
+    ("cyp1a2", "openadmet_cyp"),
+    ("cyp", "openadmet_cyp"),
+    ("expansionrx", "expansionrx"),
+    ("herg", "herg"),
+    ("pxr", "pxr"),
 )
+
+# dataset groups in report-card row order (the rule labels, de-duplicated, first appearance kept)
+DATASETS = tuple(dict.fromkeys(label for _, label in _DATASET_RULES))
 
 # metric columns produced by evaluate.py, in output order
 METRIC_COLUMNS = ("r2", "rmse", "mae", "mse", "spearman", "kendall", "rae")
@@ -31,8 +45,8 @@ METRIC_LABELS = {
 
 
 def dataset_of(recipe: str) -> str:
-    """Return the dataset group a recipe name belongs to (longest matching prefix)."""
-    for dataset in DATASETS:
-        if recipe == dataset or recipe.startswith(f"{dataset}_"):
-            return dataset
+    """Return the dataset group a recipe name belongs to (most-specific prefix rule wins)."""
+    for prefix, label in _DATASET_RULES:
+        if recipe == prefix or recipe.startswith(f"{prefix}_"):
+            return label
     return recipe.split("_")[0]
