@@ -216,9 +216,11 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   which still included the dropped `ml_qm` and, being globbed by `lr_recipe_list`, would have
   swept unlocked too and cascade-cancelled analyze on the all-NaN `ml_qm` foundation); the
   regenerated reduced recipes are the 15-flavor registry and point at the full-corpus
-  `foundations/<flavor>__s42_mp.pt`. Unlocked still to submit the same way when reduced looks
-  healthy; the per-protocol stock baseline / meta-model and the six report cards (Milestone 8)
-  remain gated behind both non-frozen protocols.
+  `foundations/<flavor>__s42_mp.pt`. Unlocked was to follow the same way once reduced looked
+  healthy, but single-seed unlocked was dropped: all finetuning moved to 5-seed only (decision
+  2026-07-10, recorded below and in Future experiments), so the per-protocol stock baseline /
+  meta-model and the six report cards (Milestone 8) are gated behind the 5-seed non-frozen legs,
+  not a single-seed s42 unlocked run.
   **Reduced finetune hit the bad-node fault; reran the 10 casualties (2026-07-09).** 605427
   finished 350/360; the 10 failures (minimol, osmordred, osmordred_pca90/95, surrogate_adme
   endpoints) all died on `iscn008` with `CUDA driver initialization failed`, the same bad GPU
@@ -236,8 +238,12 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   `plots/lr_ranking_r2.csv`: reduced mean R-squared 0.324 vs. frozen 0.289 (+0.035, reduced wins
   202 of 285 endpoint comparisons), matching the standing "reduced is the best protocol" pattern.
   Reduced per-flavor leaders: minimol 0.380, surrogate_adme 0.377, rdkit2d 0.371, osmordred 0.360.
-  Unlocked still to submit the same way; the Milestone-8 per-protocol stock baseline / meta-model
-  and six report cards remain gated behind unlocked.
+  **Single-seed unlocked dropped from scope (decision, 2026-07-10): all finetuning is now
+  5-seed only.** The single-seed s42 unlocked protocol will not be submitted; unlocked, like every
+  protocol, is covered by the 5-seed finetune-only redo (Future experiments) instead, so each
+  report-card cell carries error bars rather than a lone s42 point. The single-seed frozen and
+  reduced results already on disk stand as historical; the Milestone-8 per-protocol stock baseline
+  / meta-model and six report cards are now gated behind the 5-seed non-frozen legs.
 - [ ] 7. Add the learned-model flavors: minimol, surrogate_adme. Each runs its
   source model over the shared corpus in an isolated environment and caches the target.
   **`ml_qm` dropped from scope (decision, 2026-07-08): we are not running it.** Its qmdesc
@@ -629,6 +635,12 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   unlocked"`, `FLAVOR_SEEDS` matching the sweep) off the same foundations; the LR path reuses
   the pretrained foundations, so submit it only after every foundation the sweep needs is on
   disk. Do not treat "finetune" as frozen-only.
+- **All finetuning is 5-seed (decision, 2026-07-10).** Every finetune submission runs seeds 1-5
+  as finetune-only replicates off the fixed s42 foundations (`FOUNDATION_SEED=42
+  FLAVOR_SEEDS="1 2 3 4 5"`), so every report-card cell carries error bars. Do not submit
+  single-seed (s42-only) finetune runs; the earlier single-seed s42 frozen and reduced results
+  stand as historical but are not extended with a single-seed unlocked run. Unlocked, and any
+  further protocol, is covered only by the 5-seed legs.
 - Pretraining regime constants (`sarizard/pretraining/config.py`) are reconciled against the
   sibling `../foundation-models/pretraining` implementation as of the training-collapse fix
   (`PATIENCE`, `FNN_HIDDEN_SIZE`, `WARMUP_EPOCHS`, `DROPOUT_FRACTION`, `GRADIENT_CLIP_VAL`,
