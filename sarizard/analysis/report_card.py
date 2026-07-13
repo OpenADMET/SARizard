@@ -6,12 +6,15 @@ Two cards are rendered per setup from the tidy metrics CSV written by ``analysis
   stock-CheMeleon baseline as the first column (separated from the flavor block by a blank
   spacer) and a final AVERAGE row that means each column across all endpoints;
 - a delta card whose cells are the percentage change in MAE relative to the stock-CheMeleon
-  baseline (green where a flavor's MAE beats the baseline, red where it is worse, white at no
-  change), flavor columns only, with the same AVERAGE row.
+  baseline (green where a flavor's MAE beats the baseline, red where it is worse), flavor columns
+  only, with the same AVERAGE row. A cell is painted white unless the flavor's per-seed MAE
+  differs significantly from the baseline's (two-sample Welch t-test, p at or below
+  ``SIGNIFICANCE_ALPHA``), so only differences the seed spread supports carry color.
 
-Every endpoint cell (flavors and the multi-seed baseline column) carries a ``±`` seed standard
-deviation under its value; the delta card propagates the flavor and baseline seed spreads into
-its error bar. The AVERAGE row shows a bare mean, since its spread is over endpoints, not seeds.
+The R² card annotates every endpoint cell (flavors and the multi-seed baseline column) with a
+``±`` seed standard deviation under its value; the delta card annotates each cell with its change
+and the test p-value. The AVERAGE row shows a bare mean, since its spread is over endpoints, not
+seeds.
 
 Both cards group the endpoint rows by their source dataset (asap, chembl, expansionrx, ...)
 with a bold black separator line and a bold source label per group.
@@ -36,12 +39,18 @@ import matplotlib.pyplot as plt  # noqa: E402 - set backend before importing pyp
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm  # noqa: E402
+from scipy.stats import ttest_ind  # noqa: E402
 
 from sarizard.analysis.metrics_spec import DATASETS, dataset_of  # noqa: E402
 from sarizard.analysis.paths import METRICS_CSV, PLOTS_DIR, parse_seed_variant  # noqa: E402
 from sarizard.pretraining.flavors import flavor_names  # noqa: E402
 
 logger = logging.getLogger(__name__)
+
+# significance threshold for the MAE-delta card: a flavor whose per-seed MAE does not differ from
+# the baseline's at this level (two-sample Welch t-test, p above the threshold) is painted white,
+# so only differences the seed spread supports carry color
+SIGNIFICANCE_ALPHA = 0.05
 
 # reference-column labels and the blank labels used for the spacer column(s) and spacer row;
 # the spacers carry no data (painted white) and their tick labels are blanked at render
@@ -284,6 +293,59 @@ def mae_delta_std(
     return sigma.where(np.isfinite(sigma))
 
 
+def _per_seed_values(frame: pd.DataFrame, metric: str) -> dict[tuple[str, str], np.ndarray]:
+    """Map ``(row, flavor)`` to the array of per-seed ``metric`` values behind that cell.
+
+    After ``collapse_seed_variants`` the seed replicates share a flavor label but stay separate
+    rows, so grouping by the displayed row identity and flavor recovers each cell's seed sample.
+    """
+    grouped = frame.groupby(["row", "flavor"])[metric].apply(lambda s: s.to_numpy(dtype=float))
+    return dict(grouped)
+
+
+def mae_significance_pvalues(
+    matrix_frame: pd.DataFrame, frame: pd.DataFrame, baseline_flavor: str, mae_matrix: pd.DataFrame
+) -> pd.DataFrame:
+    """Two-sample p-value per (endpoint, flavor) for the flavor's MAE differing from baseline.
+
+    Each cell runs a two-sample Welch t-test (unequal variance) between the flavor's per-seed MAE
+    sample and the stock baseline's per-seed MAE sample for that endpoint. The seed sets are not
+    paired (the baseline and flavor seeds only partly overlap), so an unpaired test is used. A cell
+    is NaN where either side has fewer than two seeds or zero variance, which the card treats as
+    not significant (painted white).
+
+    Parameters
+    ----------
+    matrix_frame : pandas.DataFrame
+        Prepared, seed-collapsed metrics for the flavor columns (carries ``row``, ``flavor``,
+        ``mae``); the same frame ``build_matrix`` pivots.
+    frame : pandas.DataFrame
+        Prepared, seed-collapsed metrics that include the baseline flavor's rows.
+    baseline_flavor : str
+        The baseline flavor label (e.g. ``chemeleon_stock``).
+    mae_matrix : pandas.DataFrame
+        The per-flavor MAE matrix whose index and columns the returned p-values align to.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Same shape as ``mae_matrix``; each cell is the test p-value, NaN where undefined.
+    """
+    flavor_samples = _per_seed_values(matrix_frame, "mae")
+    baseline_samples = _per_seed_values(frame[frame["flavor"] == baseline_flavor], "mae")
+    pvalues = pd.DataFrame(np.nan, index=mae_matrix.index, columns=mae_matrix.columns)
+    for row in mae_matrix.index:
+        base = baseline_samples.get((row, baseline_flavor))
+        if base is None or np.size(base) < 2 or np.ptp(base) == 0:
+            continue
+        for flavor in mae_matrix.columns:
+            sample = flavor_samples.get((row, flavor))
+            if sample is None or np.size(sample) < 2 or np.ptp(sample) == 0:
+                continue
+            pvalues.loc[row, flavor] = float(ttest_ind(sample, base, equal_var=False).pvalue)
+    return pvalues
+
+
 def assemble_r2_card(
     flavor_matrix: pd.DataFrame, baseline: pd.Series
 ) -> tuple[pd.DataFrame, list[int], list[int]]:
@@ -377,7 +439,8 @@ def plot_card(
     ref_cols: list[int],
     groups: list[tuple[int, int, str]],
     average_row: int,
-    std: pd.DataFrame | None = None,
+    aux: pd.DataFrame | None = None,
+    color_values: pd.DataFrame | None = None,
 ) -> None:
     """Render one report-card heatmap and write its underlying matrix CSV.
 
@@ -385,7 +448,8 @@ def plot_card(
     ----------
     matrix : pandas.DataFrame
         The fully assembled card (endpoint rows, then a spacer row and the AVERAGE row; columns
-        may include blank spacer columns and reference columns).
+        may include blank spacer columns and reference columns). Drives the cell annotations, and
+        the cell colors unless ``color_values`` is given.
     out_png, out_csv : pathlib.Path
         Image and matrix-CSV output paths.
     cmap : matplotlib colormap
@@ -395,8 +459,9 @@ def plot_card(
     vmin, vmax : float, optional
         Linear color bounds used when ``norm`` is None.
     annotate : callable
-        Maps a finite cell value and its standard deviation to an annotation string,
-        ``annotate(value, std)``; ``std`` is NaN where no seed spread is defined.
+        Maps a finite cell value and its auxiliary value to an annotation string,
+        ``annotate(value, aux)``; ``aux`` is NaN where none is defined. The auxiliary value is the
+        seed standard deviation on the R² card and the significance p-value on the MAE-delta card.
     title : str
         Figure title.
     cbar_ticks, cbar_labels : list
@@ -410,16 +475,28 @@ def plot_card(
         boundary line and a bold source label.
     average_row : int
         Row index of the AVERAGE row, separated from the endpoint block by a bold line.
-    std : pandas.DataFrame, optional
-        Per-cell standard deviation aligned to ``matrix`` (same index and columns); passed as the
+    aux : pandas.DataFrame, optional
+        Per-cell auxiliary value aligned to ``matrix`` (same index and columns); passed as the
         second argument to ``annotate``. When omitted, ``annotate`` receives NaN for every cell.
+    color_values : pandas.DataFrame, optional
+        Per-cell value driving the color, aligned to ``matrix``; used when the color should differ
+        from the annotated value (e.g. the MAE-delta card paints a non-significant cell white by
+        setting its color value to the norm center while still annotating the real change). When
+        omitted, the annotated ``matrix`` drives the color.
     """
     values = matrix.to_numpy(dtype=float)
-    # align the std matrix to the value matrix so the annotation loop indexes them in lockstep
-    std_values = (
-        std.reindex(index=matrix.index, columns=matrix.columns).to_numpy(dtype=float)
-        if std is not None
+    # align the auxiliary matrix to the value matrix so the annotation loop indexes them in lockstep
+    aux_values = (
+        aux.reindex(index=matrix.index, columns=matrix.columns).to_numpy(dtype=float)
+        if aux is not None
         else np.full_like(values, np.nan)
+    )
+    # the color layer defaults to the annotated values, but a card may drive color from a separate
+    # matrix (e.g. significance-gated deltas) while still annotating the true value
+    color_layer = (
+        color_values.reindex(index=matrix.index, columns=matrix.columns).to_numpy(dtype=float)
+        if color_values is not None
+        else values
     )
     n_rows, n_cols = values.shape
     cmap = cmap.copy()
@@ -429,7 +506,7 @@ def plot_card(
         figsize=(1.15 * n_cols + 3.5, 0.42 * n_rows + 2.5), constrained_layout=True
     )
     imshow_kwargs = {"norm": norm} if norm is not None else {"vmin": vmin, "vmax": vmax}
-    im = ax.imshow(np.ma.masked_invalid(values), aspect="auto", cmap=cmap, **imshow_kwargs)
+    im = ax.imshow(np.ma.masked_invalid(color_layer), aspect="auto", cmap=cmap, **imshow_kwargs)
 
     # paint the spacer columns and the spacer row white (distinct from missing-data lightgrey)
     # and bound the spacer columns with divider lines so the reference block reads as separate
@@ -467,13 +544,13 @@ def plot_card(
         if label.get_text() == AVERAGE_LABEL:
             label.set_fontweight("bold")
 
-    # annotate each cell with its value and, where a seed spread is defined, its error bar
+    # annotate each cell with its value and, where defined, its auxiliary (error bar or p-value)
     for i in range(n_rows):
         for j in range(n_cols):
             value = values[i, j]
             if np.isfinite(value):
                 ax.text(
-                    j, i, annotate(value, std_values[i, j]),
+                    j, i, annotate(value, aux_values[i, j]),
                     ha="center", va="center", fontsize=7, color="black",
                 )
 
@@ -489,16 +566,17 @@ def plot_card(
     logger.info("wrote %s and %s", out_png, out_csv)
 
 
-def _blank_summary_rows(std: pd.DataFrame) -> pd.DataFrame:
-    """Null the error bars on the trailing spacer and AVERAGE rows.
+def _blank_summary_rows(aux: pd.DataFrame) -> pd.DataFrame:
+    """Null the auxiliary annotation (error bar or p-value) on the spacer and AVERAGE rows.
 
-    ``append_average_row`` would otherwise mean the per-cell standard deviations into the AVERAGE
-    row, conflating seed spread with the endpoint-to-endpoint spread the AVERAGE summarizes. The
-    AVERAGE row shows a bare mean (no error bar), so its std is nulled along with the spacer row.
+    ``append_average_row`` would otherwise mean the per-cell auxiliary values into the AVERAGE row,
+    conflating a per-cell quantity (seed spread, or a per-cell significance test) with the
+    endpoint-to-endpoint AVERAGE. The AVERAGE row shows a bare mean, so its auxiliary is nulled
+    along with the spacer row.
     """
-    std = std.copy()
-    std.iloc[-2:, :] = np.nan
-    return std
+    aux = aux.copy()
+    aux.iloc[-2:, :] = np.nan
+    return aux
 
 
 def _render_r2_card(
@@ -521,28 +599,51 @@ def _render_r2_card(
         title="Report card: R² (red = 0, green = 1; ± is the seed standard deviation)",
         cbar_ticks=[0.0, 0.5, 1.0], cbar_labels=["0.0", "0.5", "1.0"],
         spacer_cols=spacer_cols, ref_cols=ref_cols, groups=groups, average_row=average_row,
-        std=_blank_summary_rows(std),
+        aux=_blank_summary_rows(std),
     )
+
+
+def _format_pvalue(p: float) -> str:
+    """Render a significance p-value compactly for a cell annotation."""
+    if not np.isfinite(p):
+        return ""
+    if p < 0.001:
+        return "p<.001"
+    return f"p={p:.3f}"
 
 
 def _render_mae_delta_card(
     matrix_frame: pd.DataFrame, frame: pd.DataFrame, baseline_flavor: str, out_png: Path
 ) -> None:
-    """Assemble and render the MAE %-change card (green = better than baseline, red = worse)."""
+    """Render the MAE %-change card, coloring only cells that differ significantly from baseline.
+
+    Each cell's color still encodes the percentage change in MAE (green better, red worse), but a
+    cell whose per-seed MAE does not differ significantly from the baseline's (two-sample Welch
+    t-test p above ``SIGNIFICANCE_ALPHA``) is painted white regardless of the change, so the card
+    highlights only differences the seed spread supports. Every cell is annotated with its change
+    and its p-value.
+    """
     baseline_mae = build_reference_series(frame, baseline_flavor, "mae")
     if baseline_mae.empty:
         logger.warning(
             "no %s MAE in the metrics; skipping the MAE-delta card", baseline_flavor
         )
         return
-    baseline_mae_std = build_reference_series(frame, baseline_flavor, "mae", agg="std")
     mae = build_matrix(matrix_frame, "mae")
-    mae_std = build_matrix(matrix_frame, "mae", aggfunc="std")
     delta = mae_delta_matrix(mae, baseline_mae)
-    delta_std = mae_delta_std(mae, mae_std, baseline_mae, baseline_mae_std)
+    pvalues = mae_significance_pvalues(matrix_frame, frame, baseline_flavor, mae)
+    # paint a non-significant (or untestable) cell white by driving its color to the norm center,
+    # while the annotation still shows the real change; leave a missing delta as NaN (grey)
+    significant = pvalues.le(SIGNIFICANCE_ALPHA)
+    color_delta = delta.mask((~significant) & delta.notna(), 0.0)
+
     groups = source_groups(delta.index)
     matrix, average_row = append_average_row(delta)
-    std, _ = append_average_row(delta_std)
+    color_matrix, _ = append_average_row(color_delta)
+    # the AVERAGE row summarizes across endpoints, not a per-cell test, so color it by its true
+    # mean change rather than the significance-gated values
+    color_matrix.iloc[-1] = matrix.iloc[-1].to_numpy()
+    pvalue_matrix, _ = append_average_row(pvalues)
 
     finite = matrix.to_numpy(dtype=float)
     finite = finite[np.isfinite(finite)]
@@ -554,13 +655,13 @@ def _render_mae_delta_card(
     plot_card(
         matrix, out_png, out_png.with_suffix(".csv"),
         cmap=_DELTA_CMAP, norm=norm,
-        annotate=lambda v, s: f"{v:+.0f}%" if not np.isfinite(s) else f"{v:+.0f}%\n±{s:.0f}",
-        title="Report card: MAE % change vs chemeleon baseline "
-        "(green = lower MAE / better, red = worse; ± is the propagated seed standard deviation)",
+        annotate=lambda v, p: f"{v:+.0f}%\n{_format_pvalue(p)}".rstrip(),
+        title="Report card: MAE % change vs chemeleon baseline (green = lower MAE / better, red = "
+        f"worse; white where p > {SIGNIFICANCE_ALPHA:g}, two-sample Welch t-test on the seeds)",
         cbar_ticks=[-extent, 0.0, extent],
         cbar_labels=[f"-{extent:.0f}%", "0% (baseline)", f"+{extent:.0f}%"],
         spacer_cols=[], ref_cols=[], groups=groups, average_row=average_row,
-        std=_blank_summary_rows(std),
+        aux=_blank_summary_rows(pvalue_matrix), color_values=color_matrix,
     )
 
 
