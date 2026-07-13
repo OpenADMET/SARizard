@@ -145,6 +145,15 @@ lr_recipe_list() {
     ls "$REPO_DIR"/configs/lr_*/*.yaml 2>/dev/null
 }
 
+# print only the unlocked-protocol LR recipe paths (configs/lr_unlocked__<flavor>__s<seed>/),
+# one per line. This scopes an unlocked-only finetune driver to its own recipes so it can run
+# concurrently with a reduced-only driver reading lr_recipe_list without their array indices
+# aliasing: each driver enumerates a disjoint recipe set through its own sbatch. Pair it with
+# lr_finetune_unlocked.sbatch, which maps the array index against this same glob
+lr_unlocked_recipe_list() {
+    ls "$REPO_DIR"/configs/lr_unlocked__*/*.yaml 2>/dev/null
+}
+
 # print the generated ablation finetune recipe paths (configs/ablation_<name>__s<seed>[__<mode>]/),
 # one per line, for the finetune array in run_ablations.sh. ablation_finetune.sbatch and
 # submit_batched.sh both enumerate through this so their array-index-to-recipe order agrees.

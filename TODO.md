@@ -598,7 +598,25 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   --wrap="bash slurm/submit_batched.sh slurm/lr_finetune.sbatch lr_recipe_list --export=ALL"` (driver
   job 1533842, log `slurm/logs/lr_driver_reduced_1533842.out`). It resumes via the `model.pth`
   skip-guard, fast-forwarding batches 0-30 and running only the 300 remaining. `lr_analyze` still to
-  submit once the reduced leg completes; the unlocked leg is still unlaunched.
+  submit once the reduced leg completes.
+  **Unlocked leg launched concurrently (2026-07-13).** Generated the 1800 unlocked recipes
+  (`configs.generate --seeds 1 2 3 4 5 --mpnn-lr-mode unlocked --label-prefix lr_unlocked
+  --foundation-seed 42`, off the same s42 flavor-sweep foundations, `mpnn_lr` == `ffn_lr`) and
+  started a second cpu driver alongside the reduced one so both protocols finetune at once. The two
+  legs share `configs/lr_*` but must not alias array indices: `lr_recipe_list` globs all `lr_*`, and
+  `lr_unlocked__` sorts after `lr_reduced__`, so the reduced driver's recipes stay at indices 0-1799
+  and its in-flight tasks are unaffected. To keep the unlocked driver off those indices it runs its
+  own recipe set through its own sbatch: added `lr_unlocked_recipe_list` (globs only
+  `configs/lr_unlocked__*/*.yaml`, 1800 recipes) to `slurm/env.sh` and
+  `slurm/lr_finetune_unlocked.sbatch` (a clone of `lr_finetune.sbatch` that maps the array index
+  against that unlocked-only list), both purely additive so the running reduced leg is untouched.
+  Launched the same durable, wrapper-free way as the reduced relaunch: `sbatch --partition=cpu
+  --time=1-00:00:00 --job-name=lr-driver-unlocked --export=ALL,REPO_DIR=... --wrap="bash
+  slurm/submit_batched.sh slurm/lr_finetune_unlocked.sbatch lr_unlocked_recipe_list --export=ALL"`
+  (driver job 1534116, log `slurm/logs/lr_driver_unlocked_1534116.out`). It enumerated 1800
+  unlocked recipes (confirming isolation, not the shared 3600) and began at batch 1. `lr_analyze`
+  for the unlocked leg still to submit once it completes; the Milestone-8 reduced/unlocked report
+  cards remain gated on both legs finishing.
 - [x] **Blocker for Milestone 7, raised in urgency:** target-dropout fraction for small
   flavors. The masked-pretext dropout in `losses.py` (`DROPOUT_FRACTION`, applied per target
   element to every flavor) keeps a fixed fraction, not a fixed count. Its rationale (stop the
