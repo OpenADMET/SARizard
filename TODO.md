@@ -463,12 +463,18 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   exercised end to end on a synthetic 5-seed frame. **Frozen first:** 96 finetunes (4 seeds x 24
   endpoints) generated as `configs/chemeleon_stock__s{1,2,3,4}/`, to submit via
   `STOCK_LR_MODE=frozen STOCK_SEEDS="1 2 3 4" bash slurm/run_stock_baseline.sh` (then
-  `sbatch slurm/analyze.sbatch`). **Reduced and unlocked stock baselines still to run (pending):**
-  each also needs 4 additional seeds (1-4) on top of any existing single-seed run, submitted the
-  same way with `STOCK_LR_MODE=reduced` and `STOCK_LR_MODE=unlocked`, then the matching per-mode
-  report cards (`report_card.py --lr-mode <mode> --baseline-flavor chemeleon_stock_<mode>`) and
-  per-mode meta-models rendered. The reduced/unlocked flavor legs (see Future experiments) must
-  finish first, since those cards read `results/lr_metrics.csv`.
+  `sbatch slurm/analyze.sbatch`). **Reduced and unlocked stock baselines submitted (2026-07-13):**
+  each as an independent cpu driver, `STOCK_LR_MODE=reduced STOCK_SEEDS="1 2 3 4" bash
+  slurm/run_stock_baseline.sh` (driver job 1595754) and the same with `STOCK_LR_MODE=unlocked`
+  (driver job 1595755), 96 finetunes each (4 seeds x 24 endpoints) into
+  `configs/chemeleon_stock_<mode>__s{1,2,3,4}/` with `mpnn_lr` baked per protocol (reduced 1e-4,
+  unlocked 1e-3). Unlike frozen, no single-seed reduced/unlocked stock run pre-existed, so these
+  baselines are 4 seeds (1-4), not 5; the frozen baseline is 5 (the old seed-42 run plus 1-4). If
+  a fifth seed is wanted to match the flavor legs' seeds 1-5, run seed 5 the same way. Still to do
+  once these and the reduced/unlocked flavor legs finish: render the matching per-mode report
+  cards (`report_card.py --lr-mode <mode> --baseline-flavor chemeleon_stock_<mode>`, reading
+  `results/lr_metrics.csv`) and per-mode meta-models. The single-seed reduced/unlocked cards are
+  not rendered against the old baseline; they are redone with these averaged baselines.
 - [x] 9. Meta-model: stack per-flavor finetuned predictions per endpoint, fit LGBM/RF/MLP
   on out-of-fold predictions, compare to the best single flavor.
   First real result, produced by the same job 19230968 now that ≥2 flavors have results:
