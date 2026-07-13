@@ -7,8 +7,8 @@ Two cards are rendered per setup from the tidy metrics CSV written by ``analysis
   spacer) and a final AVERAGE row that means each column across all endpoints;
 - a delta card whose cells are the percentage change in MAE relative to the stock-CheMeleon
   baseline (green where a flavor's MAE beats the baseline, red where it is worse), flavor columns
-  only, with the same AVERAGE row. A cell is painted white unless the flavor's MAE differs
-  significantly from the baseline's (paired t-test over the seeds present in both, p at or below
+  only, with the same AVERAGE row. A cell is painted white unless the flavor's per-seed MAE
+  differs significantly from the baseline's (two-sample Welch t-test, p at or below
   ``SIGNIFICANCE_ALPHA``), so only differences the seed spread supports carry color.
 
 The R² card annotates every endpoint cell (flavors and the multi-seed baseline column) with a
@@ -39,7 +39,7 @@ import matplotlib.pyplot as plt  # noqa: E402 - set backend before importing pyp
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm  # noqa: E402
-from scipy.stats import ttest_rel  # noqa: E402
+from scipy.stats import ttest_ind  # noqa: E402
 
 from sarizard.analysis.metrics_spec import DATASETS, dataset_of  # noqa: E402
 from sarizard.analysis.paths import METRICS_CSV, PLOTS_DIR, parse_seed_variant  # noqa: E402
@@ -47,9 +47,9 @@ from sarizard.pretraining.flavors import flavor_names  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-# significance threshold for the MAE-delta card: a flavor whose MAE does not differ from the
-# baseline's at this level (paired t-test over the seeds present in both, p above the threshold) is
-# painted white, so only differences the seed spread supports carry color
+# significance threshold for the MAE-delta card: a flavor whose per-seed MAE does not differ from
+# the baseline's at this level (two-sample Welch t-test, p above the threshold) is painted white,
+# so only differences the seed spread supports carry color
 SIGNIFICANCE_ALPHA = 0.05
 
 # reference-column labels and the blank labels used for the spacer column(s) and spacer row;
@@ -293,38 +293,32 @@ def mae_delta_std(
     return sigma.where(np.isfinite(sigma))
 
 
-def _per_seed_by_seed(frame: pd.DataFrame, metric: str) -> dict[tuple[str, str], dict[float, float]]:
-    """Map ``(row, flavor)`` to a ``{seed: metric}`` dict, keeping seed identity for pairing.
+def _per_seed_values(frame: pd.DataFrame, metric: str) -> dict[tuple[str, str], np.ndarray]:
+    """Map ``(row, flavor)`` to the array of per-seed ``metric`` values behind that cell.
 
     After ``collapse_seed_variants`` the seed replicates share a flavor label but stay separate
-    rows carrying the original ``seed``; keying the metric by seed lets the significance test pair a
-    flavor and the baseline on the seeds they share.
+    rows, so grouping by the displayed row identity and flavor recovers each cell's seed sample.
     """
-    out: dict[tuple[str, str], dict[float, float]] = {}
-    for (row, flavor), group in frame.groupby(["row", "flavor"]):
-        out[(row, flavor)] = dict(zip(group["seed"].to_numpy(), group[metric].to_numpy()))
-    return out
+    grouped = frame.groupby(["row", "flavor"])[metric].apply(lambda s: s.to_numpy(dtype=float))
+    return dict(grouped)
 
 
 def mae_significance_pvalues(
     matrix_frame: pd.DataFrame, frame: pd.DataFrame, baseline_flavor: str, mae_matrix: pd.DataFrame
 ) -> pd.DataFrame:
-    """Paired p-value per (endpoint, flavor) for the flavor's MAE differing from baseline.
+    """Two-sample p-value per (endpoint, flavor) for the flavor's MAE differing from baseline.
 
-    Each cell runs a paired t-test between the flavor's and the baseline's per-seed MAE on the
-    seeds present in both, pairing by seed. Pairing is valid because for a given seed the flavor and
-    the baseline share the same train/val/test split (the cluster-split endpoints reproduce the
-    same partition from that seed, the predefined-split endpoints share one fixed split across all
-    seeds), so the pair is measured on the same molecules. The baseline and flavor seed sets only
-    partly overlap (e.g. baseline 42 plus 1-4, flavors 1-5), so only the shared seeds are paired. A
-    cell is NaN where fewer than two seeds are shared or the paired differences have zero variance,
-    which the card treats as not significant (painted white).
+    Each cell runs a two-sample Welch t-test (unequal variance) between the flavor's per-seed MAE
+    sample and the stock baseline's per-seed MAE sample for that endpoint. The seed sets are not
+    paired (the baseline and flavor seeds only partly overlap), so an unpaired test is used. A cell
+    is NaN where either side has fewer than two seeds or zero variance, which the card treats as
+    not significant (painted white).
 
     Parameters
     ----------
     matrix_frame : pandas.DataFrame
         Prepared, seed-collapsed metrics for the flavor columns (carries ``row``, ``flavor``,
-        ``seed``, ``mae``); the same frame ``build_matrix`` pivots.
+        ``mae``); the same frame ``build_matrix`` pivots.
     frame : pandas.DataFrame
         Prepared, seed-collapsed metrics that include the baseline flavor's rows.
     baseline_flavor : str
@@ -335,28 +329,20 @@ def mae_significance_pvalues(
     Returns
     -------
     pandas.DataFrame
-        Same shape as ``mae_matrix``; each cell is the paired-test p-value, NaN where undefined.
+        Same shape as ``mae_matrix``; each cell is the test p-value, NaN where undefined.
     """
-    flavor_by_seed = _per_seed_by_seed(matrix_frame, "mae")
-    baseline_by_seed = _per_seed_by_seed(frame[frame["flavor"] == baseline_flavor], "mae")
+    flavor_samples = _per_seed_values(matrix_frame, "mae")
+    baseline_samples = _per_seed_values(frame[frame["flavor"] == baseline_flavor], "mae")
     pvalues = pd.DataFrame(np.nan, index=mae_matrix.index, columns=mae_matrix.columns)
     for row in mae_matrix.index:
-        base = baseline_by_seed.get((row, baseline_flavor))
-        if not base:
+        base = baseline_samples.get((row, baseline_flavor))
+        if base is None or np.size(base) < 2 or np.ptp(base) == 0:
             continue
         for flavor in mae_matrix.columns:
-            sample = flavor_by_seed.get((row, flavor))
-            if not sample:
+            sample = flavor_samples.get((row, flavor))
+            if sample is None or np.size(sample) < 2 or np.ptp(sample) == 0:
                 continue
-            # pair on the seeds present in both sides, dropping the unpaired seeds and any NaN seed
-            shared = sorted(s for s in sample.keys() & base.keys() if pd.notna(s))
-            if len(shared) < 2:
-                continue
-            flavor_vals = np.array([sample[s] for s in shared], dtype=float)
-            base_vals = np.array([base[s] for s in shared], dtype=float)
-            if np.ptp(flavor_vals - base_vals) == 0:
-                continue
-            pvalues.loc[row, flavor] = float(ttest_rel(flavor_vals, base_vals).pvalue)
+            pvalues.loc[row, flavor] = float(ttest_ind(sample, base, equal_var=False).pvalue)
     return pvalues
 
 
@@ -671,7 +657,7 @@ def _render_mae_delta_card(
         cmap=_DELTA_CMAP, norm=norm,
         annotate=lambda v, p: f"{v:+.0f}%\n{_format_pvalue(p)}".rstrip(),
         title="Report card: MAE % change vs chemeleon baseline (green = lower MAE / better, red = "
-        f"worse; white where p > {SIGNIFICANCE_ALPHA:g}, paired t-test on the shared seeds)",
+        f"worse; white where p > {SIGNIFICANCE_ALPHA:g}, two-sample Welch t-test on the seeds)",
         cbar_ticks=[-extent, 0.0, extent],
         cbar_labels=[f"-{extent:.0f}%", "0% (baseline)", f"+{extent:.0f}%"],
         spacer_cols=[], ref_cols=[], groups=groups, average_row=average_row,
@@ -705,13 +691,9 @@ def main() -> None:
 
     if not args.metrics_csv.exists():
         raise SystemExit(f"{args.metrics_csv} not found; run analysis.evaluate first")
-    # capture each row's finetune seed before collapse strips the __s<seed> tag, so the MAE-delta
-    # significance test can pair a flavor and the baseline on the seeds they share
-    raw = pd.read_csv(args.metrics_csv)
-    raw = raw.assign(seed=raw["flavor"].map(lambda label: parse_seed_variant(label)[1]))
     # re-derive the dataset from the recipe and build the disambiguated row identity once on the
     # full frame, so build_matrix and the reference series share one consistent set of row labels
-    frame = prepare_rows(collapse_seed_variants(raw))
+    frame = prepare_rows(collapse_seed_variants(pd.read_csv(args.metrics_csv)))
     # for a reduced/unlocked setup, keep only that protocol's rows as bare-flavor columns; the
     # references still read from the full frame so the mode's stock baseline survives
     matrix_frame = frame
