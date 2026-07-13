@@ -15,6 +15,7 @@ from sarizard.analysis.report_card import (
     filter_lr_mode,
     mae_delta_matrix,
     mae_delta_std,
+    mae_significance_pvalues,
     prepare_rows,
     source_groups,
 )
@@ -190,6 +191,42 @@ def test_mae_delta_std_is_nan_when_a_side_is_single_seed():
     sigma = mae_delta_std(mae, mae_std, baseline, baseline_std)
 
     assert np.isnan(sigma.loc["herg · herg", "ecfp"])
+
+
+def _seeded_mae_frame(per_flavor_maes: dict[str, list[float]]) -> pd.DataFrame:
+    """Prepared metrics frame with one herg row per flavor per seed, from given MAE samples."""
+    rows = [
+        {"flavor": flavor, "recipe": "herg_st", "dataset": "herg", "endpoint": "herg", "mae": mae}
+        for flavor, maes in per_flavor_maes.items()
+        for mae in maes
+    ]
+    return prepare_rows(pd.DataFrame(rows))
+
+
+def test_mae_significance_flags_clear_difference_and_spares_overlap():
+    frame = _seeded_mae_frame({
+        "chemeleon_stock": [0.50, 0.52, 0.48, 0.51, 0.49],
+        "far": [0.80, 0.82, 0.78, 0.81, 0.79],   # cleanly separated from baseline
+        "near": [0.50, 0.53, 0.47, 0.52, 0.48],   # overlapping baseline
+    })
+    mae_matrix = pd.DataFrame({"far": [0.80], "near": [0.50]}, index=["herg · herg"])
+
+    pvalues = mae_significance_pvalues(frame, frame, "chemeleon_stock", mae_matrix)
+
+    assert pvalues.loc["herg · herg", "far"] < 0.05
+    assert pvalues.loc["herg · herg", "near"] > 0.05
+
+
+def test_mae_significance_is_nan_without_enough_seeds():
+    frame = _seeded_mae_frame({
+        "chemeleon_stock": [0.50, 0.52, 0.48],
+        "single": [0.80],   # one seed: no test possible
+    })
+    mae_matrix = pd.DataFrame({"single": [0.80]}, index=["herg · herg"])
+
+    pvalues = mae_significance_pvalues(frame, frame, "chemeleon_stock", mae_matrix)
+
+    assert np.isnan(pvalues.loc["herg · herg", "single"])
 
 
 def test_assemble_r2_card_orders_baseline_first_then_flavors(tidy_metrics):
