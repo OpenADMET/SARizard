@@ -66,6 +66,18 @@ FOUNDATION_SEED="${FOUNDATION_SEED:-}"
 # foundations (frozen is the flavor sweep itself, so it is not repeated here)
 LR_MODES="${LR_MODES:-reduced unlocked}"
 
+# multi-seed stock-CheMeleon baseline (run_stock_baseline.sh): the finetune seeds to add so the
+# baseline carries the same per-cell error bars the flavors do. Each seed is a separate finetune
+# of the released checkpoint, tagged chemeleon_stock[_<mode>]__s<seed>; report_card/meta_model
+# collapse the seeds back to one baseline column. The existing single-seed run (bare
+# chemeleon_stock, seed 42) stays on disk and averages in alongside these.
+STOCK_SEEDS="${STOCK_SEEDS:-1 2 3 4}"
+
+# finetune protocol for the stock-baseline seeds this invocation generates/finetunes (one of
+# frozen/reduced/unlocked). stock_recipe_list scopes to this mode's per-seed dirs so a driver
+# runs exactly one protocol at a time, matching the flavor LR-experiment driver pattern.
+STOCK_LR_MODE="${STOCK_LR_MODE:-frozen}"
+
 # Optional per-flavor override of the masked-pretext target-dropout fraction (config.py's
 # DROPOUT_FRACTION, 0.85 for every flavor by default). Space-separated flavor=value pairs;
 # a flavor absent from this list pretrains at the regime default. This tunes above-threshold
@@ -152,6 +164,32 @@ lr_recipe_list() {
 # lr_finetune_unlocked.sbatch, which maps the array index against this same glob
 lr_unlocked_recipe_list() {
     ls "$REPO_DIR"/configs/lr_unlocked__*/*.yaml 2>/dev/null
+}
+
+# print the base config-dir label for the stock baseline under STOCK_LR_MODE: bare
+# chemeleon_stock for frozen (matching generate.py's stock_baseline_label), chemeleon_stock_<mode>
+# otherwise. The per-seed dirs suffix this with __s<seed>.
+stock_base_label() {
+    if [[ "$STOCK_LR_MODE" == "frozen" ]]; then
+        echo "chemeleon_stock"
+    else
+        echo "chemeleon_stock_${STOCK_LR_MODE}"
+    fi
+}
+
+# print the generated stock-baseline finetune recipe paths for STOCK_LR_MODE x STOCK_SEEDS
+# (configs/<stock-base>__s<seed>/), one per line, in a fixed (seed, endpoint) order.
+# finetune_stock_baseline.sbatch and submit_batched.sh both enumerate through this so their
+# array-index-to-recipe order agrees. Scopes to the seeded dirs only, so the bare single-seed
+# chemeleon_stock dir (seed 42, already finetuned) is not re-swept.
+stock_recipe_list() {
+    local seed base
+    local -a seeds
+    base="$(stock_base_label)"
+    read -ra seeds <<<"$STOCK_SEEDS"
+    for seed in "${seeds[@]}"; do
+        ls "$REPO_DIR/configs/${base}__s${seed}"/*.yaml 2>/dev/null
+    done
 }
 
 # print the generated ablation finetune recipe paths (configs/ablation_<name>__s<seed>[__<mode>]/),

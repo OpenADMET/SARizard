@@ -28,12 +28,16 @@ for flavor in "${FLAVORS[@]}"; do
     done
 done
 
-# the stock-CheMeleon reference (slurm/run_stock_baseline.sh) is a one-time, corpus-independent
-# run; fold it into the same metrics.csv whenever it has results, so report_card's
-# --baseline-flavor finds it without a separate evaluate pass
-if [[ -d "$REPO_DIR/results/chemeleon_stock" ]]; then
-    LABELS+=("chemeleon_stock")
-fi
+# the stock-CheMeleon reference (slurm/run_stock_baseline.sh) is a corpus-independent run; fold
+# every frozen stock seed variant into the same metrics.csv whenever present, so report_card's
+# --baseline-flavor finds them without a separate evaluate pass. report_card/meta_model collapse
+# the __s<seed> variants back to the bare chemeleon_stock label and average the seeds. The bare
+# dir is the original single-seed (seed 42) run; the __s<seed> dirs are the added replicates.
+# Match only frozen stock dirs (chemeleon_stock, chemeleon_stock__s<seed>); the reduced/unlocked
+# baselines (chemeleon_stock_<mode>...) belong to run_lr_experiments.sh's own analyze pass.
+for stock_dir in "$REPO_DIR"/results/chemeleon_stock "$REPO_DIR"/results/chemeleon_stock__s*; do
+    [[ -d "$stock_dir" ]] && LABELS+=("$(basename "$stock_dir")")
+done
 
 # reload test-set predictions and write metrics.csv
 python -m sarizard.analysis.evaluate --accelerator "$ACCELERATOR" --flavors "${LABELS[@]}"

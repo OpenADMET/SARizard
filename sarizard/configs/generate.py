@@ -55,6 +55,18 @@ def stock_baseline_label(mpnn_lr_mode: str) -> str:
     return f"chemeleon_stock_{mpnn_lr_mode}"
 
 
+def stock_baseline_variant_label(mpnn_lr_mode: str, finetune_seed: int | None) -> str:
+    """Return the stock-baseline label for a protocol and optional finetune seed.
+
+    With ``finetune_seed`` given, the label carries the ``__s<seed>`` variant tag so a multi-seed
+    baseline lands in a per-seed configs/results dir (``chemeleon_stock__s<seed>``); without it,
+    the bare protocol label is kept so the original single-seed run stays valid. ``report_card``
+    and ``meta_model`` collapse the ``__s<seed>`` variants back to the bare label and average them.
+    """
+    base = stock_baseline_label(mpnn_lr_mode)
+    return seed_variant_label(base, finetune_seed) if finetune_seed is not None else base
+
+
 def _mpnn_lr(ffn_lr: float, mode: str) -> float:
     """Return the MPNN learning rate for a finetune protocol, relative to ``ffn_lr``."""
     if mode == "frozen":
@@ -230,9 +242,13 @@ def main() -> None:
         raise SystemExit(f"no baseline templates in {args.baseline_dir}")
 
     # stock-baseline mode: relabel only, from_foundation stays "chemeleon" (a no-op override).
-    # the label is mode-aware so reduced/unlocked land beside, not on top of, the frozen baseline
+    # the label is mode-aware so reduced/unlocked land beside, not on top of, the frozen baseline,
+    # and seed-aware when --finetune-seed is given so a multi-seed baseline lands in its own
+    # per-seed configs/results dir (chemeleon_stock__s<seed>). Omitting --finetune-seed keeps the
+    # bare label (chemeleon_stock), so the existing single-seed run stays valid; report_card and
+    # meta_model collapse the __s<seed> variants back to the bare label and average them.
     if args.stock_baseline:
-        label = stock_baseline_label(args.mpnn_lr_mode)
+        label = stock_baseline_variant_label(args.mpnn_lr_mode, args.finetune_seed)
         n = _generate_one(
             templates, CONFIGS_DIR / label, BACKBONE, label, args.accelerator,
             mpnn_lr_mode=args.mpnn_lr_mode, finetune_seed=args.finetune_seed,

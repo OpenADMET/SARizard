@@ -10,6 +10,7 @@ from sarizard.configs.generate import (
     _retarget,
     _set_random_seeds,
     stock_baseline_label,
+    stock_baseline_variant_label,
 )
 
 
@@ -93,6 +94,17 @@ def test_stock_baseline_label_appends_mode_for_non_frozen():
     # reduced/unlocked get a distinct label so a protocol does not overwrite another's dirs
     assert stock_baseline_label("reduced") == "chemeleon_stock_reduced"
     assert stock_baseline_label("unlocked") == "chemeleon_stock_unlocked"
+
+
+def test_stock_baseline_variant_label_bare_when_seed_none():
+    # no finetune seed keeps the bare label so the original single-seed run stays valid
+    assert stock_baseline_variant_label("frozen", None) == "chemeleon_stock"
+
+
+def test_stock_baseline_variant_label_appends_seed_tag():
+    # a finetune seed tags the label so each seed lands in its own configs/results dir
+    assert stock_baseline_variant_label("frozen", 3) == "chemeleon_stock__s3"
+    assert stock_baseline_variant_label("reduced", 2) == "chemeleon_stock_reduced__s2"
 
 
 def test_set_random_seeds_overwrites_every_nested_field():

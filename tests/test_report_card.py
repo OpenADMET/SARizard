@@ -14,6 +14,7 @@ from sarizard.analysis.report_card import (
     collapse_seed_variants,
     filter_lr_mode,
     mae_delta_matrix,
+    mae_delta_std,
     prepare_rows,
     source_groups,
 )
@@ -132,6 +133,63 @@ def test_mae_delta_is_nan_when_baseline_missing():
     delta = mae_delta_matrix(mae, pd.Series(dtype=float))
 
     assert np.isnan(delta.loc["herg · herg", "osmordred"])
+
+
+def test_build_matrix_std_aggregates_the_seed_spread():
+    frame = pd.DataFrame(
+        [
+            {"flavor": "ecfp__s1", "recipe": "herg_st", "dataset": "herg",
+             "endpoint": "herg", "r2": 0.4},
+            {"flavor": "ecfp__s2", "recipe": "herg_st", "dataset": "herg",
+             "endpoint": "herg", "r2": 0.6},
+        ]
+    )
+
+    std = build_matrix(prepare_rows(collapse_seed_variants(frame)), "r2", columns=["ecfp"],
+                       aggfunc="std")
+
+    # sample std of [0.4, 0.6] is sqrt(((-0.1)^2 + 0.1^2) / 1) = sqrt(0.02)
+    assert std.loc["herg · herg", "ecfp"] == pytest.approx(np.sqrt(0.02))
+
+
+def test_build_reference_series_std_aggregates_baseline_seed_spread():
+    frame = pd.DataFrame(
+        [
+            {"flavor": "chemeleon_stock__s1", "recipe": "herg_st", "dataset": "herg",
+             "endpoint": "herg", "r2": 0.4},
+            {"flavor": "chemeleon_stock__s2", "recipe": "herg_st", "dataset": "herg",
+             "endpoint": "herg", "r2": 0.6},
+        ]
+    )
+
+    std = build_reference_series(
+        prepare_rows(collapse_seed_variants(frame)), "chemeleon_stock", "r2", agg="std"
+    )
+
+    assert std.loc["herg · herg"] == pytest.approx(np.sqrt(0.02))
+
+
+def test_mae_delta_std_propagates_both_seed_spreads():
+    mae = pd.DataFrame({"ecfp": [0.6]}, index=["herg · herg"])
+    mae_std = pd.DataFrame({"ecfp": [0.1]}, index=["herg · herg"])
+    baseline = pd.Series({"herg · herg": 0.5})
+    baseline_std = pd.Series({"herg · herg": 0.05})
+
+    sigma = mae_delta_std(mae, mae_std, baseline, baseline_std)
+
+    # 100 * sqrt((0.1/0.5)^2 + (0.6*0.05/0.5^2)^2) = 100 * sqrt(0.2^2 + 0.12^2)
+    assert sigma.loc["herg · herg", "ecfp"] == pytest.approx(100.0 * np.sqrt(0.2**2 + 0.12**2))
+
+
+def test_mae_delta_std_is_nan_when_a_side_is_single_seed():
+    mae = pd.DataFrame({"ecfp": [0.6]}, index=["herg · herg"])
+    mae_std = pd.DataFrame({"ecfp": [np.nan]}, index=["herg · herg"])
+    baseline = pd.Series({"herg · herg": 0.5})
+    baseline_std = pd.Series({"herg · herg": 0.05})
+
+    sigma = mae_delta_std(mae, mae_std, baseline, baseline_std)
+
+    assert np.isnan(sigma.loc["herg · herg", "ecfp"])
 
 
 def test_assemble_r2_card_orders_baseline_first_then_flavors(tidy_metrics):

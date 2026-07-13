@@ -9,6 +9,10 @@ Two cards are rendered per setup from the tidy metrics CSV written by ``analysis
   baseline (green where a flavor's MAE beats the baseline, red where it is worse, white at no
   change), flavor columns only, with the same AVERAGE row.
 
+Every endpoint cell (flavors and the multi-seed baseline column) carries a ``±`` seed standard
+deviation under its value; the delta card propagates the flavor and baseline seed spreads into
+its error bar. The AVERAGE row shows a bare mean, since its spread is over endpoints, not seeds.
+
 Both cards group the endpoint rows by their source dataset (asap, chembl, expansionrx, ...)
 with a bold black separator line and a bold source label per group.
 
@@ -126,7 +130,7 @@ def prepare_rows(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_matrix(
-    frame: pd.DataFrame, metric: str, columns: list[str] | None = None
+    frame: pd.DataFrame, metric: str, columns: list[str] | None = None, *, aggfunc: str = "mean"
 ) -> pd.DataFrame:
     """Pivot the prepared metrics into an endpoints-by-columns matrix for one metric.
 
@@ -141,6 +145,11 @@ def build_matrix(
         Column order for the pivot (values of the ``flavor`` field). Defaults to the flavor
         registry order; pass an explicit list (e.g. ablation labels) to order by something
         other than the registry. Only columns present in ``frame`` are kept.
+    aggfunc : str, optional
+        How to combine the seed replicates that ``collapse_seed_variants`` maps to one flavor
+        label. Defaults to ``"mean"`` (the displayed value); pass ``"std"`` to build the matching
+        per-cell standard deviation for the error-bar annotation. A cell with a single seed is
+        NaN under ``"std"`` (no spread defined).
 
     Returns
     -------
@@ -163,16 +172,20 @@ def build_matrix(
     order = columns if columns is not None else flavor_names()
     present = set(frame["flavor"])
     keep = [col for col in order if col in present]
-    pivot = frame.pivot_table(index="row", columns="flavor", values=metric, aggfunc="mean")
+    pivot = frame.pivot_table(index="row", columns="flavor", values=metric, aggfunc=aggfunc)
     return pivot.reindex(index=ordered["row"].tolist(), columns=keep)
 
 
-def build_reference_series(frame: pd.DataFrame, flavor: str, metric: str) -> pd.Series:
+def build_reference_series(
+    frame: pd.DataFrame, flavor: str, metric: str, *, agg: str = "mean"
+) -> pd.Series:
     """Extract one flavor's per-endpoint metric as a ``"<dataset> · <endpoint>"``-indexed Series.
 
     Used for a reference flavor (e.g. ``chemeleon_stock``) that should appear as a single
     extra report-card column, or supply the baseline the MAE-delta card is measured against,
-    rather than take part in ``build_matrix``'s registry-ordered flavor columns.
+    rather than take part in ``build_matrix``'s registry-ordered flavor columns. When the
+    baseline is run at several seeds (collapsed to one label by ``collapse_seed_variants``), the
+    per-endpoint duplicates are the seed replicates.
 
     Parameters
     ----------
@@ -183,6 +196,10 @@ def build_reference_series(frame: pd.DataFrame, flavor: str, metric: str) -> pd.
         The flavor label to extract (a value of the ``flavor`` column).
     metric : str
         Which metric column to extract.
+    agg : str, optional
+        How to combine the seed replicates per endpoint. Defaults to ``"mean"`` (the displayed
+        baseline value); pass ``"std"`` for the baseline error bar. A single-seed baseline is NaN
+        under ``"std"``.
 
     Returns
     -------
@@ -194,13 +211,13 @@ def build_reference_series(frame: pd.DataFrame, flavor: str, metric: str) -> pd.
     if subset.empty:
         return pd.Series(dtype=float)
     # the prepared row identity separates single-task and multi-task variants; fall back to the
-    # plain dataset+endpoint key for an unprepared frame, collapsing any duplicate by mean so the
+    # plain dataset+endpoint key for an unprepared frame, collapsing seed duplicates by agg so the
     # index stays unique and aligned to the pivot
     if "row" in subset.columns:
         row = subset["row"]
     else:
         row = subset["dataset"] + " · " + subset["endpoint"]
-    return pd.Series(subset[metric].to_numpy(), index=row).groupby(level=0).mean()
+    return pd.Series(subset[metric].to_numpy(), index=row).groupby(level=0).agg(agg)
 
 
 def mae_delta_matrix(mae_matrix: pd.DataFrame, baseline_mae: pd.Series) -> pd.DataFrame:
@@ -227,6 +244,44 @@ def mae_delta_matrix(mae_matrix: pd.DataFrame, baseline_mae: pd.Series) -> pd.Da
     with np.errstate(divide="ignore", invalid="ignore"):
         delta = 100.0 * mae_matrix.sub(baseline, axis=0).div(baseline, axis=0)
     return delta.where(np.isfinite(delta))
+
+
+def mae_delta_std(
+    mae_matrix: pd.DataFrame,
+    mae_std_matrix: pd.DataFrame,
+    baseline_mae: pd.Series,
+    baseline_mae_std: pd.Series,
+) -> pd.DataFrame:
+    """Propagate the seed spread of both sides into the MAE %-change error bar.
+
+    The delta cell is ``100 * (F/B - 1)`` for flavor mean MAE ``F`` and baseline mean MAE ``B``.
+    Treating the flavor and baseline seed spreads as independent (the stock seeds and flavor
+    seeds are separate finetune runs), first-order propagation gives
+    ``sigma_delta = 100 * sqrt((sF / B)^2 + (F * sB / B^2)^2)`` for per-seed standard deviations
+    ``sF`` (flavor) and ``sB`` (baseline). A cell is NaN where either spread or the baseline is
+    undefined (single-seed side, or missing/zero baseline).
+
+    Parameters
+    ----------
+    mae_matrix, mae_std_matrix : pandas.DataFrame
+        Per-flavor mean and standard-deviation MAE matrices from ``build_matrix(frame, "mae",
+        aggfunc=...)``.
+    baseline_mae, baseline_mae_std : pandas.Series
+        Baseline mean and standard-deviation MAE per endpoint, indexed like the matrices' rows.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Same shape as ``mae_matrix``; cells are the propagated percentage-point standard
+        deviations, NaN where undefined.
+    """
+    base = baseline_mae.reindex(mae_matrix.index)
+    base_std = baseline_mae_std.reindex(mae_matrix.index)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        flavor_term = mae_std_matrix.div(base, axis=0)
+        baseline_term = mae_matrix.mul(base_std, axis=0).div(base**2, axis=0)
+        sigma = 100.0 * np.sqrt(flavor_term**2 + baseline_term**2)
+    return sigma.where(np.isfinite(sigma))
 
 
 def assemble_r2_card(
@@ -322,6 +377,7 @@ def plot_card(
     ref_cols: list[int],
     groups: list[tuple[int, int, str]],
     average_row: int,
+    std: pd.DataFrame | None = None,
 ) -> None:
     """Render one report-card heatmap and write its underlying matrix CSV.
 
@@ -339,7 +395,8 @@ def plot_card(
     vmin, vmax : float, optional
         Linear color bounds used when ``norm`` is None.
     annotate : callable
-        Maps a finite cell value to its annotation string.
+        Maps a finite cell value and its standard deviation to an annotation string,
+        ``annotate(value, std)``; ``std`` is NaN where no seed spread is defined.
     title : str
         Figure title.
     cbar_ticks, cbar_labels : list
@@ -353,8 +410,17 @@ def plot_card(
         boundary line and a bold source label.
     average_row : int
         Row index of the AVERAGE row, separated from the endpoint block by a bold line.
+    std : pandas.DataFrame, optional
+        Per-cell standard deviation aligned to ``matrix`` (same index and columns); passed as the
+        second argument to ``annotate``. When omitted, ``annotate`` receives NaN for every cell.
     """
     values = matrix.to_numpy(dtype=float)
+    # align the std matrix to the value matrix so the annotation loop indexes them in lockstep
+    std_values = (
+        std.reindex(index=matrix.index, columns=matrix.columns).to_numpy(dtype=float)
+        if std is not None
+        else np.full_like(values, np.nan)
+    )
     n_rows, n_cols = values.shape
     cmap = cmap.copy()
     cmap.set_bad("lightgrey")  # missing (flavor, endpoint) cells
@@ -401,12 +467,15 @@ def plot_card(
         if label.get_text() == AVERAGE_LABEL:
             label.set_fontweight("bold")
 
-    # annotate each cell with its value
+    # annotate each cell with its value and, where a seed spread is defined, its error bar
     for i in range(n_rows):
         for j in range(n_cols):
             value = values[i, j]
             if np.isfinite(value):
-                ax.text(j, i, annotate(value), ha="center", va="center", fontsize=7, color="black")
+                ax.text(
+                    j, i, annotate(value, std_values[i, j]),
+                    ha="center", va="center", fontsize=7, color="black",
+                )
 
     ax.set_title(title, fontsize=11, pad=28)
     cbar = fig.colorbar(im, ax=ax, shrink=0.5, pad=0.02)
@@ -420,22 +489,39 @@ def plot_card(
     logger.info("wrote %s and %s", out_png, out_csv)
 
 
+def _blank_summary_rows(std: pd.DataFrame) -> pd.DataFrame:
+    """Null the error bars on the trailing spacer and AVERAGE rows.
+
+    ``append_average_row`` would otherwise mean the per-cell standard deviations into the AVERAGE
+    row, conflating seed spread with the endpoint-to-endpoint spread the AVERAGE summarizes. The
+    AVERAGE row shows a bare mean (no error bar), so its std is nulled along with the spacer row.
+    """
+    std = std.copy()
+    std.iloc[-2:, :] = np.nan
+    return std
+
+
 def _render_r2_card(
     matrix_frame: pd.DataFrame, frame: pd.DataFrame, baseline_flavor: str, out_png: Path
 ) -> None:
     """Assemble and render the R-squared card (red = 0, green = 1) with the baseline column."""
     flavor_r2 = build_matrix(matrix_frame, "r2")
+    flavor_r2_std = build_matrix(matrix_frame, "r2", aggfunc="std")
     baseline = build_reference_series(frame, baseline_flavor, "r2")
+    baseline_std = build_reference_series(frame, baseline_flavor, "r2", agg="std")
     matrix, spacer_cols, ref_cols = assemble_r2_card(flavor_r2, baseline)
+    std, _, _ = assemble_r2_card(flavor_r2_std, baseline_std)
     groups = source_groups(flavor_r2.index)
     matrix, average_row = append_average_row(matrix)
+    std, _ = append_average_row(std)
     plot_card(
         matrix, out_png, out_png.with_suffix(".csv"),
         cmap=plt.get_cmap("RdYlGn"), vmin=0.0, vmax=1.0,
-        annotate=lambda v: f"{v:.3f}",
-        title="Report card: R² (red = 0, green = 1)",
+        annotate=lambda v, s: f"{v:.3f}" if not np.isfinite(s) else f"{v:.3f}\n±{s:.3f}",
+        title="Report card: R² (red = 0, green = 1; ± is the seed standard deviation)",
         cbar_ticks=[0.0, 0.5, 1.0], cbar_labels=["0.0", "0.5", "1.0"],
         spacer_cols=spacer_cols, ref_cols=ref_cols, groups=groups, average_row=average_row,
+        std=_blank_summary_rows(std),
     )
 
 
@@ -449,9 +535,14 @@ def _render_mae_delta_card(
             "no %s MAE in the metrics; skipping the MAE-delta card", baseline_flavor
         )
         return
-    delta = mae_delta_matrix(build_matrix(matrix_frame, "mae"), baseline_mae)
+    baseline_mae_std = build_reference_series(frame, baseline_flavor, "mae", agg="std")
+    mae = build_matrix(matrix_frame, "mae")
+    mae_std = build_matrix(matrix_frame, "mae", aggfunc="std")
+    delta = mae_delta_matrix(mae, baseline_mae)
+    delta_std = mae_delta_std(mae, mae_std, baseline_mae, baseline_mae_std)
     groups = source_groups(delta.index)
     matrix, average_row = append_average_row(delta)
+    std, _ = append_average_row(delta_std)
 
     finite = matrix.to_numpy(dtype=float)
     finite = finite[np.isfinite(finite)]
@@ -463,12 +554,13 @@ def _render_mae_delta_card(
     plot_card(
         matrix, out_png, out_png.with_suffix(".csv"),
         cmap=_DELTA_CMAP, norm=norm,
-        annotate=lambda v: f"{v:+.0f}%",
+        annotate=lambda v, s: f"{v:+.0f}%" if not np.isfinite(s) else f"{v:+.0f}%\n±{s:.0f}",
         title="Report card: MAE % change vs chemeleon baseline "
-        "(green = lower MAE / better, red = worse)",
+        "(green = lower MAE / better, red = worse; ± is the propagated seed standard deviation)",
         cbar_ticks=[-extent, 0.0, extent],
         cbar_labels=[f"-{extent:.0f}%", "0% (baseline)", f"+{extent:.0f}%"],
         spacer_cols=[], ref_cols=[], groups=groups, average_row=average_row,
+        std=_blank_summary_rows(std),
     )
 
 
