@@ -585,6 +585,20 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   remaining 1799 in batches of 50 (batch job 799147, 49 tasks). Log: `slurm/logs/lr_driver_799014.out`.
   This is the durable pattern for future batched runs: submit `submit_batched.sh`'s runner as a cpu
   job rather than a session-bound process.
+  **Driver 799014 died on scheduler backpressure at recipe 1500; relaunched (2026-07-13).** The
+  standalone driver failed 2026-07-11T01:29 partway through batch 31 (recipes 1500-1549): `sbatch`
+  hit `Batch job submission failed: Resource temporarily unavailable` and its internal retry loop
+  gave up, so `submit_batched.sh` exited nonzero with batches 31-35 (recipes 1500-1799, the last
+  300) never submitted. Batches 0-30 landed clean: 1500/1800 reduced recipes have `model.pth` (62
+  full flavor-seed combos plus `surrogate_adme__s3` at 12/24 endpoints). The 12 unfinished combos
+  are `surrogate_adme` s3 (partial)/s4/s5, `usrcat` s1-5, and `whim` s1-5. This was transient
+  scheduler backpressure, not a code or node fault. Relaunched the same durable way but scoped to
+  reduced-only and driving `submit_batched.sh` directly (no `run_lr_experiments.sh` wrapper, so no
+  trailing `lr_analyze` submission): `sbatch --partition=cpu --time=1-00:00:00 --export=ALL,REPO_DIR=...
+  --wrap="bash slurm/submit_batched.sh slurm/lr_finetune.sbatch lr_recipe_list --export=ALL"` (driver
+  job 1533842, log `slurm/logs/lr_driver_reduced_1533842.out`). It resumes via the `model.pth`
+  skip-guard, fast-forwarding batches 0-30 and running only the 300 remaining. `lr_analyze` still to
+  submit once the reduced leg completes; the unlocked leg is still unlaunched.
 - [x] **Blocker for Milestone 7, raised in urgency:** target-dropout fraction for small
   flavors. The masked-pretext dropout in `losses.py` (`DROPOUT_FRACTION`, applied per target
   element to every flavor) keeps a fixed fraction, not a fixed count. Its rationale (stop the
