@@ -12,6 +12,10 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
+# exclude the known-bad GPU nodes by default: their uncorrectable-ECC/CUDA-init faults have
+# repeatedly killed the single-GPU evaluate pass (jobs 509950 on iscn008, 1622223 on iscf008),
+# and a live model.predict there fails every uncached result dir. Override on the CLI if needed.
+#SBATCH --exclude=iscn008,iscf008
 #SBATCH --output=slurm/logs/analyze_%j.out
 
 source "${SLURM_SUBMIT_DIR:-$(pwd)}/slurm/env.sh"
