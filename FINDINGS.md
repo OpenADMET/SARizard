@@ -365,6 +365,39 @@ and was resubmitted with that node excluded). The reduced and unlocked protocols
 corpus are not yet run; the 250K partial sweep below is superseded by this table for the
 flavors it covers.
 
+### Multi-seed stock baseline and per-cell error bars (2026-07-13)
+
+The report cards averaged each flavor over five finetune seeds but measured them against a
+single-seed stock-CheMeleon baseline (seed 42), which made both the R-squared baseline column
+and the entire MAE %-change card an unpaired, high-variance reference. The stock reference is
+now finetuned at five seeds (frozen: the original seed 42 plus seeds 1-4), and `report_card.py`
+averages it and annotates every endpoint cell (flavors and the baseline column) with a plus/minus
+seed standard deviation; the MAE-delta card propagates both sides' spread into its error bar.
+`results/metrics.csv` and `plots/report_card_r2.png`/`report_card_mae_delta.png` are regenerated
+with the 5-seed baseline.
+
+The correction matters most where the single seed happened to be unrepresentative. On PXR:
+
+| baseline | R-squared | MAE |
+|---|---|---|
+| seed 42 alone (old) | 0.729 | 0.490 |
+| 5-seed average (new) | 0.668 +/- 0.084 | 0.550 +/- 0.054 |
+
+Seed 42 was the best of the five stock seeds on PXR (the five range 0.525 to 0.729 in
+R-squared), so the old single-seed baseline flattered stock and made every flavor look 9 to 27
+percent worse on MAE. Against the 5-seed average, PXR is roughly a wash: minimol (-3.1 percent
+MAE versus baseline), rdkit2d (-1.7 percent), and osmordred (-0.2 percent) beat it, and most
+flavors fall within one seed standard deviation, with propagated delta error bars of order 10 to
+19 percentage points that comfortably cross zero. The earlier "PXR delta is bad across the
+board" read was an artifact of comparing 5-seed flavor averages against one lucky stock point,
+not a real deficit of descriptor pretraining on PXR. The lesson generalizes: the stock baseline
+is as seed-unstable as the flavors, so a single-seed reference is not a safe comparison for any
+endpoint with this much finetune-seed variance.
+
+The reduced and unlocked stock baselines are also finetuned at the added seeds 1-4 (4 seeds
+each, since no single-seed run pre-existed for those protocols), but their report cards are gated
+on the reduced and unlocked flavor legs completing; see `TODO.md` Milestone 8.
+
 ### Milestone 6 (partial, 250K, superseded by the full-corpus table above)
 
 **Milestone 6 (partial): 9 direct-compute flavors, 250K corpus, `order_fix` prescaling, 24

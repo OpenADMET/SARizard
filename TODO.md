@@ -460,10 +460,25 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   free (the existing `collapse_seed_variants` maps `chemeleon_stock__s<seed>` back to
   `chemeleon_stock`). The AVERAGE row keeps a bare mean (its spread is over endpoints, not seeds).
   Regression tests added (`test_report_card.py`, `test_generate.py`); the render path was
-  exercised end to end on a synthetic 5-seed frame. **Frozen first:** 96 finetunes (4 seeds x 24
-  endpoints) generated as `configs/chemeleon_stock__s{1,2,3,4}/`, to submit via
-  `STOCK_LR_MODE=frozen STOCK_SEEDS="1 2 3 4" bash slurm/run_stock_baseline.sh` (then
-  `sbatch slurm/analyze.sbatch`). **Reduced and unlocked stock baselines submitted (2026-07-13):**
+  exercised end to end on a synthetic 5-seed frame. **Frozen complete (2026-07-13):** the 96
+  finetunes (4 seeds x 24 endpoints, `configs/chemeleon_stock__s{1,2,3,4}/`) ran clean via the
+  durable driver (job 1593785), so the frozen baseline is now 5 seeds on disk (`chemeleon_stock`
+  plus `__s{1,2,3,4}`). The first `analyze.sbatch` (job 1622223) landed on the bad-ECC node
+  `iscf008` and every seeded-stock `model.predict` failed with an uncorrectable-ECC error, so the
+  regenerated `metrics.csv`/cards briefly reverted to the single-seed baseline; the flavors and
+  the old bare stock survived only because their `y_pred.npy` was cached. Resubmitted with
+  `--exclude=iscn008,iscf008` (job 1624623, clean on `isck002`); evaluate recomputed
+  only the 4 uncached seeded dirs and re-rendered `plots/report_card_r2.png` and
+  `report_card_mae_delta.png` with the true 5-seed baseline and per-cell error bars. Baked the
+  exclusion into `analyze.sbatch`'s header (commit `52d526d`) so a direct submission is protected;
+  this bad-node analyze fault has now bitten twice (509950 on iscn008, 1622223 on iscf008).
+  **Corrected PXR read (the reason this work started):** the single-seed baseline (seed 42) was
+  the best of the five stock seeds on PXR (R-squared 0.729, MAE 0.490); the 5-seed average is
+  0.668 +/- 0.084 R-squared, 0.550 +/- 0.054 MAE, mid-pack among the flavors. This reframes PXR
+  from "every flavor worse than baseline" (an artifact of a lucky single seed) to roughly a wash:
+  minimol (-3.1% MAE), rdkit2d (-1.7%), and osmordred (-0.2%) beat the averaged baseline, and most
+  flavors sit within one seed standard deviation of it. Recorded in `FINDINGS.md`.
+  **Reduced and unlocked stock baselines submitted (2026-07-13):**
   each as an independent cpu driver, `STOCK_LR_MODE=reduced STOCK_SEEDS="1 2 3 4" bash
   slurm/run_stock_baseline.sh` (driver job 1595754) and the same with `STOCK_LR_MODE=unlocked`
   (driver job 1595755), 96 finetunes each (4 seeds x 24 endpoints) into
