@@ -193,40 +193,54 @@ def test_mae_delta_std_is_nan_when_a_side_is_single_seed():
     assert np.isnan(sigma.loc["herg · herg", "ecfp"])
 
 
-def _seeded_mae_frame(per_flavor_maes: dict[str, list[float]]) -> pd.DataFrame:
-    """Prepared metrics frame with one herg row per flavor per seed, from given MAE samples."""
+def _seeded_mae_frame(per_flavor_seed_maes: dict[str, dict[int, float]]) -> pd.DataFrame:
+    """Prepared metrics frame with one herg row per flavor per seed, keyed by explicit seed."""
     rows = [
-        {"flavor": flavor, "recipe": "herg_st", "dataset": "herg", "endpoint": "herg", "mae": mae}
-        for flavor, maes in per_flavor_maes.items()
-        for mae in maes
+        {"flavor": flavor, "seed": seed, "recipe": "herg_st", "dataset": "herg",
+         "endpoint": "herg", "mae": mae}
+        for flavor, seed_maes in per_flavor_seed_maes.items()
+        for seed, mae in seed_maes.items()
     ]
     return prepare_rows(pd.DataFrame(rows))
 
 
-def test_mae_significance_flags_clear_difference_and_spares_overlap():
+def test_mae_significance_flags_consistent_paired_difference():
+    # baseline and flavor share seeds 1-4; the flavor is ~0.30 worse at every shared seed
     frame = _seeded_mae_frame({
-        "chemeleon_stock": [0.50, 0.52, 0.48, 0.51, 0.49],
-        "far": [0.80, 0.82, 0.78, 0.81, 0.79],   # cleanly separated from baseline
-        "near": [0.50, 0.53, 0.47, 0.52, 0.48],   # overlapping baseline
+        "chemeleon_stock": {1: 0.50, 2: 0.52, 3: 0.48, 4: 0.51},
+        "far": {1: 0.80, 2: 0.83, 3: 0.77, 4: 0.82, 5: 0.79},
     })
-    mae_matrix = pd.DataFrame({"far": [0.80], "near": [0.50]}, index=["herg · herg"])
+    mae_matrix = pd.DataFrame({"far": [0.80]}, index=["herg · herg"])
 
     pvalues = mae_significance_pvalues(frame, frame, "chemeleon_stock", mae_matrix)
 
     assert pvalues.loc["herg · herg", "far"] < 0.05
-    assert pvalues.loc["herg · herg", "near"] > 0.05
 
 
-def test_mae_significance_is_nan_without_enough_seeds():
+def test_mae_significance_spares_noisy_paired_difference():
+    # the per-seed differences are small and change sign, so the paired test finds no signal
     frame = _seeded_mae_frame({
-        "chemeleon_stock": [0.50, 0.52, 0.48],
-        "single": [0.80],   # one seed: no test possible
+        "chemeleon_stock": {1: 0.50, 2: 0.52, 3: 0.48, 4: 0.51},
+        "near": {1: 0.51, 2: 0.50, 3: 0.53, 4: 0.49, 5: 0.52},
     })
-    mae_matrix = pd.DataFrame({"single": [0.80]}, index=["herg · herg"])
+    mae_matrix = pd.DataFrame({"near": [0.51]}, index=["herg · herg"])
 
     pvalues = mae_significance_pvalues(frame, frame, "chemeleon_stock", mae_matrix)
 
-    assert np.isnan(pvalues.loc["herg · herg", "single"])
+    assert pvalues.loc["herg · herg", "near"] > 0.05
+
+
+def test_mae_significance_is_nan_with_fewer_than_two_shared_seeds():
+    # baseline seeds 1-3, flavor only seed 5: no shared seed to pair on
+    frame = _seeded_mae_frame({
+        "chemeleon_stock": {1: 0.50, 2: 0.52, 3: 0.48},
+        "disjoint": {5: 0.80},
+    })
+    mae_matrix = pd.DataFrame({"disjoint": [0.80]}, index=["herg · herg"])
+
+    pvalues = mae_significance_pvalues(frame, frame, "chemeleon_stock", mae_matrix)
+
+    assert np.isnan(pvalues.loc["herg · herg", "disjoint"])
 
 
 def test_assemble_r2_card_orders_baseline_first_then_flavors(tidy_metrics):
