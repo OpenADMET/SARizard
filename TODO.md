@@ -434,6 +434,41 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   all three. Still to do (submission orchestration, part of the 5-seed launch): finetune the
   stock baseline per protocol, run `meta_model.py --lr-mode` per protocol, and render the six
   cards (three protocols x two color modes).
+  **Multi-seed stock baseline so every card cell compares like against like (2026-07-13).** The
+  report cards averaged each flavor over 5 finetune seeds but compared them against a
+  single-seed stock baseline, so the baseline column and the whole MAE %-change card were an
+  unpaired reference. Fix: run the stock CheMeleon reference at 5 seeds too, matching the flavors,
+  and average it. Decision on the seed set (explicit call): keep the existing single-seed run
+  (bare `chemeleon_stock`, seed 42) and add seeds 1-4, so the baseline is 5 seeds total (42 plus
+  1-4). Note the PXR/ClusterSplitter endpoints write the finetune seed into `split.random_seed`,
+  so seeds 1-4 reproduce the same Butina splits the same-seed flavor runs use, but seed 42 is a
+  split no flavor uses; the averaged baseline is therefore over a slightly different split set
+  than the flavors (an accepted, unpaired comparison), which is why the MAE-delta error bar is
+  propagated from each side's independent seed spread rather than paired per seed.
+  Wiring (code done, committed; jobs not yet submitted): `generate.py` stock mode is now
+  seed-aware via `stock_baseline_variant_label` (`--finetune-seed <s>` writes
+  `configs/chemeleon_stock[_<mode>]__s<seed>/`, no `--finetune-seed` keeps the bare dir);
+  `slurm/env.sh` gained `STOCK_SEEDS` (default `1 2 3 4`), `STOCK_LR_MODE`, `stock_base_label`,
+  and `stock_recipe_list`; `finetune_stock_baseline.sbatch` enumerates via `stock_recipe_list`
+  and writes `results/<label>/<recipe>/`; `run_stock_baseline.sh` generates the per-seed recipes
+  and drives the finetune through `submit_batched.sh` (bad-node-safe batches), one protocol per
+  invocation; `analyze.sbatch` folds every frozen `chemeleon_stock[__s<seed>]` dir into
+  `metrics.csv`. `report_card.py` now annotates every endpoint cell (flavors and the baseline
+  column) with a `±` seed standard deviation: `build_matrix`/`build_reference_series` gained an
+  `aggfunc`/`agg` argument for the per-cell std, `mae_delta_std` propagates both sides' spread
+  into the delta card's error bar, and the baseline column averages the collapsed stock seeds for
+  free (the existing `collapse_seed_variants` maps `chemeleon_stock__s<seed>` back to
+  `chemeleon_stock`). The AVERAGE row keeps a bare mean (its spread is over endpoints, not seeds).
+  Regression tests added (`test_report_card.py`, `test_generate.py`); the render path was
+  exercised end to end on a synthetic 5-seed frame. **Frozen first:** 96 finetunes (4 seeds x 24
+  endpoints) generated as `configs/chemeleon_stock__s{1,2,3,4}/`, to submit via
+  `STOCK_LR_MODE=frozen STOCK_SEEDS="1 2 3 4" bash slurm/run_stock_baseline.sh` (then
+  `sbatch slurm/analyze.sbatch`). **Reduced and unlocked stock baselines still to run (pending):**
+  each also needs 4 additional seeds (1-4) on top of any existing single-seed run, submitted the
+  same way with `STOCK_LR_MODE=reduced` and `STOCK_LR_MODE=unlocked`, then the matching per-mode
+  report cards (`report_card.py --lr-mode <mode> --baseline-flavor chemeleon_stock_<mode>`) and
+  per-mode meta-models rendered. The reduced/unlocked flavor legs (see Future experiments) must
+  finish first, since those cards read `results/lr_metrics.csv`.
 - [x] 9. Meta-model: stack per-flavor finetuned predictions per endpoint, fit LGBM/RF/MLP
   on out-of-fold predictions, compare to the best single flavor.
   First real result, produced by the same job 19230968 now that ≥2 flavors have results:

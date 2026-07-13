@@ -5,32 +5,57 @@
 # custom pretraining help over off-the-shelf CheMeleon" reference for the report card
 # (sarizard.analysis.report_card's --baseline-flavor).
 #
-# One-time: unlike run_all.sh, this does not depend on the corpus or pretraining regime, so it
-# does not need to be rerun when either changes. Resumable: an existing results/chemeleon_stock/
-# <recipe>/ dir is skipped.
+# Multi-seed: STOCK_SEEDS (default "1 2 3 4") finetunes the checkpoint once per seed so the
+# baseline carries the same per-cell error bars the flavors do, tagged
+# chemeleon_stock[_<mode>]__s<seed>. The existing single-seed run (bare chemeleon_stock, seed
+# 42) stays on disk and averages in alongside these, so the frozen baseline is 5 seeds total
+# (42 plus 1-4). report_card/meta_model collapse the __s<seed> variants back to one baseline
+# column and average them.
+#
+# One protocol per invocation via STOCK_LR_MODE (frozen/reduced/unlocked), matching the flavor
+# LR-experiment driver pattern; run it three times (once per protocol) to cover all three.
+# Corpus/regime-independent, so unlike run_all.sh it never needs rerunning when either changes.
+# Resumable: an existing results/<label>/<recipe>/ dir with a model.pth is skipped.
+#
+# The finetune runs through submit_batched.sh, which blocks for the duration (submit a batch,
+# wait, rerun bad-node casualties, next batch), so launch this from a persistent shell. The
+# durable pattern is a standalone cpu job:
+#   sbatch --partition=cpu --time=1-00:00:00 --job-name=stock-driver-frozen \
+#       --export=ALL,REPO_DIR="$PWD",STOCK_LR_MODE=frozen,STOCK_SEEDS="1 2 3 4" \
+#       --wrap="bash slurm/run_stock_baseline.sh"
 #
 # Usage:
-#   bash slurm/run_stock_baseline.sh
+#   STOCK_LR_MODE=frozen STOCK_SEEDS="1 2 3 4" bash slurm/run_stock_baseline.sh
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/env.sh"
 
-echo "generating stock-CheMeleon baseline recipes..."
-conda run -n "$MAIN_ENV" python -m sarizard.configs.generate --stock-baseline
-N_RECIPES=$(ls "$REPO_DIR"/configs/chemeleon_stock/*.yaml 2>/dev/null | wc -l | tr -d ' ')
+echo "stock-CheMeleon baseline: mode=$STOCK_LR_MODE seeds='$STOCK_SEEDS'"
+
+# generate the per-seed recipes for this protocol (one recipe set per seed, gitignored)
+for seed in $STOCK_SEEDS; do
+    conda run -n "$MAIN_ENV" python -m sarizard.configs.generate \
+        --stock-baseline --mpnn-lr-mode "$STOCK_LR_MODE" --finetune-seed "$seed"
+done
+
+N_RECIPES=$(stock_recipe_list | wc -l | tr -d ' ')
 if [[ "$N_RECIPES" -eq 0 ]]; then
     echo "ERROR: no stock-baseline recipes generated; check configs/generate.py" >&2
     exit 1
 fi
-echo "  $N_RECIPES recipes (finetune array 0-$((N_RECIPES - 1)))"
+echo "  $N_RECIPES recipes (STOCK_LR_MODE=$STOCK_LR_MODE x $(wc -w <<<"$STOCK_SEEDS") seeds)"
 
-JOB_FINETUNE=$(sbatch --parsable \
-    --array=0-$((N_RECIPES - 1)) \
-    "$SCRIPT_DIR/finetune_stock_baseline.sbatch")
-echo "stock-finetune job=$JOB_FINETUNE  ($N_RECIPES recipes)"
+# drive the finetune in bad-node-safe batches; the array index maps against stock_recipe_list,
+# the same order finetune_stock_baseline.sbatch enumerates
+bash "$SCRIPT_DIR/submit_batched.sh" \
+    "$SCRIPT_DIR/finetune_stock_baseline.sbatch" stock_recipe_list --export=ALL
 
 echo ""
-echo "when done, results/chemeleon_stock/ is picked up automatically by:"
-echo "  python -m sarizard.analysis.evaluate --flavors chemeleon_stock <other flavors...>"
-echo "  python -m sarizard.analysis.report_card --metric r2   # includes it as a reference column"
+echo "stock-baseline finetune complete for mode=$STOCK_LR_MODE."
+echo "regenerate the report cards / metrics with the averaged baseline via:"
+if [[ "$STOCK_LR_MODE" == "frozen" ]]; then
+    echo "  sbatch slurm/analyze.sbatch      # folds every chemeleon_stock[__s<seed>] dir in"
+else
+    echo "  bash slurm/run_lr_experiments.sh # rerun analyze for the $STOCK_LR_MODE protocol"
+fi
