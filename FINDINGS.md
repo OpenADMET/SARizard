@@ -373,12 +373,16 @@ and the entire MAE %-change card an unpaired, high-variance reference. The stock
 now finetuned at five seeds (frozen: the original seed 42 plus seeds 1-4), and `report_card.py`
 averages it. The R-squared card annotates every endpoint cell (flavors and the baseline column)
 with a plus/minus seed standard deviation. The MAE %-change card now colors a cell only where the
-flavor's per-seed MAE differs significantly from the baseline's (two-sample Welch t-test, p at or
-below 0.05); a non-significant cell is painted white and every cell is annotated with its p-value,
-so the card highlights only the differences the seed spread supports.
+flavor's MAE differs significantly from the baseline's (paired t-test over the seeds present in
+both, p at or below 0.05); a non-significant cell is painted white and every cell is annotated
+with its p-value, so the card highlights only the differences the seed spread supports. Pairing is
+by seed: a given seed drives the same split for the flavor and the baseline (the cluster-split
+endpoints reproduce one partition per seed, the predefined splits are fixed across seeds), so the
+pair is measured on the same molecules. The baseline and flavor seed sets overlap on seeds 1-4
+(baseline is 42 plus 1-4, flavors are 1-5), so the test pairs those four.
 `results/metrics.csv` and `plots/report_card_r2.png`/`report_card_mae_delta.png` are regenerated
-with the 5-seed baseline. Across the whole frozen card, 143 of 480 cells are significant, on 23
-of 32 endpoints, concentrated on the high-signal, low-variance endpoints (LogD, Caco-2 efflux,
+with the 5-seed baseline. Across the whole frozen card, 134 of 480 cells are significant, on 28 of
+32 endpoints, concentrated on the high-signal, low-variance endpoints (LogD, Caco-2 efflux,
 clearance) where flavors separate cleanly from stock.
 
 The correction matters most where the single seed happened to be unrepresentative. On PXR:
@@ -392,10 +396,11 @@ Seed 42 was the best of the five stock seeds on PXR (the five range 0.525 to 0.7
 R-squared), so the old single-seed baseline flattered stock and made every flavor look 9 to 27
 percent worse on MAE. Against the 5-seed average, PXR is roughly a wash: minimol (-3.1 percent
 MAE versus baseline), rdkit2d (-1.7 percent), and osmordred (-0.2 percent) beat it, and the rest
-are worse but not by much. Under the significance test, every flavor on PXR is white (p from 0.057
-to 0.99), so no flavor differs significantly from stock on PXR MAE at five seeds. The earlier "PXR
-delta is bad across the board" read was an artifact of comparing 5-seed flavor averages against
-one lucky stock point, not a real deficit of descriptor pretraining on PXR. The lesson
+are worse but not by much. Under the paired significance test, only erg is significantly worse
+than stock on PXR (+13.3 percent MAE, p 0.037); every other flavor is white (p 0.09 to 0.84), so
+14 of 15 flavors do not differ significantly from stock on PXR MAE. The earlier "PXR delta is bad
+across the board" read was an artifact of comparing 5-seed flavor averages against one lucky stock
+point, not a real deficit of descriptor pretraining on PXR. The lesson
 generalizes: the stock baseline is as seed-unstable as the flavors, so a single-seed reference is
 not a safe comparison for any endpoint with this much finetune-seed variance.
 

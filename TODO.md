@@ -478,16 +478,19 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   from "every flavor worse than baseline" (an artifact of a lucky single seed) to roughly a wash:
   minimol (-3.1% MAE), rdkit2d (-1.7%), and osmordred (-0.2%) beat the averaged baseline, and most
   flavors sit within one seed standard deviation of it. Recorded in `FINDINGS.md`.
-  **Delta card now significance-gated (2026-07-13, commit 9442857).** On explicit request, the
-  MAE %-change card colors a cell only where the flavor's per-seed MAE differs significantly from
-  the baseline's (two-sample Welch t-test on the seeds, p at or below `SIGNIFICANCE_ALPHA=0.05`);
-  a non-significant cell is white and every cell is annotated with its p-value. `report_card.py`'s
-  `mae_significance_pvalues` runs the test and `plot_card` gained a `color_values` layer so a cell
-  can be annotated with its true change while colored white. The R-squared card keeps its
-  per-cell +/- seed std. Frozen cards regenerated from the live `metrics.csv` (no GPU needed):
-  143 of 480 cells significant, on 23 of 32 endpoints, all concentrated on the high-signal
-  endpoints; on PXR every flavor is white (none significant vs stock at 5 seeds). The same gating
-  applies automatically to the reduced/unlocked cards when they are rendered.
+  **Delta card now significance-gated (2026-07-13, commits 9442857, 45019c4).** On explicit
+  request, the MAE %-change card colors a cell only where the flavor's MAE differs significantly
+  from the baseline's (paired t-test over the seeds present in both, p at or below
+  `SIGNIFICANCE_ALPHA=0.05`); a non-significant cell is white and every cell is annotated with its
+  p-value. `report_card.py`'s `mae_significance_pvalues` runs the test and `plot_card` gained a
+  `color_values` layer so a cell can be annotated with its true change while colored white. The
+  test is paired by seed (a seed drives the same split for flavor and baseline), pairing the
+  shared seeds 1-4 (baseline is 42 plus 1-4, flavors are 1-5); `main` captures the seed from each
+  label before collapse strips the `__s` tag. The R-squared card keeps its per-cell +/- seed std.
+  Frozen cards regenerated from the live `metrics.csv` (no GPU needed): 134 of 480 cells
+  significant, on 28 of 32 endpoints, concentrated on the high-signal endpoints; on PXR only erg
+  is significant (worse than stock, p 0.037), the other 14 flavors white. The same gating applies
+  automatically to the reduced/unlocked cards when they are rendered.
   **Reduced and unlocked stock baselines submitted (2026-07-13):**
   each as an independent cpu driver, `STOCK_LR_MODE=reduced STOCK_SEEDS="1 2 3 4" bash
   slurm/run_stock_baseline.sh` (driver job 1595754) and the same with `STOCK_LR_MODE=unlocked`
