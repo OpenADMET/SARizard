@@ -96,7 +96,7 @@ def ablation_metrics_csv(tmp_path):
         label = "ablation_" + name + "__s42" + ("" if mode == "frozen" else f"__{mode}")
         for endpoint in ("herg", "cyp"):
             rows.append(
-                {"flavor": label, "dataset": "d", "endpoint": endpoint, "r2": value}
+                {"flavor": label, "recipe": endpoint, "endpoint": endpoint, "r2": value}
             )
     csv_path = tmp_path / "ablation_metrics.csv"
     pd.DataFrame(rows).to_csv(csv_path, index=False)

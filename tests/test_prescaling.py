@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 import zarr
 
-from sarizard.pretraining.prescaling import get_ablation, run_prescaling
+from sarizard.pretraining.prescaling import PrescalingConfig, get_ablation, run_prescaling
 from sarizard.pretraining.splitting import train_val_chunk_indices
 
 CHUNK_ROWS = 128
@@ -66,7 +66,7 @@ def target_store(tmp_path):
 
 @pytest.mark.parametrize(
     "ablation",
-    ["minimal", "chemeleon_baseline", "order_fix", "plus_drop_corr",
+    ["minimal", "order_fix", "plus_drop_corr",
      "plus_drop_low_var", "plus_yeo_johnson", "full"],
 )
 def test_nonfinite_inputs_are_not_imputed(target_store, tmp_path, ablation: str):
@@ -90,7 +90,7 @@ def test_nonfinite_inputs_are_not_imputed(target_store, tmp_path, ablation: str)
 
 @pytest.mark.parametrize(
     "ablation",
-    ["minimal", "chemeleon_baseline", "order_fix", "plus_drop_corr",
+    ["minimal", "order_fix", "plus_drop_corr",
      "plus_drop_low_var", "plus_yeo_johnson", "full"],
 )
 def test_failed_molecule_row_stays_nan(target_store, tmp_path, ablation: str):
@@ -148,10 +148,16 @@ def test_full_drops_more_columns_than_order_fix(target_store, tmp_path):
 
 
 def test_winsorization_bounds_the_outlier(target_store, tmp_path):
-    run_prescaling(target_store, tmp_path / "min.zarr", get_ablation("minimal"), force=True)
-    run_prescaling(
-        target_store, tmp_path / "base.zarr", get_ablation("chemeleon_baseline"), force=True
+    # the legacy production recipe: std-based winsorize and z-score both fit on the raw target
+    std_baseline = PrescalingConfig(
+        name="std_baseline",
+        do_winsorize=True,
+        winsorize_method="std",
+        winsorize_std_factor=6.0,
+        zscore_fit="raw",
     )
+    run_prescaling(target_store, tmp_path / "min.zarr", get_ablation("minimal"), force=True)
+    run_prescaling(target_store, tmp_path / "base.zarr", std_baseline, force=True)
     run_prescaling(target_store, tmp_path / "of.zarr", get_ablation("order_fix"), force=True)
 
     # nan-aware: the failed-molecule row is NaN in every output store

@@ -27,6 +27,18 @@ if [[ ${#LABELS[@]} -eq 0 ]]; then
     exit 1
 fi
 
+# add the stock-CheMeleon baseline the cards diverge against: for each finetuned protocol, its
+# per-seed baseline dirs (chemeleon_stock__s<seed> for frozen, chemeleon_stock_<mode>__s<seed>
+# otherwise), plus the legacy bare frozen dir. prescaling_report looks these up by label as the
+# reference column and the MAE-delta baseline, so they must be in ablation_metrics.csv too.
+read -ra MODES <<<"$ABLATION_LR_MODES"
+for mode in "${MODES[@]}"; do
+    if [[ "$mode" == "frozen" ]]; then base="chemeleon_stock"; else base="chemeleon_stock_${mode}"; fi
+    for sdir in "$REPO_DIR"/results/${base}__s* "$REPO_DIR"/results/${base}; do
+        [[ -d "$sdir" ]] && LABELS+=("$(basename "$sdir")")
+    done
+done
+
 # collect per-(variant, endpoint) metrics into a dedicated CSV, then compare ablations
 python -m sarizard.analysis.evaluate --accelerator "$ACCELERATOR" \
     --flavors "${LABELS[@]}" --out results/ablation_metrics.csv
