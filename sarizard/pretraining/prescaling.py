@@ -22,10 +22,12 @@ the train chunks only, drawn from the same chunk split ``split.py`` later emits,
 from the validation rows leaks into the transform. Column drops and transforms are then
 applied to every row when writing the output store.
 
-Reproducing the current CheMeleon recipe (``chemeleon_baseline`` ablation): the production
-``split.py`` computes mean/std on the raw target and uses those same stats both to set the
-winsorization limits (mean ± k·std) and to z-score, so the outliers it is about to clip
-inflate the std first. That is ``winsorize_method="std"`` with ``zscore_fit="raw"``.
+For reference, the pre-milestone-5 production recipe was ``winsorize_method="std"`` with
+``zscore_fit="raw"``: ``split.py`` computed mean/std on the raw target and used those same
+stats both to set the winsorization limits (mean ± k·std) and to z-score, so the outliers it
+was about to clip inflated the std first. That legacy recipe is no longer carried as an
+ablation column; the triage now compares each prescaling recipe against the stock-CheMeleon
+base model instead.
 """
 
 from __future__ import annotations
@@ -121,8 +123,10 @@ class PrescalingConfig:
 
 
 # The ablation ladder, run before the flavor sweep to cement the production recipe.
-# chemeleon_baseline reproduces today's split.py; order_fix corrects the winsorize/scale
-# entanglement; each plus_* isolates one new step on top of order_fix; full stacks them.
+# order_fix corrects the winsorize/scale entanglement of the legacy production recipe; each
+# plus_* isolates one new step on top of order_fix; full stacks them. The triage compares each
+# recipe against the stock-CheMeleon base model, so the legacy production recipe is no longer
+# carried as its own ablation column.
 _ORDER_FIX = PrescalingConfig(
     name="order_fix",
     winsorize_method="percentile",
@@ -136,17 +140,6 @@ ABLATIONS: dict[str, PrescalingConfig] = {
         do_winsorize=False,
         zscore_fit="post_transform",
         description="Floor: mandatory NaN/inf clean and z-score only, no winsorization.",
-    ),
-    "chemeleon_baseline": PrescalingConfig(
-        name="chemeleon_baseline",
-        do_winsorize=True,
-        winsorize_method="std",
-        winsorize_std_factor=6.0,
-        zscore_fit="raw",
-        description=(
-            "Reproduces production split.py: std-based winsorize and z-score both fit on "
-            "the raw target, so clipped outliers inflate the std first."
-        ),
     ),
     "order_fix": _ORDER_FIX,
     "plus_drop_corr": replace(
