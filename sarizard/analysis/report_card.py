@@ -566,11 +566,12 @@ def plot_card(
             GROUP_LABEL_X, (start + end - 1) / 2.0, source, transform=ax.get_yaxis_transform(),
             rotation=90, ha="center", va="center", fontsize=FONT_AXIS, fontweight="bold",
         )
-    # thicker emphasis line directly after the requested source group's last endpoint
+    # emphasis line directly after the requested source group's last endpoint, matching the
+    # weight of the other group separators
     if emphasis_source is not None:
         for _, end, source in groups:
             if source == emphasis_source:
-                _draw_hline(ax, end - 0.5, n_cols, spacer_cols, linewidth=4.0)
+                _draw_hline(ax, end - 0.5, n_cols, spacer_cols, linewidth=2.2)
     # bold line above the AVERAGE row
     _draw_hline(ax, average_row - 0.5, n_cols, spacer_cols, linewidth=2.2)
 
