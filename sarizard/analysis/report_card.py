@@ -73,9 +73,11 @@ FONT_CBAR = 9  # colorbar tick labels
 # source group whose last endpoint gets a thicker separator line directly after it
 EMPHASIS_SOURCE = "pxr"
 
-# x position (axes fraction, left of the grid) for the rotated per-group source labels, pushed
-# far enough left to clear the longest endpoint tick label
-GROUP_LABEL_X = -0.28
+# clearance (inches) left of the grid for the rotated per-group source labels, enough to clear
+# the longest endpoint tick label. Converted to an axes fraction per card from the grid width
+# (~1.15 in/column, matching the figsize) so narrow ablation cards get the same absolute gap as
+# the wide flavor card rather than a width-scaled one that collides on the narrow layout.
+GROUP_LABEL_INCHES = 5.5
 
 
 def collapse_seed_variants(frame: pd.DataFrame, column: str = "flavor") -> pd.DataFrame:
@@ -558,12 +560,14 @@ def plot_card(
     ax.axhspan(spacer_row_top, spacer_row_bottom, color="white", zorder=2)
 
     # bold source-group separators (each broken across the white spacer columns) and per-group
-    # labels on the left margin
+    # labels on the left margin; the label x is a fixed absolute gap left of the grid, so a narrow
+    # card clears its row labels as well as the wide one does (see GROUP_LABEL_INCHES)
+    group_label_x = -GROUP_LABEL_INCHES / (1.15 * n_cols)
     for start, end, source in groups:
         if start > 0:
             _draw_hline(ax, start - 0.5, n_cols, spacer_cols, linewidth=2.2)
         ax.text(
-            GROUP_LABEL_X, (start + end - 1) / 2.0, source, transform=ax.get_yaxis_transform(),
+            group_label_x, (start + end - 1) / 2.0, source, transform=ax.get_yaxis_transform(),
             rotation=90, ha="center", va="center", fontsize=FONT_AXIS, fontweight="bold",
         )
     # emphasis line directly after the requested source group's last endpoint, matching the
@@ -637,12 +641,37 @@ def _blank_summary_rows(aux: pd.DataFrame) -> pd.DataFrame:
     return aux
 
 
-def _render_r2_card(
-    matrix_frame: pd.DataFrame, frame: pd.DataFrame, baseline_flavor: str, out_png: Path
+def render_r2_card(
+    matrix_frame: pd.DataFrame,
+    frame: pd.DataFrame,
+    baseline_flavor: str,
+    out_png: Path,
+    *,
+    columns: list[str] | None = None,
+    title_prefix: str = "Report card",
 ) -> None:
-    """Assemble and render the R-squared card (red = 0, green = 1) with the baseline column."""
-    flavor_r2 = build_matrix(matrix_frame, "r2")
-    flavor_r2_std = build_matrix(matrix_frame, "r2", aggfunc="std")
+    """Assemble and render the R-squared card (red = 0, green = 1) with the baseline column.
+
+    Parameters
+    ----------
+    matrix_frame : pandas.DataFrame
+        Prepared, seed-collapsed metrics for the card columns (carries ``row``, ``flavor``, and
+        the metric columns).
+    frame : pandas.DataFrame
+        Prepared, seed-collapsed metrics that include the baseline flavor's rows.
+    baseline_flavor : str
+        Baseline flavor label for the reference column (e.g. ``chemeleon_stock``).
+    out_png : pathlib.Path
+        Image output path; the matrix CSV is written alongside it.
+    columns : list of str, optional
+        Column order for the card, values of the ``flavor`` field. Defaults to the flavor
+        registry order; the ablation report passes its bare ablation names.
+    title_prefix : str, optional
+        Leading text of the figure title, so a reused card can read e.g. ``Ablation report
+        card`` instead of the default ``Report card``.
+    """
+    flavor_r2 = build_matrix(matrix_frame, "r2", columns=columns)
+    flavor_r2_std = build_matrix(matrix_frame, "r2", columns=columns, aggfunc="std")
     baseline = build_reference_series(frame, baseline_flavor, "r2")
     baseline_std = build_reference_series(frame, baseline_flavor, "r2", agg="std")
     matrix, spacer_cols, ref_cols = assemble_r2_card(flavor_r2, baseline)
@@ -654,7 +683,7 @@ def _render_r2_card(
         matrix, out_png, out_png.with_suffix(".csv"),
         cmap=plt.get_cmap("RdYlGn"), vmin=0.0, vmax=1.0,
         annotate=lambda v, s: f"{v:.3f}" if not np.isfinite(s) else f"{v:.3f}\n±{s:.3f}",
-        title="Report card: R² (red = 0, green = 1; ± is the seed standard deviation)",
+        title=f"{title_prefix}: R² (red = 0, green = 1; ± is the seed standard deviation)",
         cbar_ticks=[0.0, 0.5, 1.0], cbar_labels=["0.0", "0.5", "1.0"],
         spacer_cols=spacer_cols, ref_cols=ref_cols, groups=groups, average_row=average_row,
         aux=_blank_summary_rows(std), emphasis_source=EMPHASIS_SOURCE,
@@ -670,8 +699,14 @@ def _format_pvalue(p: float) -> str:
     return f"p={p:.3f}"
 
 
-def _render_mae_delta_card(
-    matrix_frame: pd.DataFrame, frame: pd.DataFrame, baseline_flavor: str, out_png: Path
+def render_mae_delta_card(
+    matrix_frame: pd.DataFrame,
+    frame: pd.DataFrame,
+    baseline_flavor: str,
+    out_png: Path,
+    *,
+    columns: list[str] | None = None,
+    title_prefix: str = "Report card",
 ) -> None:
     """Render the MAE %-change card, coloring only cells that differ significantly from baseline.
 
@@ -680,6 +715,16 @@ def _render_mae_delta_card(
     t-test p above ``SIGNIFICANCE_ALPHA``) is painted white regardless of the change, so the card
     highlights only differences the seed spread supports. Every cell is annotated with its change
     and its p-value.
+
+    Parameters
+    ----------
+    matrix_frame, frame, baseline_flavor, out_png
+        As in :func:`render_r2_card`.
+    columns : list of str, optional
+        Column order for the card. Defaults to the flavor registry order; the ablation report
+        passes its bare ablation names.
+    title_prefix : str, optional
+        Leading text of the figure title (default ``Report card``).
     """
     baseline_mae = build_reference_series(frame, baseline_flavor, "mae")
     if baseline_mae.empty:
@@ -687,7 +732,7 @@ def _render_mae_delta_card(
             "no %s MAE in the metrics; skipping the MAE-delta card", baseline_flavor
         )
         return
-    mae = build_matrix(matrix_frame, "mae")
+    mae = build_matrix(matrix_frame, "mae", columns=columns)
     delta = mae_delta_matrix(mae, baseline_mae)
     pvalues = mae_significance_pvalues(matrix_frame, frame, baseline_flavor, mae)
     # paint a non-significant (or untestable) cell white by driving its color to the norm center,
@@ -714,8 +759,9 @@ def _render_mae_delta_card(
         matrix, out_png, out_png.with_suffix(".csv"),
         cmap=_DELTA_CMAP, norm=norm,
         annotate=lambda v, p: f"{v:+.0f}%\n{_format_pvalue(p)}".rstrip(),
-        title="Report card: MAE % change vs chemeleon baseline (green = lower MAE / better, red = "
-        f"worse; white where p > {SIGNIFICANCE_ALPHA:g}, two-sample Welch t-test on the seeds)",
+        title=f"{title_prefix}: MAE % change vs chemeleon baseline (green = lower MAE / better, "
+        f"red = worse; white where p > {SIGNIFICANCE_ALPHA:g}, two-sample Welch t-test on the "
+        "seeds)",
         cbar_ticks=[-extent, 0.0, extent],
         cbar_labels=[f"-{extent:.0f}%", "0% (baseline)", f"+{extent:.0f}%"],
         spacer_cols=[], ref_cols=[], groups=groups, average_row=average_row,
@@ -765,11 +811,11 @@ def main() -> None:
             )
 
     suffix = f"_{args.lr_mode}" if args.lr_mode else ""
-    _render_r2_card(
+    render_r2_card(
         matrix_frame, frame, args.baseline_flavor,
         args.out_dir / f"report_card_r2{suffix}.png",
     )
-    _render_mae_delta_card(
+    render_mae_delta_card(
         matrix_frame, frame, args.baseline_flavor,
         args.out_dir / f"report_card_mae_delta{suffix}.png",
     )
