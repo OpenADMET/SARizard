@@ -63,6 +63,16 @@ _SPACER_ROW = " "
 # white = no change, red = MAE above baseline (worse)
 _DELTA_CMAP = LinearSegmentedColormap.from_list("mae_delta", ["#1a9850", "#ffffff", "#d73027"])
 
+# report-card font sizes (points), nudged up for legibility at print scale
+FONT_TITLE = 13
+FONT_AXIS = 11  # x tick labels and the per-group source labels
+FONT_YTICK = 10  # endpoint row labels
+FONT_CELL = 8  # per-cell value and error-bar/p-value annotation
+FONT_CBAR = 9  # colorbar tick labels
+
+# source group whose last endpoint gets a thicker separator line directly after it
+EMPHASIS_SOURCE = "pxr"
+
 
 def collapse_seed_variants(frame: pd.DataFrame, column: str = "flavor") -> pd.DataFrame:
     """Map ``<base>__s<seed>`` labels in ``column`` back to their base label.
@@ -422,6 +432,20 @@ def _endpoint_labels(index: pd.Index) -> list[str]:
     return labels
 
 
+def _draw_hline(ax, y: float, n_cols: int, spacer_cols: list[int], *, linewidth: float) -> None:
+    """Draw a horizontal separator at ``y`` across the data columns, broken over spacer columns.
+
+    Splitting the rule at each blank spacer column keeps it from crossing the white reference
+    gap; the segments span the real cells on either side only.
+    """
+    x = -0.5
+    for col in sorted(spacer_cols):
+        if col - 0.5 > x:
+            ax.plot([x, col - 0.5], [y, y], color="black", linewidth=linewidth, zorder=3)
+        x = col + 0.5
+    ax.plot([x, n_cols - 0.5], [y, y], color="black", linewidth=linewidth, zorder=3)
+
+
 def plot_card(
     matrix: pd.DataFrame,
     out_png: Path,
@@ -441,6 +465,7 @@ def plot_card(
     average_row: int,
     aux: pd.DataFrame | None = None,
     color_values: pd.DataFrame | None = None,
+    emphasis_source: str | None = None,
 ) -> None:
     """Render one report-card heatmap and write its underlying matrix CSV.
 
@@ -483,6 +508,10 @@ def plot_card(
         from the annotated value (e.g. the MAE-delta card paints a non-significant cell white by
         setting its color value to the norm center while still annotating the real change). When
         omitted, the annotated ``matrix`` drives the color.
+    emphasis_source : str, optional
+        Source-group name (see ``groups``) whose last endpoint gets a thicker separator line
+        directly after it, over and above the normal group boundary. When omitted, no group is
+        emphasized.
     """
     values = matrix.to_numpy(dtype=float)
     # align the auxiliary matrix to the value matrix so the annotation loop indexes them in lockstep
@@ -508,28 +537,46 @@ def plot_card(
     imshow_kwargs = {"norm": norm} if norm is not None else {"vmin": vmin, "vmax": vmax}
     im = ax.imshow(np.ma.masked_invalid(color_layer), aspect="auto", cmap=cmap, **imshow_kwargs)
 
-    # paint the spacer columns and the spacer row white (distinct from missing-data lightgrey)
-    # and bound the spacer columns with divider lines so the reference block reads as separate
+    # the blank spacer row sits directly above the AVERAGE row; its white band is where the
+    # vertical divider lines break so no rule crosses empty space
+    spacer_row_top, spacer_row_bottom = average_row - 1.5, average_row - 0.5
+
+    # paint the spacer columns and the spacer row white (distinct from missing-data lightgrey);
+    # bound each spacer column with divider lines split at the white spacer row so no line
+    # crosses that empty band
     for col in spacer_cols:
         ax.axvspan(col - 0.5, col + 0.5, color="white", zorder=2)
-        ax.axvline(col - 0.5, color="black", linewidth=1.2, zorder=3)
-        ax.axvline(col + 0.5, color="black", linewidth=1.2, zorder=3)
-    ax.axhspan(average_row - 1.5, average_row - 0.5, color="white", zorder=2)
+        for x in (col - 0.5, col + 0.5):
+            ax.plot([x, x], [-0.5, spacer_row_top], color="black", linewidth=1.2, zorder=3)
+            ax.plot(
+                [x, x], [spacer_row_bottom, n_rows - 0.5], color="black", linewidth=1.2, zorder=3
+            )
+    ax.axhspan(spacer_row_top, spacer_row_bottom, color="white", zorder=2)
 
-    # bold source-group separators and per-group labels on the left margin
+    # bold source-group separators (each broken across the white spacer columns) and per-group
+    # labels on the left margin
     for start, end, source in groups:
         if start > 0:
-            ax.axhline(start - 0.5, color="black", linewidth=2.2, zorder=3)
+            _draw_hline(ax, start - 0.5, n_cols, spacer_cols, linewidth=2.2)
         ax.text(
             -0.16, (start + end - 1) / 2.0, source, transform=ax.get_yaxis_transform(),
-            rotation=90, ha="center", va="center", fontsize=9, fontweight="bold",
+            rotation=90, ha="center", va="center", fontsize=FONT_AXIS, fontweight="bold",
         )
+    # thicker emphasis line directly after the requested source group's last endpoint
+    if emphasis_source is not None:
+        for _, end, source in groups:
+            if source == emphasis_source:
+                _draw_hline(ax, end - 0.5, n_cols, spacer_cols, linewidth=4.0)
     # bold line above the AVERAGE row
-    ax.axhline(average_row - 0.5, color="black", linewidth=2.2, zorder=3)
+    _draw_hline(ax, average_row - 0.5, n_cols, spacer_cols, linewidth=2.2)
+
+    # pin the view to the imshow extent so the added line segments do not re-margin the axes
+    ax.set_xlim(-0.5, n_cols - 0.5)
+    ax.set_ylim(n_rows - 0.5, -0.5)
 
     ax.set_xticks(np.arange(n_cols))
     x_labels = ["" if i in spacer_cols else str(c) for i, c in enumerate(matrix.columns)]
-    ax.set_xticklabels(x_labels, rotation=45, ha="left", fontsize=9)
+    ax.set_xticklabels(x_labels, rotation=45, ha="left", fontsize=FONT_AXIS)
     for i, label in enumerate(ax.get_xticklabels()):
         if i in ref_cols:
             label.set_fontweight("bold")
@@ -539,7 +586,7 @@ def plot_card(
     ax.set_yticks(np.arange(n_rows))
     y_labels = _endpoint_labels(matrix.index)
     y_labels = ["" if lbl == _SPACER_ROW else lbl for lbl in y_labels]
-    ax.set_yticklabels(y_labels, fontsize=8)
+    ax.set_yticklabels(y_labels, fontsize=FONT_YTICK)
     for label in ax.get_yticklabels():
         if label.get_text() == AVERAGE_LABEL:
             label.set_fontweight("bold")
@@ -551,13 +598,13 @@ def plot_card(
             if np.isfinite(value):
                 ax.text(
                     j, i, annotate(value, aux_values[i, j]),
-                    ha="center", va="center", fontsize=7, color="black",
+                    ha="center", va="center", fontsize=FONT_CELL, color="black",
                 )
 
-    ax.set_title(title, fontsize=11, pad=28)
+    ax.set_title(title, fontsize=FONT_TITLE, pad=28)
     cbar = fig.colorbar(im, ax=ax, shrink=0.5, pad=0.02)
     cbar.set_ticks(cbar_ticks)
-    cbar.set_ticklabels(cbar_labels, fontsize=7)
+    cbar.set_ticklabels(cbar_labels, fontsize=FONT_CBAR)
 
     out_png.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_png, dpi=300, bbox_inches="tight")
@@ -599,7 +646,7 @@ def _render_r2_card(
         title="Report card: R² (red = 0, green = 1; ± is the seed standard deviation)",
         cbar_ticks=[0.0, 0.5, 1.0], cbar_labels=["0.0", "0.5", "1.0"],
         spacer_cols=spacer_cols, ref_cols=ref_cols, groups=groups, average_row=average_row,
-        aux=_blank_summary_rows(std),
+        aux=_blank_summary_rows(std), emphasis_source=EMPHASIS_SOURCE,
     )
 
 
@@ -662,6 +709,7 @@ def _render_mae_delta_card(
         cbar_labels=[f"-{extent:.0f}%", "0% (baseline)", f"+{extent:.0f}%"],
         spacer_cols=[], ref_cols=[], groups=groups, average_row=average_row,
         aux=_blank_summary_rows(pvalue_matrix), color_values=color_matrix,
+        emphasis_source=EMPHASIS_SOURCE,
     )
 
 
