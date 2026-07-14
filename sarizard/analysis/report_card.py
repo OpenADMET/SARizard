@@ -73,6 +73,10 @@ FONT_CBAR = 9  # colorbar tick labels
 # source group whose last endpoint gets a thicker separator line directly after it
 EMPHASIS_SOURCE = "pxr"
 
+# x position (axes fraction, left of the grid) for the rotated per-group source labels, pushed
+# far enough left to clear the longest endpoint tick label
+GROUP_LABEL_X = -0.28
+
 
 def collapse_seed_variants(frame: pd.DataFrame, column: str = "flavor") -> pd.DataFrame:
     """Map ``<base>__s<seed>`` labels in ``column`` back to their base label.
@@ -559,7 +563,7 @@ def plot_card(
         if start > 0:
             _draw_hline(ax, start - 0.5, n_cols, spacer_cols, linewidth=2.2)
         ax.text(
-            -0.16, (start + end - 1) / 2.0, source, transform=ax.get_yaxis_transform(),
+            GROUP_LABEL_X, (start + end - 1) / 2.0, source, transform=ax.get_yaxis_transform(),
             rotation=90, ha="center", va="center", fontsize=FONT_AXIS, fontweight="bold",
         )
     # thicker emphasis line directly after the requested source group's last endpoint
@@ -574,21 +578,27 @@ def plot_card(
     ax.set_xlim(-0.5, n_cols - 0.5)
     ax.set_ylim(n_rows - 0.5, -0.5)
 
-    ax.set_xticks(np.arange(n_cols))
-    x_labels = ["" if i in spacer_cols else str(c) for i, c in enumerate(matrix.columns)]
-    ax.set_xticklabels(x_labels, rotation=45, ha="left", fontsize=FONT_AXIS)
-    for i, label in enumerate(ax.get_xticklabels()):
-        if i in ref_cols:
+    # place ticks only on real columns, so a blank spacer column carries no tick mark or label
+    x_positions = [i for i in range(n_cols) if i not in spacer_cols]
+    ax.set_xticks(
+        x_positions, labels=[str(matrix.columns[i]) for i in x_positions],
+        rotation=45, ha="left", fontsize=FONT_AXIS,
+    )
+    for pos, label in zip(x_positions, ax.get_xticklabels()):
+        if pos in ref_cols:
             label.set_fontweight("bold")
     ax.xaxis.set_label_position("top")
     ax.xaxis.tick_top()
 
-    ax.set_yticks(np.arange(n_rows))
-    y_labels = _endpoint_labels(matrix.index)
-    y_labels = ["" if lbl == _SPACER_ROW else lbl for lbl in y_labels]
-    ax.set_yticklabels(y_labels, fontsize=FONT_YTICK)
-    for label in ax.get_yticklabels():
-        if label.get_text() == AVERAGE_LABEL:
+    # likewise skip the blank spacer row (directly above AVERAGE) so it carries no tick mark
+    spacer_row_index = average_row - 1
+    endpoint_labels = _endpoint_labels(matrix.index)
+    y_positions = [i for i in range(n_rows) if i != spacer_row_index]
+    ax.set_yticks(
+        y_positions, labels=[endpoint_labels[i] for i in y_positions], fontsize=FONT_YTICK
+    )
+    for pos, label in zip(y_positions, ax.get_yticklabels()):
+        if pos == average_row:
             label.set_fontweight("bold")
 
     # annotate each cell with its value and, where defined, its auxiliary (error bar or p-value)
