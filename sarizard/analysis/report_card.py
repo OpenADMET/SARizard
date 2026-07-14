@@ -52,6 +52,11 @@ logger = logging.getLogger(__name__)
 # so only differences the seed spread supports carry color
 SIGNIFICANCE_ALPHA = 0.05
 
+# cap the MAE-delta diverging color scale at this magnitude (percentage points) in both
+# directions, so a few large outliers do not wash out the scale; larger changes saturate at the
+# end color while their annotation still shows the true value
+DELTA_EXTENT_CAP = 25.0
+
 # reference-column labels and the blank labels used for the spacer column(s) and spacer row;
 # the spacers carry no data (painted white) and their tick labels are blanked at render
 BASELINE_LABEL = "chemeleon\nbaseline"
@@ -750,10 +755,11 @@ def render_mae_delta_card(
 
     finite = matrix.to_numpy(dtype=float)
     finite = finite[np.isfinite(finite)]
-    # symmetric scale: the same magnitude in both directions, set to the largest absolute delta
-    # in the data, so 0% (the baseline) sits at the exact center (white) and green/red are
-    # directly comparable
-    extent = max(float(np.abs(finite).max()) if finite.size else 1.0, 1e-6)
+    # symmetric scale centered on 0% (the baseline), capped at DELTA_EXTENT_CAP so a few large
+    # outliers do not wash out the rest; changes beyond the cap saturate at the end color while
+    # their annotation still shows the true value
+    observed = max(float(np.abs(finite).max()) if finite.size else 1.0, 1e-6)
+    extent = min(observed, DELTA_EXTENT_CAP)
     norm = TwoSlopeNorm(vcenter=0.0, vmin=-extent, vmax=extent)
     plot_card(
         matrix, out_png, out_png.with_suffix(".csv"),
@@ -763,7 +769,7 @@ def render_mae_delta_card(
         f"red = worse; white where p > {SIGNIFICANCE_ALPHA:g}, two-sample Welch t-test on the "
         "seeds)",
         cbar_ticks=[-extent, 0.0, extent],
-        cbar_labels=[f"-{extent:.0f}%", "0% (baseline)", f"+{extent:.0f}%"],
+        cbar_labels=[f"-{extent:.0f}%", "0% (baseline or not significant)", f"+{extent:.0f}%"],
         spacer_cols=[], ref_cols=[], groups=groups, average_row=average_row,
         aux=_blank_summary_rows(pvalue_matrix), color_values=color_matrix,
         emphasis_source=EMPHASIS_SOURCE,
