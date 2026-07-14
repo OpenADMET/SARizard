@@ -665,6 +665,14 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   job 1533842, log `slurm/logs/lr_driver_reduced_1533842.out`). It resumes via the `model.pth`
   skip-guard, fast-forwarding batches 0-30 and running only the 300 remaining. `lr_analyze` still to
   submit once the reduced leg completes.
+  **Reduced leg complete; analyze submitted (2026-07-14).** All 1800 reduced 5-seed recipes have
+  `model.pth` (360/360 per seed, s1-s5). Submitted `lr_analyze` scoped to reduced,
+  `REPO_DIR=... LR_MODES=reduced FLAVOR_SEEDS="1 2 3 4 5" sbatch --export=ALL slurm/lr_analyze.sbatch`
+  (job 1706006, gpu, `iscn008,iscf008` excluded by default). It evaluates the frozen 5-seed baseline
+  labels plus the reduced `lr_reduced__*` recipes and the 4-seed `chemeleon_stock_reduced` baseline
+  into `results/lr_metrics.csv`, then renders the two reduced report cards
+  (`plots/report_card_{r2,mae_delta}_reduced.png`, baseline `chemeleon_stock_reduced`) and the
+  frozen-vs-LR ranking. Unlocked analyze still pending its leg (driver 1695635).
   **Unlocked leg launched concurrently (2026-07-13).** Generated the 1800 unlocked recipes
   (`configs.generate --seeds 1 2 3 4 5 --mpnn-lr-mode unlocked --label-prefix lr_unlocked
   --foundation-seed 42`, off the same s42 flavor-sweep foundations, `mpnn_lr` == `ffn_lr`) and
