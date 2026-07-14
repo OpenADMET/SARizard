@@ -81,6 +81,27 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   R-squared under the frozen protocol (0.352 vs. 0.307-0.342 for the other six recipes); see
   `FINDINGS.md` for the full ranking and `results/ablation_metrics.csv` /
   `plots/prescaling_report_r2.csv` for the numbers.
+  **5-seed redo with a stock-CheMeleon baseline and flavor-style cards (2026-07-14).** Brought
+  the triage in line with the flavor 5-seed redo. The `chemeleon_baseline` prescaling recipe was
+  removed from the `ABLATIONS` registry: it reproduced the legacy production scaling, not the base
+  model, so it no longer serves as the reference (the s42 foundation/results stay on disk unused).
+  The reference is now the stock CheMeleon checkpoint finetuned directly (`chemeleon_stock`), the
+  same base-model arm the flavor cards use; `ablation_analyze.sbatch` folds its
+  `chemeleon_stock[_<mode>]` dirs into `ablation_metrics.csv`. `prescaling_report.py` now renders,
+  per protocol, the two flavor-style cards via the shared `report_card` renderers
+  (`render_r2_card`/`render_mae_delta_card`): an R-squared card with per-cell seed std and the
+  stock baseline column, and an MAE %-change card comparing each ablation's 5 seeds against the
+  stock baseline's 5 seeds with an unpaired Welch t-test, white where p > 0.05, inheriting every
+  flavor-card cosmetic. Ranking and cross-protocol comparison are kept. Launched, off the fixed
+  s42 ablation foundations, after clearing the stale s42 ablation configs so exactly the s1-5
+  recipes are enumerated: stock 5th seed for all three protocols (`STOCK_SEEDS="1 2 3 4 5"`, jobs
+  1722203/1722204/1722205, only s5 is new) and the ablation finetune-only sweep across all three
+  protocols (6 ablations x 24 endpoints x 5 seeds x 3 = 2160 recipes; `FOUNDATION_SEED=42
+  ABLATION_SEEDS="1 2 3 4 5" ABLATION_LR_MODES="frozen reduced unlocked"` via `run_ablations.sh`,
+  cpu driver job 1722336, which auto-submits `ablation_analyze` once every recipe is complete).
+  Side effect flagged: the stock 5th seed also lands in the flavor baseline, so regenerating the
+  flavor cards later averages an extra seed (frozen incl. legacy s42, reduced/unlocked to 5);
+  benign, only materializes on the next flavor-card render.
 - [x] 5. (GATED on 4) Harden the chosen prescaling into the core flavor-sweep workflow. Wire
   the winning `PrescalingConfig` into the default `split.py` path (or insert a prescale step
   ahead of it) so every flavor pretrains on the same, vetted preprocessing. Until this lands,
