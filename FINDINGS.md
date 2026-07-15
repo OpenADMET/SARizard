@@ -399,9 +399,11 @@ one lucky stock point, not a real deficit of descriptor pretraining on PXR. The 
 generalizes: the stock baseline is as seed-unstable as the flavors, so a single-seed reference is
 not a safe comparison for any endpoint with this much finetune-seed variance.
 
-The reduced and unlocked stock baselines are also finetuned at the added seeds 1-4 (4 seeds
-each, since no single-seed run pre-existed for those protocols), but their report cards are gated
-on the reduced and unlocked flavor legs completing; see `TODO.md` Milestone 8.
+The reduced and unlocked stock baselines are finetuned at seeds 1-5, matching the flavor legs
+(seeds 1-4 first, since no single-seed run pre-existed for those protocols, then seed 5 on
+2026-07-14). Both flavor legs have now finished, and the reduced report cards are rendered; the
+unlocked cards are pending their analyze job (1967405, submitted 2026-07-15). Numbers land here
+once it completes; see `TODO.md` Milestone 8.
 
 ### Milestone 6 (partial, 250K, superseded by the full-corpus table above)
 
