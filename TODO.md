@@ -515,11 +515,14 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   (driver job 1595755), 96 finetunes each (4 seeds x 24 endpoints) into
   `configs/chemeleon_stock_<mode>__s{1,2,3,4}/` with `mpnn_lr` baked per protocol (reduced 1e-4,
   unlocked 1e-3). Unlike frozen, no single-seed reduced/unlocked stock run pre-existed, so these
-  baselines are 4 seeds (1-4), not 5; the frozen baseline is 5 (the old seed-42 run plus 1-4). If
-  a fifth seed is wanted to match the flavor legs' seeds 1-5, run seed 5 the same way. Still to do
+  baselines are 4 seeds (1-4), not 5; the frozen baseline is 5 (the old seed-42 run plus 1-4).
+  **Superseded 2026-07-14:** seed 5 was since run for all three protocols (jobs
+  1722203/1722204/1722205, recorded under Milestone 4), so every per-protocol stock baseline is now
+  5 seeds and matches the flavor legs' seeds 1-5. Still to do
   once these and the reduced/unlocked flavor legs finish: render the matching per-mode report
   cards (`report_card.py --lr-mode <mode> --baseline-flavor chemeleon_stock_<mode>`, reading
-  `results/lr_metrics.csv`) and per-mode meta-models. The single-seed reduced/unlocked cards are
+  `results/lr_metrics.csv`) and per-mode meta-models. **Cards submitted 2026-07-15** (job 1967405);
+  see the unlocked-leg entry under Future experiments. Meta-models still outstanding. The single-seed reduced/unlocked cards are
   not rendered against the old baseline; they are redone with these averaged baselines.
 - [x] 9. Meta-model: stack per-flavor finetuned predictions per endpoint, fit LGBM/RF/MLP
   on out-of-fold predictions, compare to the best single flavor.
@@ -712,6 +715,26 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   unlocked recipes (confirming isolation, not the shared 3600) and began at batch 1. `lr_analyze`
   for the unlocked leg still to submit once it completes; the Milestone-8 reduced/unlocked report
   cards remain gated on both legs finishing.
+  **Unlocked leg complete; analyze submitted for both protocols (2026-07-15).** Driver 1534116 hit
+  its 24-hour wall clock at 2026-07-14T10:54 partway through; the relaunch (driver job 1695635, log
+  `slurm/logs/lr_driver_unlocked_1695635.out`) resumed via the `model.pth` skip-guard and finished
+  2026-07-14T21:03. Verified against the recipe list rather than the driver log: all 1800
+  `configs/lr_unlocked__*/*.yaml` recipes have a `model.pth`, none missing. The seed-5 stock
+  baselines for all three protocols landed the same day (jobs 1722203/1722204/1722205, recorded
+  under Milestone 4), so `chemeleon_stock_unlocked` is 5 seeds / 120 finetunes, matching the flavor
+  legs' seeds 1-5.
+  Submitted `lr_analyze` scoped to **both** protocols, not unlocked alone:
+  `REPO_DIR=... LR_MODES="reduced unlocked" FLAVOR_SEEDS="1 2 3 4 5" sbatch --export=ALL
+  slurm/lr_analyze.sbatch` (job 1967405, gpu, `iscn008,iscf008` excluded by default). Both modes are
+  required because `evaluate.py` writes `results/lr_metrics.csv` with a wholesale `to_csv`: an
+  unlocked-only run would drop the 2399 reduced rows already in the CSV and break the reduced cards.
+  Re-evaluating reduced is cheap (its 1800 recipes plus the stock baseline are already cached as
+  per-dir `y_pred.npy`), so the real cost is the ~1700 uncached unlocked inferences; the reduced leg
+  did a comparable pass in 33 minutes, well inside the 6-hour wall clock. The pre-run CSV is backed
+  up at `results/lr_metrics.csv.bak-pre-unlocked` in case the job dies mid-write. On completion this
+  renders all four cards (`plots/report_card_{r2,mae_delta}_{reduced,unlocked}.png`, each against its
+  own-protocol stock baseline) and the frozen-vs-LR ranking; the per-mode meta-models
+  (`meta_model.py --lr-mode <mode>`) are then the last Milestone-8 step.
 - [x] **Blocker for Milestone 7, raised in urgency:** target-dropout fraction for small
   flavors. The masked-pretext dropout in `losses.py` (`DROPOUT_FRACTION`, applied per target
   element to every flavor) keeps a fixed fraction, not a fixed count. Its rationale (stop the
