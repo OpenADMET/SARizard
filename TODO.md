@@ -521,8 +521,9 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   5 seeds and matches the flavor legs' seeds 1-5. Still to do
   once these and the reduced/unlocked flavor legs finish: render the matching per-mode report
   cards (`report_card.py --lr-mode <mode> --baseline-flavor chemeleon_stock_<mode>`, reading
-  `results/lr_metrics.csv`) and per-mode meta-models. **Cards submitted 2026-07-15** (job 1967405);
-  see the unlocked-leg entry under Future experiments. Meta-models still outstanding. The single-seed reduced/unlocked cards are
+  `results/lr_metrics.csv`) and per-mode meta-models. **Cards rendered 2026-07-15** (job 1967405
+  COMPLETED); see the unlocked-leg entry under Future experiments. Meta-models still outstanding,
+  and are now the last open Milestone-8 step. The single-seed reduced/unlocked cards are
   not rendered against the old baseline; they are redone with these averaged baselines.
 - [x] 9. Meta-model: stack per-flavor finetuned predictions per endpoint, fit LGBM/RF/MLP
   on out-of-fold predictions, compare to the best single flavor.
@@ -735,6 +736,14 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   renders all four cards (`plots/report_card_{r2,mae_delta}_{reduced,unlocked}.png`, each against its
   own-protocol stock baseline) and the frozen-vs-LR ranking; the per-mode meta-models
   (`meta_model.py --lr-mode <mode>`) are then the last Milestone-8 step.
+  **Analyze complete (2026-07-15).** Job 1967405 ran 13:19 to 14:10 (51 minutes) and exited
+  COMPLETED 0:0; all four cards, both `lr_report_r2.csv`/`lr_ranking_r2.csv`, and the rewritten
+  `results/lr_metrics.csv` are on disk. The wholesale-`to_csv` risk did not materialize: the CSV
+  went 4927 to 7519 rows, with reduced growing 2527 to 2559 (the seed-5 stock rows), unlocked
+  adding 2560, and the 2400 frozen rows untouched, so `results/lr_metrics.csv.bak-pre-unlocked`
+  can be deleted. Unlocked coverage is complete and balanced, verified from the CSV rather than
+  the job log: 15 base flavors x 5 seeds x 32 endpoint-dataset cells = 2400 rows, no gaps and no
+  NaN R-squared. Only the per-mode meta-models remain for Milestone 8.
 - [x] **Blocker for Milestone 7, raised in urgency:** target-dropout fraction for small
   flavors. The masked-pretext dropout in `losses.py` (`DROPOUT_FRACTION`, applied per target
   element to every flavor) keeps a fixed fraction, not a fixed count. Its rationale (stop the
