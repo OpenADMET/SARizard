@@ -401,9 +401,35 @@ not a safe comparison for any endpoint with this much finetune-seed variance.
 
 The reduced and unlocked stock baselines are finetuned at seeds 1-5, matching the flavor legs
 (seeds 1-4 first, since no single-seed run pre-existed for those protocols, then seed 5 on
-2026-07-14). Both flavor legs have now finished, and the reduced report cards are rendered; the
-unlocked cards are pending their analyze job (1967405, submitted 2026-07-15). Numbers land here
-once it completes; see `TODO.md` Milestone 8.
+2026-07-14). Both flavor legs have now finished, and all four report cards are rendered as of
+2026-07-15 (job 1967405); see `TODO.md` Milestone 8.
+
+**Unlocked finetuning buys nothing over frozen; reduced is the protocol that pays.** Averaged
+over the 285 flavor-endpoint cells of `plots/lr_ranking_r2.csv` (15 flavors x 19 endpoint names,
+each cell a mean over seeds 1-5 and, for the six endpoint names measured in more than one dataset,
+over those datasets):
+
+| protocol | mean R-squared | mean delta vs frozen | cells better than frozen |
+|---|---|---|---|
+| frozen | 0.291 | | |
+| reduced | 0.321 | +0.031 | 228 / 285 |
+| unlocked | 0.292 | +0.002 | 176 / 285 |
+
+Unlocked lands within 0.002 R-squared of frozen and wins barely more cells than a coin flip
+would, so paying for a full-network finetune at 1e-3 recovers the frozen result rather than
+improving on it. Reduced beats frozen on 80 percent of cells for the same finetune cost.
+
+The per-protocol stock baselines tell the same story from the other side. These per-flavor means
+are taken over all 160 rows a flavor has in `results/lr_metrics.csv` (32 dataset-endpoint cells x
+5 seeds), so they weight repeated endpoints by dataset and are not on the collapsed basis of the
+table above. Against the unlocked
+stock baseline (mean R-squared 0.337), only `surrogate_adme` (0.368) clears it by a meaningful
+margin and `rdkit2d` (0.324), the best same-corpus flavor, does not clear it at all. Against the
+reduced stock baseline (0.316), four flavors clear it: `surrogate_adme` (0.374), `minimol`
+(0.371), `rdkit2d` (0.356), and `osmordred_pca95` (0.345). `surrogate_adme` topping both lists is
+the different-corpus reference arm, not an apples-to-apples comparison, so `minimol` and `rdkit2d`
+under reduced are the real headline. Descriptor pretraining shows up under reduced and washes out
+under unlocked, which is what a protocol that overwrites the pretrained backbone should do.
 
 ### Milestone 6 (partial, 250K, superseded by the full-corpus table above)
 
