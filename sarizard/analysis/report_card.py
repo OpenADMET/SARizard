@@ -797,6 +797,15 @@ def main() -> None:
         "full frame, so pass the protocol's stock baseline via --baseline-flavor "
         "(chemeleon_stock_<mode>). The frozen setup needs no filter (bare-flavor metrics.csv)",
     )
+    parser.add_argument(
+        "--columns", nargs="*", default=None,
+        help="explicit column set (values of the flavor field), overriding the registry-flavor "
+        "default so a standalone card shows an arbitrary foundation set (e.g. the external "
+        "checkpoints: --columns molpile_1M molpile_5M molpile_10M expansion_gen). The baseline "
+        "(--baseline-flavor) is still added as the R² card's first column and the MAE-delta "
+        "reference. Under --lr-mode pass the bare foundation name (the lr_<mode>__ prefix is "
+        "stripped like the flavors')",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -816,14 +825,20 @@ def main() -> None:
                 f"{args.metrics_csv}; point it at results/lr_metrics.csv"
             )
 
+    # an explicit --columns set overrides the registry-flavor default, so a standalone card can
+    # show just the external foundations; None keeps the registry order build_matrix defaults to
+    columns = args.columns
+
     suffix = f"_{args.lr_mode}" if args.lr_mode else ""
     render_r2_card(
         matrix_frame, frame, args.baseline_flavor,
         args.out_dir / f"report_card_r2{suffix}.png",
+        columns=columns,
     )
     render_mae_delta_card(
         matrix_frame, frame, args.baseline_flavor,
         args.out_dir / f"report_card_mae_delta{suffix}.png",
+        columns=columns,
     )
 
 

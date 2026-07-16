@@ -211,3 +211,60 @@ ablation_label_list() {
         basename "$dir"
     done | sort -u
 }
+
+# external-foundation sweep (run_external_foundations.sh): finetune the same endpoints on
+# pretrained checkpoints that carry no target/pretraining in this repo (different pretraining
+# datasets and sizes), then compare them against the shared stock-CheMeleon baseline on a
+# standalone report card. The names are both the foundations/<name>__s42_mp.pt basenames the
+# driver copies the external checkpoints to and the bare report-card column labels.
+EXTFOUND_NAMES="${EXTFOUND_NAMES:-molpile_1M molpile_5M molpile_10M expansion_gen}"
+
+# finetune seeds and protocols for the external-foundation sweep, matching the flavor 5-seed legs
+# and the 5-seed stock baseline so the comparison is like against like
+EXTFOUND_SEEDS="${EXTFOUND_SEEDS:-1 2 3 4 5}"
+EXTFOUND_LR_MODES="${EXTFOUND_LR_MODES:-frozen reduced unlocked}"
+
+# print the generated external-foundation finetune recipe paths, one per line, in a fixed
+# (name, seed, mode) order. Each recipe finetunes the one pinned foundations/<name>__s42_mp.pt as
+# a finetune replicate (--finetune-seed), labelled <name>__s<seed> for frozen and
+# lr_<mode>__<name>__s<seed> otherwise so filter_lr_mode/report_card pick the protocols apart the
+# same way they do for the flavors. extfound_finetune.sbatch and submit_batched.sh both enumerate
+# through this, so their array-index-to-recipe order agrees.
+extfound_recipe_list() {
+    local name seed mode
+    local -a seeds modes
+    read -ra seeds <<<"$EXTFOUND_SEEDS"
+    read -ra modes <<<"$EXTFOUND_LR_MODES"
+    for name in $EXTFOUND_NAMES; do
+        for seed in "${seeds[@]}"; do
+            for mode in "${modes[@]}"; do
+                if [[ "$mode" == "frozen" ]]; then
+                    ls "$REPO_DIR/configs/${name}__s${seed}"/*.yaml 2>/dev/null
+                else
+                    ls "$REPO_DIR/configs/lr_${mode}__${name}__s${seed}"/*.yaml 2>/dev/null
+                fi
+            done
+        done
+    done
+}
+
+# print the external-foundation result labels (config dir basenames) to evaluate, one per line:
+# every (name, seed) frozen dir and its lr_<mode>__ protocol variants. Mirrors
+# extfound_recipe_list's dirs so analyze collects exactly the protocols that were finetuned.
+extfound_label_list() {
+    local name seed mode
+    local -a seeds modes
+    read -ra seeds <<<"$EXTFOUND_SEEDS"
+    read -ra modes <<<"$EXTFOUND_LR_MODES"
+    for name in $EXTFOUND_NAMES; do
+        for seed in "${seeds[@]}"; do
+            for mode in "${modes[@]}"; do
+                if [[ "$mode" == "frozen" ]]; then
+                    echo "${name}__s${seed}"
+                else
+                    echo "lr_${mode}__${name}__s${seed}"
+                fi
+            done
+        done
+    done
+}

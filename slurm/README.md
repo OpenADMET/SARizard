@@ -50,6 +50,23 @@ produced the foundations. Read `plots/lr_ranking_r2.csv` for each mode's mean RÂ
 count versus frozen. The frozen-warmup protocol is not included (it needs a two-phase schedule
 anvil cannot express; see TODO.md).
 
+### External-foundation comparison (run after the flavor sweep)
+
+```bash
+bash slurm/run_external_foundations.sh
+```
+
+`run_external_foundations.sh` finetunes the same endpoints on external pretrained
+CheMeleon-format foundations that carry no target or pretraining in this repo (`EXTFOUND_NAMES`,
+default the four molpile/expansion_gen checkpoints), comparing pretraining datasets and sizes
+rather than descriptor blocks. It copies each checkpoint into `foundations/<name>__s42_mp.pt`,
+validates its openadmet format and message-passing dims, finetunes it at `EXTFOUND_SEEDS`
+(default 1-5) under `EXTFOUND_LR_MODES` (default all three protocols), then renders a standalone
+report card (the stock-CheMeleon baseline plus the foundations) per protocol into
+`plots/external_foundations/` off a dedicated `results/external_metrics.csv`, leaving the flavor
+sweep's `results/metrics.csv` untouched. Runs the finetune in batches via `submit_batched.sh`,
+so launch from a persistent shell.
+
 ## Before submitting
 
 Adjust the time, CPU, and memory directives in each `.sbatch` header if your cluster requires
@@ -91,6 +108,13 @@ Finetune LR experiments (driven by `run_lr_experiments.sh`, after the flavor swe
 |---|---|---|
 | `lr_finetune.sbatch` | 312 x seeds x modes (GPU array) | flavor-sweep foundations |
 | `lr_analyze.sbatch` | 1 (GPU) | lr_finetune |
+
+External-foundation comparison (driven by `run_external_foundations.sh`, after the flavor sweep):
+
+| Script | Tasks | Depends on |
+|---|---|---|
+| `extfound_finetune.sbatch` | names x endpoints x seeds x modes (GPU array) | copied foundations |
+| `extfound_analyze.sbatch` | 1 (GPU) | extfound_finetune |
 
 `ablation_pretrain` and `ablation_finetune` scale with `ABLATION_SEEDS` (default one seed):
 each ablation is pretrained once per seed (`ablation_<name>__s<seed>`), and `ablation_analyze`
