@@ -899,6 +899,13 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   batched bad-node-safe finetune via `submit_batched.sh`, chained analyze). Held until the
   Milestone-4 ablation sweep finishes to avoid GPU contention; launch with
   `bash slurm/run_external_foundations.sh` from a persistent shell.
+  **Launched (2026-07-16).** Submitted the driver as a durable cpu job the same way the flavor
+  legs run (`sbatch --partition=cpu --time=2-00:00:00 --export=ALL,REPO_DIR=... --wrap="bash
+  slurm/run_external_foundations.sh"`, job 2151841) so the batched finetune survives the session.
+  The driver copied the four checkpoints into `foundations/<name>__s42_mp.pt`, passed the
+  format/message-passing-dim validation gate, and generated the 1440 recipes; the finetune then
+  runs in batches of 50 via `submit_batched.sh` (bad nodes excluded) with `extfound_analyze`
+  chained after. Ran concurrently with the ablation MAE-delta re-render (job 2151326).
 
 ## Methodology watch-items
 
