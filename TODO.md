@@ -124,6 +124,16 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   2138998, all 11 confirmed running on good nodes), and re-chained analyze on the rerun plus the
   two still-running original tasks (`--dependency=afterok:2138998:2130907_2153:2130907_1961
   --exclude=iscn008,iscf008`, job 2139035).
+  **5-seed ablation redo complete (2026-07-16).** All 2160 finetunes have `model.pth` (6 ablations
+  x 24 endpoints x 5 seeds x 3 protocols, no remaining gaps), and analyze 2139035 finished clean,
+  writing `results/ablation_metrics.csv`, the per-protocol `plots/ablation_report_card_r2[_<mode>]`
+  R-squared cards, `plots/ablation_report_card_mae_delta` (frozen), the rankings, and
+  `plots/prescaling_mode_comparison_r2.csv`. **The winning recipe shifts by protocol:** frozen
+  `plus_yeo_johnson`, reduced `plus_drop_low_var`, unlocked `plus_drop_low_var` (by mean R-squared).
+  Caveat: the reduced/unlocked MAE-delta cards were skipped because the per-protocol stock baseline
+  (`chemeleon_stock_<mode>`) is not folded into `ablation_metrics.csv` (analyze folds only the
+  frozen `chemeleon_stock` dirs), so only the frozen MAE-delta card rendered; the R-squared cards
+  cover all three protocols.
 - [x] 5. (GATED on 4) Harden the chosen prescaling into the core flavor-sweep workflow. Wire
   the winning `PrescalingConfig` into the default `split.py` path (or insert a prescale step
   ahead of it) so every flavor pretrains on the same, vetted preprocessing. Until this lands,
