@@ -113,6 +113,17 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   straggler from the driver's last batch (`plus_drop_low_var__s5__unlocked/biogen_clint_mt`, array
   task 2122570_1782, left running so its result dir completes): job 2130908,
   `--dependency=afterok:2130907:2122570`.
+  **Bad-node fallout on the direct array; 11 casualties rerun (2026-07-16).** Submitting 2130907
+  as a plain `sbatch --array` (not through `submit_batched.sh`) bypassed the driver's default
+  bad-node exclusion, so 11 of the 360 tasks died on `iscf008` (uncorrectable ECC, exit 1:0), not
+  code faults: indices 1800, 1805, 1828, 1847, 1873, 1907, 1933, 2001, 2058, 2110, 2147 (all
+  `plus_yeo_johnson`). The failures tripped analyze 2130908's `afterok`, so it was cancelled. Each
+  crashed task left a partial `results/ablation_plus_yeo_johnson__s<seed>[__<mode>]/<endpoint>/`
+  dir (dataloaders, no `model.pth`) that the skip-guard would have silently no-op'd, so all 11 were
+  removed first. Resubmitted just those indices with `--exclude=iscn008,iscf008` (rerun job
+  2138998, all 11 confirmed running on good nodes), and re-chained analyze on the rerun plus the
+  two still-running original tasks (`--dependency=afterok:2138998:2130907_2153:2130907_1961
+  --exclude=iscn008,iscf008`, job 2139035).
 - [x] 5. (GATED on 4) Harden the chosen prescaling into the core flavor-sweep workflow. Wire
   the winning `PrescalingConfig` into the default `split.py` path (or insert a prescale step
   ahead of it) so every flavor pretrains on the same, vetted preprocessing. Until this lands,
