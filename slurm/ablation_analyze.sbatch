@@ -31,7 +31,12 @@ fi
 # per-seed baseline dirs (chemeleon_stock__s<seed> for frozen, chemeleon_stock_<mode>__s<seed>
 # otherwise), plus the legacy bare frozen dir. prescaling_report looks these up by label as the
 # reference column and the MAE-delta baseline, so they must be in ablation_metrics.csv too.
-read -ra MODES <<<"$ABLATION_LR_MODES"
+# Derive the protocols from the ablation result dirs actually present rather than ABLATION_LR_MODES,
+# so a submit that does not export the env var (e.g. a manual rerun) cannot silently drop a
+# protocol's baseline and skip its MAE-delta card. Frozen is always present.
+MODES=(frozen)
+compgen -G "$REPO_DIR/configs/ablation_*__s*__reduced" >/dev/null && MODES+=(reduced)
+compgen -G "$REPO_DIR/configs/ablation_*__s*__unlocked" >/dev/null && MODES+=(unlocked)
 for mode in "${MODES[@]}"; do
     if [[ "$mode" == "frozen" ]]; then base="chemeleon_stock"; else base="chemeleon_stock_${mode}"; fi
     for sdir in "$REPO_DIR"/results/${base}__s* "$REPO_DIR"/results/${base}; do

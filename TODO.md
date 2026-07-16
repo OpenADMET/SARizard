@@ -130,10 +130,14 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   R-squared cards, `plots/ablation_report_card_mae_delta` (frozen), the rankings, and
   `plots/prescaling_mode_comparison_r2.csv`. **The winning recipe shifts by protocol:** frozen
   `plus_yeo_johnson`, reduced `plus_drop_low_var`, unlocked `plus_drop_low_var` (by mean R-squared).
-  Caveat: the reduced/unlocked MAE-delta cards were skipped because the per-protocol stock baseline
-  (`chemeleon_stock_<mode>`) is not folded into `ablation_metrics.csv` (analyze folds only the
-  frozen `chemeleon_stock` dirs), so only the frozen MAE-delta card rendered; the R-squared cards
-  cover all three protocols.
+  The reduced/unlocked MAE-delta cards were skipped on the first render because the re-chained
+  analyze (2139035) was submitted without exporting `ABLATION_LR_MODES`, so the stock-baseline fold
+  defaulted to frozen and the per-protocol `chemeleon_stock_<mode>` baselines never reached
+  `ablation_metrics.csv`. Fixed by deriving the protocols to fold from the ablation result dirs
+  actually present (frozen always, reduced/unlocked when their config dirs exist) instead of the
+  env var, so a manual rerun cannot silently drop a protocol's baseline. Re-ran analyze off the
+  fix (job 2151326, `--exclude=iscn008,iscf008`) to fold the 5-seed `chemeleon_stock_reduced`/
+  `chemeleon_stock_unlocked` baselines and render the two missing MAE-delta cards.
 - [x] 5. (GATED on 4) Harden the chosen prescaling into the core flavor-sweep workflow. Wire
   the winning `PrescalingConfig` into the default `split.py` path (or insert a prescale step
   ahead of it) so every flavor pretrains on the same, vetted preprocessing. Until this lands,
