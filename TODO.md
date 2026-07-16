@@ -102,6 +102,17 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   Side effect flagged: the stock 5th seed also lands in the flavor baseline, so regenerating the
   flavor cards later averages an extra seed (frozen incl. legacy s42, reduced/unlocked to 5);
   benign, only materializes on the next flavor-card render.
+  **Driver ran to 1800/2160 then was cancelled to finish the tail in one shot (2026-07-16).** The
+  cpu driver (1722336) walked the sweep in batches of 50 and reached recipe 1800 of 2160 (five of
+  the six ablations complete across all seeds and protocols: `full`, `minimal`, `order_fix`,
+  `plus_drop_corr`, `plus_drop_low_var`), but was going to hit its 2-day wall before the last
+  ablation, so it was cancelled. The remaining 360 recipes are exactly `plus_yeo_johnson` (all 5
+  seeds x 3 protocols x 24 endpoints, the contiguous index range 1800-2159 of `ablation_recipe_list`)
+  and were resubmitted directly as one array, `sbatch --array=1800-2159 slurm/ablation_finetune.sbatch`
+  (job 2130907), rather than in batches. `ablation_analyze` is chained on it plus the one in-flight
+  straggler from the driver's last batch (`plus_drop_low_var__s5__unlocked/biogen_clint_mt`, array
+  task 2122570_1782, left running so its result dir completes): job 2130908,
+  `--dependency=afterok:2130907:2122570`.
 - [x] 5. (GATED on 4) Harden the chosen prescaling into the core flavor-sweep workflow. Wire
   the winning `PrescalingConfig` into the default `split.py` path (or insert a prescale step
   ahead of it) so every flavor pretrains on the same, vetted preprocessing. Until this lands,
@@ -837,6 +848,32 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   pretrain/finetune ride the same chain (jobs 33590/33591) once split completes. **Pretrain
   is now complete: all three `osmordred_pca80/90/95` foundations are on disk (pca90 via the
   93729_14 resubmit after a transient GPU failure); finetune still pending, see Milestone 6.**
+- [ ] External-foundation comparison (set up 2026-07-16, not yet submitted): finetune the same
+  24 endpoints on four externally pretrained CheMeleon-format foundations that carry no target or
+  pretraining in this repo, to compare pretraining datasets and sizes rather than descriptor
+  blocks: `molpile_1M`, `molpile_5M`, `molpile_10M`
+  (`/home/westd1/myscratch/foundation-models/datafiles/foundation_models/molpile_*_converted.pt`)
+  and `expansion_gen`
+  (`/home/westd1/myscratch/202606_generative_foundation_models/expansion_gen/best_converted.pt`).
+  This is the flavor sweep's finetune-only path pointed at external foundations: each checkpoint
+  is copied to `foundations/<name>__s42_mp.pt` (a copy, not a symlink, so `configs.generate` can
+  resolve it relative to the repo root), validated for the openadmet `{hyper_parameters,
+  state_dict}` format and matching message-passing dims (`d_v`/`d_e`) against an existing repo
+  foundation, then finetuned at 5 seeds (1-5) under all three protocols (frozen/reduced/unlocked):
+  4 x 24 x 5 x 3 = 1440 finetunes. Deliverable is a standalone report card (not merged with the
+  flavor card): the existing 5-seed stock-CheMeleon baseline reused as the first column plus the
+  four foundations, rendered per protocol into `plots/external_foundations/` off a dedicated
+  `results/external_metrics.csv`, so the flavor sweep's `results/metrics.csv` is untouched. Wiring
+  (code done, committed, jobs not yet submitted): `report_card.py` gained `--columns` (an explicit
+  column set overriding the registry-flavor default, so a standalone card shows just these
+  foundations; regression test added); `slurm/env.sh` gained `EXTFOUND_NAMES`/`EXTFOUND_SEEDS`/
+  `EXTFOUND_LR_MODES` and the `extfound_recipe_list`/`extfound_label_list` helpers; new
+  `slurm/extfound_finetune.sbatch` (1440-task GPU array, resumable skip-if-exists),
+  `slurm/extfound_analyze.sbatch` (evaluate into `external_metrics.csv`, then render the three
+  card pairs), and the driver `slurm/run_external_foundations.sh` (copy, validate, generate,
+  batched bad-node-safe finetune via `submit_batched.sh`, chained analyze). Held until the
+  Milestone-4 ablation sweep finishes to avoid GPU contention; launch with
+  `bash slurm/run_external_foundations.sh` from a persistent shell.
 
 ## Methodology watch-items
 

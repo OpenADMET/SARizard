@@ -1,5 +1,7 @@
 """Tests for the report-card pivots, row disambiguation, MAE-delta, and card assembly."""
 
+import sys
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -16,6 +18,7 @@ from sarizard.analysis.report_card import (
     mae_delta_matrix,
     mae_delta_std,
     mae_significance_pvalues,
+    main,
     prepare_rows,
     source_groups,
 )
@@ -287,3 +290,33 @@ def test_build_reference_series_uses_disambiguated_rows(tidy_metrics):
     series = build_reference_series(frame, "chemeleon_stock", "r2")
 
     assert series.to_dict() == {"openadmet_cyp · OPENADMET_LOGAC50_cyp1a2 (cyp_mt)": 0.42}
+
+
+def test_columns_override_renders_standalone_card_excluding_the_registry(tmp_path, monkeypatch):
+    # a registry flavor, two external foundations, and the baseline on one endpoint; the frame
+    # carries osmordred so a regression back to the registry default would surface it as a column
+    metrics = pd.DataFrame(
+        [
+            {"flavor": "osmordred", "recipe": "herg_st", "dataset": "herg",
+             "endpoint": "pchembl_value_mean", "r2": 0.5, "mae": 0.4},
+            {"flavor": "molpile_1M", "recipe": "herg_st", "dataset": "herg",
+             "endpoint": "pchembl_value_mean", "r2": 0.4, "mae": 0.5},
+            {"flavor": "molpile_5M", "recipe": "herg_st", "dataset": "herg",
+             "endpoint": "pchembl_value_mean", "r2": 0.45, "mae": 0.45},
+            {"flavor": "chemeleon_stock", "recipe": "herg_st", "dataset": "herg",
+             "endpoint": "pchembl_value_mean", "r2": 0.35, "mae": 0.55},
+        ]
+    )
+    metrics_csv = tmp_path / "metrics.csv"
+    metrics.to_csv(metrics_csv, index=False)
+    monkeypatch.setattr(sys, "argv", [
+        "report_card", "--metrics-csv", str(metrics_csv), "--out-dir", str(tmp_path),
+        "--columns", "molpile_1M", "molpile_5M",
+    ])
+
+    main()
+
+    card = pd.read_csv(tmp_path / "report_card_r2.csv", index_col=0)
+    assert BASELINE_LABEL in card.columns
+    assert {"molpile_1M", "molpile_5M"} <= set(card.columns)
+    assert "osmordred" not in card.columns
