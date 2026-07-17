@@ -138,6 +138,12 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   env var, so a manual rerun cannot silently drop a protocol's baseline. Re-ran analyze off the
   fix (job 2151326, `--exclude=iscn008,iscf008`) to fold the 5-seed `chemeleon_stock_reduced`/
   `chemeleon_stock_unlocked` baselines and render the two missing MAE-delta cards.
+  **Re-render complete (2026-07-16).** Job 2151326 finished clean in 5:36. Verified from
+  `results/ablation_metrics.csv` rather than the job log: all three protocols' stock baselines are
+  folded in at 5 seeds each (`chemeleon_stock__s1-5` plus the legacy bare `chemeleon_stock`,
+  `chemeleon_stock_reduced__s1-5`, `chemeleon_stock_unlocked__s1-5`), and the two previously
+  missing cards (`plots/ablation_report_card_mae_delta_reduced.png` and `..._unlocked.png`) are on
+  disk alongside the frozen one. Milestone 4 is now rendered across all three protocols.
 - [x] 5. (GATED on 4) Harden the chosen prescaling into the core flavor-sweep workflow. Wire
   the winning `PrescalingConfig` into the default `split.py` path (or insert a prescale step
   ahead of it) so every flavor pretrains on the same, vetted preprocessing. Until this lands,
@@ -873,7 +879,7 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   pretrain/finetune ride the same chain (jobs 33590/33591) once split completes. **Pretrain
   is now complete: all three `osmordred_pca80/90/95` foundations are on disk (pca90 via the
   93729_14 resubmit after a transient GPU failure); finetune still pending, see Milestone 6.**
-- [ ] External-foundation comparison (set up 2026-07-16, not yet submitted): finetune the same
+- [x] External-foundation comparison (complete 2026-07-16): finetune the same
   24 endpoints on four externally pretrained CheMeleon-format foundations that carry no target or
   pretraining in this repo, to compare pretraining datasets and sizes rather than descriptor
   blocks: `molpile_1M`, `molpile_5M`, `molpile_10M`
@@ -906,6 +912,26 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   format/message-passing-dim validation gate, and generated the 1440 recipes; the finetune then
   runs in batches of 50 via `submit_batched.sh` (bad nodes excluded) with `extfound_analyze`
   chained after. Ran concurrently with the ablation MAE-delta re-render (job 2151326).
+  **Complete (2026-07-16).** Driver 2151841 walked all 29 batches and exited clean after 6:37
+  (`submit_batched: all 1440 recipes complete`, no casualty reruns needed), then submitted
+  `extfound_analyze` job 2184690, which completed in 26:02. Verified from disk rather than the
+  driver log: 360 `model.pth` for each of the four foundations (1440 total, 60 result dirs = 4
+  foundations x 5 seeds x 3 protocols), `results/external_metrics.csv` written (2432 rows), and all
+  six cards rendered into `plots/external_foundations/` (`report_card_{r2,mae_delta}[_reduced,
+  _unlocked}.png`). The flavor sweep's `results/metrics.csv` is untouched as designed.
+  **Result: every external foundation loses to stock CheMeleon under every protocol**, by mean
+  R-squared across the 32 endpoint-columns (baseline first, then the four):
+  frozen 0.295 vs. molpile_5M 0.255, molpile_10M 0.220, molpile_1M 0.217, expansion_gen 0.186;
+  reduced 0.316 vs. molpile_5M 0.264, molpile_10M 0.250, expansion_gen 0.250, molpile_1M 0.241;
+  unlocked 0.337 vs. molpile_1M 0.292, molpile_5M 0.242, expansion_gen 0.231, molpile_10M 0.213.
+  Molpile pretraining size does not buy accuracy monotonically: 5M leads 1M and 10M under frozen
+  and reduced, while under unlocked the order inverts to 1M first and 10M last, so the size
+  ordering is not stable across protocols and the spread between the three sizes (0.04-0.08) is
+  the same scale as the seed spread. `expansion_gen` is last under frozen and reduced. Reading
+  these as a pretraining-corpus comparison is therefore weaker than the flavor sweep's
+  descriptor-block comparison: the four checkpoints differ in corpus, size, and pretraining recipe
+  at once, so a per-foundation delta cannot be attributed to corpus size alone. Not yet written up
+  in `FINDINGS.md`.
 
 ## Methodology watch-items
 
