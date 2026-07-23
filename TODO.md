@@ -952,8 +952,16 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   batched 5-seed finetune; `slurm/osmordred_surrogate_analyze.sbatch` evaluates into a dedicated
   `results/osmordred_surrogate_metrics.csv` (never the shared `metrics.csv`) and prints the
   comparison via `sarizard/analysis/control_report.py` (mean R-squared +/- seed std per condition,
-  a Welch test vs the baseline, and which context arm the control lands nearest). Jobs not yet
-  submitted as of this note.
+  a Welch test vs the baseline, and which context arm the control lands nearest).
+  **Submitted (2026-07-23).** Launched the durable cpu driver
+  (`sbatch --partition=cpu --export=ALL,REPO_DIR=... --wrap="bash slurm/run_osmordred_surrogate.sh"`,
+  job 3246383). It fired the build chain: targets 3246386 (confirmed computing osmordred on the
+  273,706-row Novartis corpus in `sarizard-osmordred`, the `corpus_from` wiring verified from its
+  log) -> split 3246387 -> pretrain 3246388 (seed 42 foundation), and submitted finetune batch 1
+  (3246389, `afterok` pretrain) via `submit_batched.sh`, which blocks driving the 120 recipes
+  (24 endpoints x 5 seeds, frozen) in batches. The analyze/print job
+  (`osmordred_surrogate_analyze.sbatch`) is submitted by the driver once every finetune completes;
+  its log will carry the terminal comparison. Not yet complete.
 
 ## Methodology watch-items
 
