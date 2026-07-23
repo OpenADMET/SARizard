@@ -68,19 +68,28 @@ _SPACER_ROW = " "
 # white = no change, red = MAE above baseline (worse)
 _DELTA_CMAP = LinearSegmentedColormap.from_list("mae_delta", ["#1a9850", "#ffffff", "#d73027"])
 
-# report-card font sizes (points), nudged up for legibility at print scale
-FONT_TITLE = 13
-FONT_AXIS = 11  # x tick labels and the per-group source labels
-FONT_YTICK = 10  # endpoint row labels
-FONT_CELL = 8  # per-cell value and error-bar/p-value annotation
-FONT_CBAR = 9  # colorbar tick labels
+# report-card font sizes (points), enlarged for legibility at print scale. FONT_CELL drives the
+# per-cell annotation, which is two lines (value over its error bar or p-value); the per-row cell
+# height (CELL_ROW_INCHES) is scaled with it so those two lines always sit inside the cell rules
+FONT_TITLE = 19
+FONT_AXIS = 15  # x tick labels and the per-group source labels
+FONT_YTICK = 14  # endpoint row labels
+FONT_CELL = 12  # per-cell value and error-bar/p-value annotation
+FONT_CBAR = 13  # colorbar tick labels
+
+# cell grid geometry (inches). CELL_ROW_INCHES is the per-row height; it is scaled up alongside
+# FONT_CELL from the previous (0.42 in, 8 pt) so the two-line cell annotation keeps the same
+# fits-inside-the-cell ratio at the larger font. CELL_COL_INCHES is the per-column width, also
+# the divisor for the group-label margin (GROUP_LABEL_INCHES), so keep the two consistent
+CELL_ROW_INCHES = 0.64
+CELL_COL_INCHES = 1.15
 
 # source group whose last endpoint gets a thicker separator line directly after it
 EMPHASIS_SOURCE = "pxr"
 
 # clearance (inches) left of the grid for the rotated per-group source labels, enough to clear
 # the longest endpoint tick label. Converted to an axes fraction per card from the grid width
-# (~1.15 in/column, matching the figsize) so narrow ablation cards get the same absolute gap as
+# (CELL_COL_INCHES per column, matching the figsize) so narrow ablation cards get the same gap as
 # the wide flavor card rather than a width-scaled one that collides on the narrow layout.
 GROUP_LABEL_INCHES = 5.5
 
@@ -542,8 +551,11 @@ def plot_card(
     cmap = cmap.copy()
     cmap.set_bad("lightgrey")  # missing (flavor, endpoint) cells
 
+    # additive margins (+4.2 wide, +3.2 tall) leave room for the enlarged title, tick labels, and
+    # colorbar so constrained_layout does not shrink the cells to fit the bigger text
     fig, ax = plt.subplots(
-        figsize=(1.15 * n_cols + 3.5, 0.42 * n_rows + 2.5), constrained_layout=True
+        figsize=(CELL_COL_INCHES * n_cols + 4.2, CELL_ROW_INCHES * n_rows + 3.2),
+        constrained_layout=True,
     )
     imshow_kwargs = {"norm": norm} if norm is not None else {"vmin": vmin, "vmax": vmax}
     im = ax.imshow(np.ma.masked_invalid(color_layer), aspect="auto", cmap=cmap, **imshow_kwargs)
@@ -567,7 +579,7 @@ def plot_card(
     # bold source-group separators (each broken across the white spacer columns) and per-group
     # labels on the left margin; the label x is a fixed absolute gap left of the grid, so a narrow
     # card clears its row labels as well as the wide one does (see GROUP_LABEL_INCHES)
-    group_label_x = -GROUP_LABEL_INCHES / (1.15 * n_cols)
+    group_label_x = -GROUP_LABEL_INCHES / (CELL_COL_INCHES * n_cols)
     for start, end, source in groups:
         if start > 0:
             _draw_hline(ax, start - 0.5, n_cols, spacer_cols, linewidth=2.2)
