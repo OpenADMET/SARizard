@@ -84,6 +84,16 @@ FONT_CBAR = 13  # colorbar tick labels
 CELL_ROW_INCHES = 0.64
 CELL_COL_INCHES = 1.15
 
+# additive figure margins (inches) around the cell grid. The width margin must cover the whole
+# non-grid footprint (the long endpoint row labels, the rotated group labels reaching
+# GROUP_LABEL_INCHES to the left, and the colorbar on the right); if it under-provisions,
+# constrained_layout steals width from the grid, squeezing the columns of a few-column card
+# (e.g. the 6-column ablation MAE-delta) until the per-cell annotations overlap. Sizing it to the
+# footprint keeps the cells full width on narrow and wide cards alike. Height covers the title,
+# the rotated column labels, and the bottom axis.
+MARGIN_WIDTH_INCHES = 8.5
+MARGIN_HEIGHT_INCHES = 3.2
+
 # source group whose last endpoint gets a thicker separator line directly after it
 EMPHASIS_SOURCE = "pxr"
 
@@ -554,7 +564,10 @@ def plot_card(
     # additive margins (+4.2 wide, +3.2 tall) leave room for the enlarged title, tick labels, and
     # colorbar so constrained_layout does not shrink the cells to fit the bigger text
     fig, ax = plt.subplots(
-        figsize=(CELL_COL_INCHES * n_cols + 4.2, CELL_ROW_INCHES * n_rows + 3.2),
+        figsize=(
+            CELL_COL_INCHES * n_cols + MARGIN_WIDTH_INCHES,
+            CELL_ROW_INCHES * n_rows + MARGIN_HEIGHT_INCHES,
+        ),
         constrained_layout=True,
     )
     imshow_kwargs = {"norm": norm} if norm is not None else {"vmin": vmin, "vmax": vmax}
