@@ -247,16 +247,18 @@ def plot_delta(frame: pd.DataFrame, estimator: str, out_png: Path) -> None:
 
     # seed spread as x error bars when the CSV carries it (single-seed rows report 0.0)
     xerr = ordered["delta_r2_std"] if "delta_r2_std" in ordered else None
-    fig, ax = plt.subplots(figsize=(8, 0.4 * len(ordered) + 2.0), constrained_layout=True)
+    fig, ax = plt.subplots(figsize=(9, 0.5 * len(ordered) + 2.0), constrained_layout=True)
     ax.barh(
         np.arange(len(ordered)), ordered["delta_r2"], color=colors,
         xerr=xerr, error_kw={"elinewidth": 0.8, "ecolor": "0.3"},
     )
     ax.axvline(0.0, color="black", linewidth=0.8)
-    ax.set_yticks(np.arange(len(ordered)))
-    ax.set_yticklabels(labels, fontsize=8)
-    ax.set_xlabel("meta R² − best single flavor R²")
-    ax.set_title(f"Stacking lift ({estimator}); green = ensemble beats best single", fontsize=11)
+    ax.set_yticks(np.arange(len(ordered)), labels=list(labels), fontsize=12)
+    ax.tick_params(axis="x", labelsize=13)
+    ax.set_xlabel("meta R² − best single flavor R²", fontsize=14)
+    ax.set_title(
+        f"Stacking lift ({estimator}); green = ensemble beats best single", fontsize=15
+    )
     out_png.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_png, dpi=300, bbox_inches="tight")
     plt.close(fig)

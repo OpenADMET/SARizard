@@ -100,12 +100,13 @@ def plot_deltas(summary: pd.DataFrame, metric: str, out_png: Path) -> None:
     """Bar chart of each non-frozen mode's mean metric delta versus the frozen baseline."""
     label = METRIC_LABELS.get(metric, metric)
     deltas = summary.loc[summary.index != BASELINE_MODE, "mean_delta_vs_frozen"].dropna()
-    fig, ax = plt.subplots(figsize=(6.0, 0.6 * len(deltas) + 1.5), constrained_layout=True)
+    fig, ax = plt.subplots(figsize=(7.0, 0.7 * len(deltas) + 1.6), constrained_layout=True)
     colors = ["tab:green" if value > 0 else "tab:red" for value in deltas]
     ax.barh(deltas.index, deltas.to_numpy(), color=colors)
     ax.axvline(0.0, color="black", linewidth=0.8)
-    ax.set_xlabel(f"mean {label} delta vs frozen")
-    ax.set_title(f"Finetune LR experiments ({label}); green beats frozen", fontsize=11)
+    ax.tick_params(labelsize=13)
+    ax.set_xlabel(f"mean {label} delta vs frozen", fontsize=14)
+    ax.set_title(f"Finetune LR experiments ({label}); green beats frozen", fontsize=15)
     out_png.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_png, dpi=300, bbox_inches="tight")
     plt.close(fig)
