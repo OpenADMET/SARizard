@@ -67,6 +67,14 @@ logger = logging.getLogger(__name__)
 
 ABLATION_METRICS_CSV = RESULTS_DIR / "ablation_metrics.csv"
 
+# summary bar-chart font sizes (points), enlarged to sit consistently with the report cards
+# rendered by report_card.plot_card; these charts are smaller figures, so they run a touch below
+# the card fonts rather than matching them one for one
+SUMMARY_FONT_TITLE = 15
+SUMMARY_FONT_LABEL = 14  # axis labels
+SUMMARY_FONT_TICK = 13  # tick labels
+SUMMARY_FONT_ANNOT = 12  # bar-value annotations and legend
+
 # collapse_seed_variants is the shared helper (report_card); re-exported so callers importing it
 # from this module keep working, and it maps ablation_<name>__s<seed> -> ablation_<name>
 __all__ = ["collapse_seed_variants", "rank_ablations", "report_one_mode", "mode_comparison"]
@@ -114,13 +122,16 @@ def rank_ablations(pivot: pd.DataFrame, metric: str) -> pd.DataFrame:
 def plot_ranking(summary: pd.DataFrame, metric: str, out_png: Path) -> None:
     """Render a horizontal bar chart of the per-ablation mean metric."""
     label = METRIC_LABELS.get(metric, metric)
-    fig, ax = plt.subplots(figsize=(7.0, 0.5 * len(summary) + 1.5), constrained_layout=True)
+    fig, ax = plt.subplots(figsize=(8.0, 0.6 * len(summary) + 1.6), constrained_layout=True)
     order = summary.iloc[::-1]  # best at top
     ax.barh(order.index, order["mean"], color="steelblue")
     for y, (value, wins) in enumerate(zip(order["mean"], order["wins"], strict=True)):
-        ax.text(value, y, f"  {value:.3f} ({wins} wins)", va="center", fontsize=8)
-    ax.set_xlabel(f"mean {label} across endpoints")
-    ax.set_title(f"Prescaling ablation ranking ({label})", fontsize=11)
+        ax.text(value, y, f"  {value:.3f} ({wins} wins)", va="center", fontsize=SUMMARY_FONT_ANNOT)
+    # headroom so the bigger bar-end annotations do not clip on the right spine
+    ax.set_xlim(right=float(order["mean"].max()) * 1.3)
+    ax.tick_params(labelsize=SUMMARY_FONT_TICK)
+    ax.set_xlabel(f"mean {label} across endpoints", fontsize=SUMMARY_FONT_LABEL)
+    ax.set_title(f"Prescaling ablation ranking ({label})", fontsize=SUMMARY_FONT_TITLE)
     out_png.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_png, dpi=300, bbox_inches="tight")
     plt.close(fig)
@@ -133,16 +144,18 @@ def plot_mode_comparison(comparison: pd.DataFrame, metric: str, out_png: Path) -
     ablations = list(comparison.index)
     positions = np.arange(len(ablations))
     height = 0.8 / max(len(modes), 1)
-    fig, ax = plt.subplots(figsize=(7.5, 0.7 * len(ablations) + 1.5), constrained_layout=True)
+    fig, ax = plt.subplots(figsize=(8.5, 0.8 * len(ablations) + 1.6), constrained_layout=True)
     # one offset bar per protocol so a recipe's three protocols sit side by side per ablation
     for i, mode in enumerate(modes):
         offset = (i - (len(modes) - 1) / 2) * height
         ax.barh(positions + offset, comparison[mode].to_numpy(), height=height, label=mode)
-    ax.set_yticks(positions)
-    ax.set_yticklabels(ablations)
-    ax.set_xlabel(f"mean {label} across endpoints")
-    ax.set_title(f"Prescaling ablation by finetune LR protocol ({label})", fontsize=11)
-    ax.legend(title="mpnn_lr", fontsize=8)
+    ax.set_yticks(positions, labels=ablations, fontsize=SUMMARY_FONT_TICK)
+    ax.tick_params(axis="x", labelsize=SUMMARY_FONT_TICK)
+    ax.set_xlabel(f"mean {label} across endpoints", fontsize=SUMMARY_FONT_LABEL)
+    ax.set_title(
+        f"Prescaling ablation by finetune LR protocol ({label})", fontsize=SUMMARY_FONT_TITLE
+    )
+    ax.legend(title="mpnn_lr", fontsize=SUMMARY_FONT_ANNOT, title_fontsize=SUMMARY_FONT_ANNOT)
     out_png.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_png, dpi=300, bbox_inches="tight")
     plt.close(fig)
