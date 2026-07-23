@@ -50,6 +50,21 @@ class Flavor:
         derived flavor's own target stage (nothing to compute independently); the
         derivation runs later in ``split.sbatch``, after the base flavor's raw target
         exists.
+    calculator : str or None, optional
+        Name of the target calculator to dispatch to when it is not this flavor's own name
+        (e.g. ``osmordred_surrogate`` reuses ``osmordred``'s calculator on a different
+        corpus). ``None`` (default) dispatches on ``name``.
+    corpus_from : str or None, optional
+        Name of another flavor whose ``corpus_smiles.parquet`` this flavor's target and
+        split borrow instead of the shared corpus (e.g. ``osmordred_surrogate`` computes
+        on ``surrogate_adme``'s Novartis molecules). ``None`` (default) uses the shared
+        ``CORPUS_FILE``. Only ``surrogate_adme`` writes its own corpus; a flavor with
+        ``corpus_from`` reads that companion parquet rather than writing one.
+    standalone : bool, optional
+        When ``True``, the flavor is excluded from :func:`flavor_names` so it never enters
+        the registry-driven flavor sweep, report cards, or meta-model. It is a one-off
+        control run through its own driver and evaluated on the side. ``get_flavor`` still
+        resolves it by name, so every ``--flavor``-driven stage works. Default ``False``.
     """
 
     name: str
@@ -59,6 +74,9 @@ class Flavor:
     env: str
     description: str
     derived_from: str | None = None
+    calculator: str | None = None
+    corpus_from: str | None = None
+    standalone: bool = False
 
 
 FLAVORS: dict[str, Flavor] = {
@@ -125,6 +143,16 @@ FLAVORS: dict[str, Flavor] = {
         "osmordred, full-recipe prescaled then PCA-compressed to 95% explained variance",
         derived_from="osmordred",
     ),
+    # standalone control: osmordred descriptors computed on surrogate_adme's Novartis
+    # corpus, holding the target identical to the sweep osmordred and the corpus identical
+    # to surrogate_adme, to separate the surrogate flavor's chemical space from its target.
+    # Excluded from flavor_names() so it never lands on the report card or in the sweep.
+    "osmordred_surrogate": Flavor(
+        "osmordred_surrogate", "continuous", "direct", 3585, "sarizard-osmordred",
+        "osmordred descriptors on the surrogate_adme Novartis corpus (standalone control "
+        "isolating chemical space from the surrogate target)",
+        calculator="osmordred", corpus_from="surrogate_adme", standalone=True,
+    ),
 }
 
 
@@ -155,5 +183,10 @@ def get_flavor(name: str) -> Flavor:
 
 
 def flavor_names() -> list[str]:
-    """Return all registered flavor names in definition order."""
-    return list(FLAVORS)
+    """Return registered non-standalone flavor names in definition order.
+
+    Standalone flavors (one-off controls, ``standalone=True``) are omitted so they never
+    enter the registry-driven sweep, report cards, or meta-model; resolve them explicitly
+    with :func:`get_flavor`.
+    """
+    return [name for name, flavor in FLAVORS.items() if not flavor.standalone]

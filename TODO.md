@@ -932,6 +932,28 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   descriptor-block comparison: the four checkpoints differ in corpus, size, and pretraining recipe
   at once, so a per-foundation delta cannot be attributed to corpus size alone. Not yet written up
   in `FINDINGS.md`.
+- [~] osmordred-on-surrogate-corpus control (in progress): `surrogate_adme` (frozen mean R-squared
+  0.369) is confounded two ways against the sweep `osmordred` (0.327): a different corpus (Novartis
+  molecules) and a different target (25 ADME predictions vs 3585 osmordred descriptors). This
+  control, `osmordred_surrogate`, computes the osmordred descriptor target on `surrogate_adme`'s
+  Novartis corpus, holding the target identical to the sweep osmordred and the corpus identical to
+  `surrogate_adme`, so where it lands separates the two: near 0.369 means the surrogate flavor's
+  strength was its chemical space, near 0.327 means it was the surrogate target itself. (The
+  Novartis corpus is ~273K vs the sweep's 944K, a minor size confound; the earlier 250K-vs-full
+  check showed osmordred-family recipes gain modestly with more data, so a small corpus that still
+  scores high only strengthens the chemical-space read.) Frozen protocol, 5 finetune seeds (1-5)
+  off one s42 foundation, matching every other flavor's 5-seed legs; tested against the 5-seed stock
+  baseline. **Standalone by construction: not on the report card.** Wiring (code committed):
+  `flavors.py` gained `calculator`/`corpus_from`/`standalone` fields and registered
+  `osmordred_surrogate` (reuses osmordred's calculator on `surrogate_adme`'s corpus, excluded from
+  `flavor_names()` so it never enters the sweep, report cards, or meta-model); `compute_target.py`
+  dispatches on `calculator`; `compute_targets.sbatch`/`split.sbatch` select the corpus from
+  `corpus_from`; `slurm/run_osmordred_surrogate.sh` drives target -> split -> pretrain (s42) ->
+  batched 5-seed finetune; `slurm/osmordred_surrogate_analyze.sbatch` evaluates into a dedicated
+  `results/osmordred_surrogate_metrics.csv` (never the shared `metrics.csv`) and prints the
+  comparison via `sarizard/analysis/control_report.py` (mean R-squared +/- seed std per condition,
+  a Welch test vs the baseline, and which context arm the control lands nearest). Jobs not yet
+  submitted as of this note.
 
 ## Methodology watch-items
 

@@ -37,19 +37,23 @@ if [[ ! -d "$TARGET_ZARR" ]]; then
     echo "missing $TARGET_ZARR; run slurm/compute_targets.sbatch first" >&2
     exit 1
 fi
-# surrogate_adme uses its own corpus written by compute_target; all other flavors share
-# whichever corpus this run targets (CORPUS_FILE, env.sh)
-if [[ "$FLAVOR" == "surrogate_adme" ]]; then
-    CORPUS="$REPO_DIR/cache/targets/surrogate_adme/corpus_smiles.parquet"
-else
-    CORPUS="$REPO_DIR/$CORPUS_FILE"
-fi
-
 # split.py runs script-style from the pretraining directory; pass absolute paths
 cd "$REPO_DIR/sarizard/pretraining"
 
 DERIVED_FROM=$(conda run -n "$MAIN_ENV" python -c \
     "from sarizard.pretraining.flavors import get_flavor; print(get_flavor('$FLAVOR').derived_from or '')")
+CORPUS_FROM=$(conda run -n "$MAIN_ENV" python -c \
+    "from sarizard.pretraining.flavors import get_flavor; print(get_flavor('$FLAVOR').corpus_from or '')")
+
+# surrogate_adme uses its own corpus written by compute_target, and a corpus_from flavor borrows
+# that companion corpus; all other flavors share whichever corpus this run targets (CORPUS_FILE)
+if [[ "$FLAVOR" == "surrogate_adme" ]]; then
+    CORPUS="$REPO_DIR/cache/targets/surrogate_adme/corpus_smiles.parquet"
+elif [[ -n "$CORPUS_FROM" ]]; then
+    CORPUS="$REPO_DIR/cache/targets/$CORPUS_FROM/corpus_smiles.parquet"
+else
+    CORPUS="$REPO_DIR/$CORPUS_FILE"
+fi
 KIND=$(conda run -n "$MAIN_ENV" python -c \
     "from sarizard.pretraining.flavors import get_flavor; print(get_flavor('$FLAVOR').kind)")
 

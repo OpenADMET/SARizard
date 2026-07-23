@@ -50,7 +50,9 @@ def _streaming_compute_fn(
     """
     from sarizard.pretraining.features.skfp_targets import is_skfp_flavor
 
-    name = flavor.name
+    # a flavor may reuse another's calculator on a different corpus (e.g. osmordred_surrogate
+    # runs the osmordred calculator on the Novartis molecules), so dispatch on calculator
+    name = flavor.calculator or flavor.name
     if is_skfp_flavor(name):
         from sarizard.pretraining.features.skfp_targets import build_compute_fn
 

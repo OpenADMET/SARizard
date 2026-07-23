@@ -32,6 +32,8 @@ FLAVOR_ENV=$(conda run -n "$MAIN_ENV" python -c \
     "from sarizard.pretraining.flavors import get_flavor; print(get_flavor('$FLAVOR').env)")
 DERIVED_FROM=$(conda run -n "$MAIN_ENV" python -c \
     "from sarizard.pretraining.flavors import get_flavor; print(get_flavor('$FLAVOR').derived_from or '')")
+CORPUS_FROM=$(conda run -n "$MAIN_ENV" python -c \
+    "from sarizard.pretraining.flavors import get_flavor; print(get_flavor('$FLAVOR').corpus_from or '')")
 echo "task=$SLURM_ARRAY_TASK_ID flavor=$FLAVOR env=$FLAVOR_ENV derived_from=${DERIVED_FROM:-none}"
 
 if [[ -n "$DERIVED_FROM" ]]; then
@@ -48,6 +50,16 @@ if [[ -d "cache/targets/$FLAVOR/target.zarr" ]]; then
 fi
 
 CORPUS="$REPO_DIR/$CORPUS_FILE"
+# a flavor with corpus_from borrows another flavor's companion corpus_smiles.parquet (written
+# by that flavor's compute_target) rather than the shared corpus, so its target is computed on
+# those molecules; that companion parquet must already exist (its source flavor ran first)
+if [[ -n "$CORPUS_FROM" ]]; then
+    CORPUS="$REPO_DIR/cache/targets/$CORPUS_FROM/corpus_smiles.parquet"
+    if [[ ! -f "$CORPUS" ]]; then
+        echo "missing $CORPUS; compute the $CORPUS_FROM target first" >&2
+        exit 1
+    fi
+fi
 if [[ "$FLAVOR" == "surrogate_adme" ]]; then
     # surrogate_adme runs in the main env; compute_target writes target.npy + corpus_smiles.parquet
     conda activate "$MAIN_ENV"
