@@ -44,3 +44,25 @@ def test_non_derived_flavor_has_no_derived_from():
 def test_get_flavor_rejects_unknown_name():
     with pytest.raises(KeyError):
         get_flavor("not_a_flavor")
+
+
+def test_standalone_control_is_excluded_from_flavor_names_but_resolvable():
+    # osmordred_surrogate is a standalone control: it must resolve by name (so every
+    # --flavor-driven stage works) yet stay out of flavor_names(), which drives the sweep,
+    # report cards, and meta-model, so it never lands on a comparable report-card column
+    assert get_flavor("osmordred_surrogate").standalone is True
+    assert "osmordred_surrogate" not in flavor_names()
+
+
+def test_osmordred_surrogate_reuses_the_osmordred_calculator_on_the_surrogate_corpus():
+    flavor = get_flavor("osmordred_surrogate")
+
+    assert flavor.calculator == "osmordred"
+    assert flavor.corpus_from == "surrogate_adme"
+    assert flavor.target_dim == get_flavor("osmordred").target_dim
+
+
+def test_registry_flavors_default_to_non_standalone():
+    assert get_flavor("osmordred").standalone is False
+    assert get_flavor("osmordred").calculator is None
+    assert get_flavor("osmordred").corpus_from is None

@@ -86,7 +86,12 @@ foundation, so treat each as a gate.
   that flavor pretrains on its own corpus (`compute_target --flavor surrogate_adme` writes
   `corpus_smiles.parquet` alongside its `target.npy`, and `split.py` uses it). Its column is
   therefore a different-corpus reference arm, not an apples-to-apples comparison; keep it
-  labelled as such. No other flavor may use a non-shared corpus.
+  labelled as such. No flavor on the report card may use a non-shared corpus. A `standalone`
+  control flavor (excluded from `flavor_names()`, so off the report card and out of the
+  sweep) may borrow another flavor's corpus via `corpus_from`: `osmordred_surrogate` computes
+  the osmordred target on `surrogate_adme`'s Novartis corpus to separate that flavor's
+  chemical space from its target. It is evaluated on the side (`run_osmordred_surrogate.sh`,
+  printed to the terminal), never folded into a comparable report-card column.
 - **One fixed pretraining regime.** Corpus size, epoch cap, and LR schedule are shared
   across flavors and recorded in each flavor's pretrain config; the only intended
   difference between flavors is the target block (and MSE vs BCE for binary targets).
