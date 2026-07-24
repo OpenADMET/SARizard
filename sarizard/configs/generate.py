@@ -36,6 +36,11 @@ logger = logging.getLogger(__name__)
 BACKBONE = "chemeleon"  # token the baseline recipes use in names, tags, and from_foundation
 BASELINE_DIR = CONFIGS_DIR / "_baseline"
 
+# pseudo-flavor accepted in --flavors so the stock reference can ride a namespaced flavor sweep
+# (via --label-prefix) instead of the separate --stock-baseline label; it finetunes the released
+# checkpoint anvil downloads, so from_foundation stays BACKBONE and it takes no local foundation
+STOCK_FLAVOR = f"{BACKBONE}_stock"
+
 # finetune protocols for the MPNN backbone, set as a multiple of the recipe's ffn_lr:
 # frozen (the default sweep) holds the backbone fixed; reduced and unlocked are the LR
 # experiments that let it adapt (see TODO.md and run_lr_experiments.sh)
@@ -181,7 +186,11 @@ def _generate_one(templates: list[Path], out_dir: Path, foundation_rel: str,
 def main() -> None:
     """Generate per-flavor recipes, or per-ablation recipes for one explicit foundation."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--flavors", nargs="*", default=None, help="flavor subset (default all)")
+    parser.add_argument(
+        "--flavors", nargs="*", default=None,
+        help="flavor subset (default all); accepts 'chemeleon_stock' as a pseudo-flavor to "
+        "include the stock reference in a namespaced sweep (from_foundation stays 'chemeleon')",
+    )
     parser.add_argument("--baseline-dir", type=Path, default=BASELINE_DIR, help="templates dir")
     parser.add_argument("--accelerator", default="auto", help="lightning accelerator")
     parser.add_argument(
@@ -285,11 +294,15 @@ def main() -> None:
         base = f"{args.label_prefix}__{flavor}" if args.label_prefix else flavor
         for seed in args.seeds:
             label = seed_variant_label(base, seed)
-            # pin the foundation seed when given, else it tracks the finetune seed (legacy)
-            foundation_seed = args.foundation_seed if args.foundation_seed is not None else seed
-            foundation_rel = str(
-                foundation_variant_path(flavor, foundation_seed).relative_to(REPO_ROOT)
-            )
+            if flavor == STOCK_FLAVOR:
+                # stock reference: no local foundation, anvil downloads the released checkpoint
+                foundation_rel = BACKBONE
+            else:
+                # pin the foundation seed when given, else it tracks the finetune seed (legacy)
+                foundation_seed = args.foundation_seed if args.foundation_seed is not None else seed
+                foundation_rel = str(
+                    foundation_variant_path(flavor, foundation_seed).relative_to(REPO_ROOT)
+                )
             n = _generate_one(
                 templates, CONFIGS_DIR / label, foundation_rel, label, args.accelerator,
                 mpnn_lr_mode=args.mpnn_lr_mode, finetune_seed=seed,
