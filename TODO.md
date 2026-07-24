@@ -984,6 +984,28 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   0.325, so surrogate_adme's lead was driven mostly by its on-task ADME target, not its chemical
   space. The Novartis chemical space contributes a little (the control sits slightly above sweep
   osmordred and above baseline), but the target dominates. Dedicated CSV only; report card untouched.
+- [~] PXR external-test reduced-protocol rerun (in progress): the sweep PXR endpoint splits
+  `pxr_pec50.parquet` with an inline Butina `ClusterSplitter`, so the split membership moves with the
+  finetune seed. This rerun instead evaluates every flavor (plus the stock reference) on two fixed
+  external held-out test sets, the OpenADMET PXR-challenge Phase 1 (253) and Phase 2 (260) molecules
+  from the `openadmet/pxr-challenge-train-test` HF dataset, with a single fixed 90/10 train/val split
+  on `pxr_pec50.parquet` (1950/217, seed 42) shared across every flavor and seed. With the split
+  pinned, the finetune seed varies only head init and training, not the evaluation set. The challenge
+  `pEC50` is already `-log10(molarity)` (matching `PXR_pEC50`), so it is used as-is, no log transform;
+  test SMILES are RDKit-canonicalized; no test molecule overlaps train by InChIKey and the two phases
+  are disjoint. Reduced protocol (`mpnn_lr=ffn_lr/10`), 5 finetune seeds off the one s42 foundation,
+  matching the reduced LR sweep. **Standalone: off the report card.** Wiring (committed, `c25e830`):
+  `data/splits/pxr_ext_{train,val}.csv` + `pxr_test_phase{1,2}.csv` built by
+  `sarizard.analysis.build_pxr_ext_splits`; two `configs/_pxr_ext` templates use anvil's
+  train/val/test-resource path (`using_train_test`) with the required-but-unused ClusterSplitter block;
+  `generate.py` gained a `chemeleon_stock` pseudo-flavor so the stock reference rides the namespaced
+  sweep; recipes land in `configs/pxr_ext__<flavor>__s<seed>/` (namespaced off every existing recipe
+  glob) and results in `results/pxr_ext__*`, evaluated into a dedicated `results/pxr_ext_metrics.csv`
+  with a per-phase flavor-vs-stock ranking (`pxr_ext_report.py`). A single-recipe smoke test passed
+  end to end (train -> predict -> evaluate; atompair phase 1 R² 0.225) before the full launch.
+  **Submitted (2026-07-24).** Durable cpu driver (`slurm/run_pxr_ext.sh`, job 3449313) generated the
+  160 recipes (16 models x 5 seeds x 2 phases) and is finetuning them in batches via
+  `submit_batched.sh`, then submits `pxr_ext_analyze.sbatch`. Not yet complete.
 
 ## Methodology watch-items
 
