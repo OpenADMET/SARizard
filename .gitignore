@@ -244,6 +244,9 @@ foundations/*
 configs/*/
 !configs/_baseline/
 !configs/_baseline/**
+# committed source templates for the standalone PXR external-test rerun (run_pxr_ext.sh)
+!configs/_pxr_ext/
+!configs/_pxr_ext/**
 
 # Finetuning and pretraining outputs: result dirs, checkpoints, logs, predictions, plots
 results/

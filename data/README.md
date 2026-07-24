@@ -21,6 +21,24 @@ file records what they are and where they came from so they can be regenerated o
 validation strategies where applicable), matching the split discipline used in the
 baseline recipes.
 
+### PXR external-test split (reduced-protocol rerun)
+
+The standard PXR endpoint splits `pxr_pec50.parquet` with an inline Butina `ClusterSplitter`, so
+the split moves with the finetune seed. The `pxr_ext` rerun instead evaluates on two external,
+fixed held-out test sets from the OpenADMET PXR challenge:
+
+| File | Source | Rows | Notes |
+|---|---|---|---|
+| `splits/pxr_ext_train.csv`, `splits/pxr_ext_val.csv` | derived from `pxr_pec50.parquet` | 1950 / 217 | one fixed 90/10 split (`np.random.default_rng(42)`), shared across every flavor and seed |
+| `splits/pxr_test_phase1.csv` | HF `openadmet/pxr-challenge-train-test` (`pxr-challenge_TEST_PHASE_1_UNBLINDED.csv`) | 253 | external held-out test |
+| `splits/pxr_test_phase2.csv` | HF `openadmet/pxr-challenge-train-test` (`pxr-challenge_TEST_PHASE_2_UNBLINDED.csv`) | 260 | external held-out test |
+
+Regenerate with `python -m sarizard.analysis.build_pxr_ext_splits` (needs a Hugging Face token for
+the gated dataset). The challenge files already carry the target as a `pEC50` column in the same
+`-log10(molarity)` convention as the training `PXR_pEC50`, so it is renamed and used as-is with no
+log transform; test SMILES are RDKit-canonicalized into `OPENADMET_CANONICAL_SMILES`. No test
+molecule overlaps the training set by InChIKey, and the two phases are disjoint.
+
 ## Provenance and discipline
 
 These tables are already standardized (canonical SMILES, log-scale potency targets).

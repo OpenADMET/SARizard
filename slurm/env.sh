@@ -166,6 +166,14 @@ lr_unlocked_recipe_list() {
     ls "$REPO_DIR"/configs/lr_unlocked__*/*.yaml 2>/dev/null
 }
 
+# print the PXR external-test recipe paths (configs/pxr_ext__<flavor>__s<seed>/), one per line,
+# for the reduced-protocol PXR rerun against the two OpenADMET challenge test phases. Namespaced
+# so it never aliases the flavor sweep, the LR experiments, or the stock baseline dirs; paired with
+# pxr_ext_finetune.sbatch, which maps the array index against this same glob
+pxr_ext_recipe_list() {
+    ls "$REPO_DIR"/configs/pxr_ext__*/*.yaml 2>/dev/null
+}
+
 # print the base config-dir label for the stock baseline under STOCK_LR_MODE: bare
 # chemeleon_stock for frozen (matching generate.py's stock_baseline_label), chemeleon_stock_<mode>
 # otherwise. The per-seed dirs suffix this with __s<seed>.
