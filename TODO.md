@@ -961,7 +961,19 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   (3246389, `afterok` pretrain) via `submit_batched.sh`, which blocks driving the 120 recipes
   (24 endpoints x 5 seeds, frozen) in batches. The analyze/print job
   (`osmordred_surrogate_analyze.sbatch`) is submitted by the driver once every finetune completes;
-  its log will carry the terminal comparison. Not yet complete.
+  its log will carry the terminal comparison.
+  **Driver failed on batch 2 (2026-07-23), fixed and resumed (2026-07-24).** Phase A finished
+  (targets/split/pretrain COMPLETED, foundation on disk) and finetune batch 1 (recipes 0-49, seeds
+  1-2 plus the first 2 endpoints of seed 3) COMPLETED, but the driver (3246383) died submitting
+  batch 2 with `sbatch: error: Job dependency problem`: `submit_batched.sh` forwarded the
+  `--dependency=afterok:<pretrain>` gate to every batch, and by batch 2 the pretrain job had
+  completed and aged out of Slurm's records, so the afterok was unsatisfiable and `set -e` aborted
+  the driver before batches 2-3 and analyze. No metrics CSV or comparison was produced. Fixed in
+  `submit_batched.sh` (commit e3369c4) to apply any `--dependency` token to the first submission
+  only, since later batches already run strictly after it; this also closes the same latent failure
+  in `run_all.sh`/`run_ablations.sh`. Relaunched the durable cpu driver (job 3426795): it skipped
+  Phase A off the existing foundation, recognized the 50 done recipes, and resumed batch 2 (job
+  3426811) without the dependency error. Awaiting batches 2-3 and analyze. Not yet complete.
 
 ## Methodology watch-items
 
