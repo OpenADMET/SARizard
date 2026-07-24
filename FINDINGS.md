@@ -351,7 +351,13 @@ across the 32 endpoint-columns:
 The two learned-model flavors lead (`surrogate_adme` 0.369, `minimol` 0.355), both above
 `rdkit2d` (0.339), the strongest direct-compute descriptor. `surrogate_adme` is a
 different-corpus reference arm (it pretrains on its own Novartis molecules per the AGENTS.md
-invariant), so it is not an apples-to-apples column; read it as such. The three PCA-compressed
+invariant), so it is not an apples-to-apples column; read it as such. Whether that lead comes from
+its Novartis chemical space or from the ADME target itself is separated by the
+`osmordred_surrogate` standalone control, which holds the target identical to sweep `osmordred`
+(the 3585-dim descriptor block) while borrowing `surrogate_adme`'s corpus: landing near `osmordred`
+(0.327) would credit the target, landing near `surrogate_adme` (0.369) the chemical space. It is
+off the report card by construction; its result lands in `results/osmordred_surrogate_metrics.csv`
+and `TODO.md` tracks its status. The three PCA-compressed
 osmordred targets land within 0.006 of full osmordred (0.321-0.325 vs. 0.327), so compressing
 the 3585-dim block to 70-237 components costs almost nothing on frozen transfer. Ten of the
 15 flavors clear the stock-CheMeleon baseline (0.297); the five below it are the binary
