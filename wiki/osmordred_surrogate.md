@@ -1,5 +1,5 @@
 ---
-tags: [control, status/running]
+tags: [control, status/complete]
 ---
 # osmordred_surrogate
 
@@ -27,12 +27,20 @@ corpus is ~273K vs the sweep's 944K, a minor size confound; the earlier 250K-vs-
 osmordred-family recipes gain only modestly with more data, so a small corpus that still scores
 high strengthens the chemical-space read rather than weakening it.
 
-## Reading the result
+## Result
 
-- Lands near **0.327** (sweep osmordred): the surrogate flavor's strength was the ADME target
-  itself, since swapping the target to descriptors on the same corpus loses the lead.
-- Lands near **0.369** (surrogate_adme): the strength was the Novartis chemical space, since the
-  lead survives replacing the ADME target with descriptors.
+Mean R² 0.325 ± 0.004 (5 seeds), against surrogate_adme 0.369, sweep osmordred 0.305, and stock
+0.295. It lands nearest sweep osmordred (|Δ|=0.020, vs 0.044 to surrogate_adme) and clears stock
+significantly (+0.031, Welch p<0.001). Holding surrogate_adme's Novartis corpus while swapping its
+ADME target for the osmordred descriptor target drops transfer from 0.369 to 0.325, so
+**surrogate_adme's lead was driven mostly by its on-task ADME target, not its chemical space**. The
+Novartis space contributes a little (the control sits above both sweep osmordred and stock), but
+the target dominates. The reading rubric this decided:
+
+- Landed near sweep osmordred: the surrogate flavor's strength was the ADME target itself, since
+  swapping the target to descriptors on the same corpus loses most of the lead.
+- Would have landed near surrogate_adme: the strength was the Novartis chemical space, since the
+  lead survives replacing the ADME target with descriptors. (Not what happened.)
 
 ## How it runs
 
@@ -46,13 +54,13 @@ R² ± seed std per condition, a Welch test vs the baseline, and which context a
 
 ## Status
 
-Running. The first driver (2026-07-23) built the foundation and finished finetune batch 1
-(50 of 120 recipes) but died submitting batch 2 with a Slurm "Job dependency problem": the batched
-finetune re-applied the `afterok:<pretrain>` gate to every batch, and by batch 2 the pretrain job
-had completed and aged out of Slurm's records. Fixed in `slurm/submit_batched.sh` to gate only the
-first submission, then relaunched off the existing foundation to finish the remaining recipes and
-the analyze step. `TODO.md` carries the full account; the result is not yet written up here or in
-`FINDINGS.md`.
+Complete (2026-07-24). The first driver (2026-07-23) built the foundation and finished finetune
+batch 1 (50 of 120 recipes) but died submitting batch 2 with a Slurm "Job dependency problem": the
+batched finetune re-applied the `afterok:<pretrain>` gate to every batch, and by batch 2 the
+pretrain job had completed and aged out of Slurm's records. Fixed in `slurm/submit_batched.sh` to
+gate only the first submission, then relaunched off the existing foundation; all 120 recipes
+finished and analyze wrote `results/osmordred_surrogate_metrics.csv`. `TODO.md` carries the full
+account.
 
 ## Related
 

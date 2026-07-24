@@ -357,7 +357,12 @@ its Novartis chemical space or from the ADME target itself is separated by the
 (the 3585-dim descriptor block) while borrowing `surrogate_adme`'s corpus: landing near `osmordred`
 (0.327) would credit the target, landing near `surrogate_adme` (0.369) the chemical space. It is
 off the report card by construction; its result lands in `results/osmordred_surrogate_metrics.csv`
-and `TODO.md` tracks its status. The three PCA-compressed
+and `TODO.md` tracks its status. It came back at 0.325 ± 0.004 (5 seeds), nearest sweep osmordred
+(0.305, |Δ|=0.020) rather than surrogate_adme (0.369, |Δ|=0.044): holding surrogate_adme's Novartis
+corpus but swapping its ADME target for the osmordred descriptor target drops transfer to near
+sweep osmordred, so surrogate_adme's lead was driven mostly by its on-task ADME target, not its
+chemical space (the space contributes a little, the control clearing stock by +0.031, Welch
+p<0.001). The three PCA-compressed
 osmordred targets land within 0.006 of full osmordred (0.321-0.325 vs. 0.327), so compressing
 the 3585-dim block to 70-237 components costs almost nothing on frozen transfer. Ten of the
 15 flavors clear the stock-CheMeleon baseline (0.297); the five below it are the binary
