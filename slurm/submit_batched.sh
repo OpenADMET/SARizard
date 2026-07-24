@@ -25,7 +25,13 @@
 #                        lr_recipe_list, ablation_recipe_list); the array index maps to this order,
 #                        so the two must agree for the result-dir bookkeeping to line up
 #     passthru           extra args forwarded to every sbatch call (e.g.
-#                        --export=ALL,FLAVOR_SEEDS=..., or --dependency=afterok:<pretrain job>)
+#                        --export=ALL,FLAVOR_SEEDS=..., or --dependency=afterok:<pretrain job>).
+#                        A --dependency=... token is special-cased: it gates only the FIRST
+#                        submission, not every batch. Later batches already run strictly after the
+#                        first (each batch blocks until the prior one finishes), so the upstream job
+#                        the dependency names is done by then; re-applying it would fail once that
+#                        completed job ages out of Slurm's records (afterok on a purged job errors
+#                        with "Job dependency problem" and aborts the run).
 #
 # Knobs (environment, with defaults):
 #   BATCH_SIZE=50                 tasks submitted per batch
@@ -41,7 +47,17 @@ source "$SCRIPT_DIR/env.sh"
 SBATCH_SCRIPT="${1:?usage: submit_batched.sh <sbatch_script> <recipe_list_fn> [sbatch args...]}"
 RECIPE_FN="${2:?missing recipe_list_fn}"
 shift 2
-PASSTHRU=("$@")
+# split any --dependency=... out of the passthru: it gates only the first submission (see header),
+# so DEP_ARG rides the first sbatch call and PASSTHRU (dependency-free) rides every call
+PASSTHRU=()
+DEP_ARG=()
+for arg in "$@"; do
+    if [[ "$arg" == --dependency=* ]]; then
+        DEP_ARG=("$arg")
+    else
+        PASSTHRU+=("$arg")
+    fi
+done
 
 BATCH_SIZE="${BATCH_SIZE:-50}"
 MAX_RETRIES="${MAX_RETRIES:-3}"
@@ -113,7 +129,10 @@ while (( batch_start < N )); do
         done
         arr="$(IFS=,; echo "${todo[*]}")"
         echo "attempt $attempt/$MAX_RETRIES: submitting ${#todo[@]} tasks (array=$arr)"
-        jid=$(sbatch --parsable "${EXCLUDE_ARG[@]}" --array="$arr" "${PASSTHRU[@]}" "$SBATCH_SCRIPT")
+        jid=$(sbatch --parsable "${EXCLUDE_ARG[@]}" --array="$arr" "${DEP_ARG[@]}" "${PASSTHRU[@]}" "$SBATCH_SCRIPT")
+        # the upstream dependency gates only this first submission; drop it so later batches (and
+        # retries) do not fail once the named job ages out of Slurm's records
+        DEP_ARG=()
         echo "  job=$jid; waiting for completion..."
         wait_for_job "$jid"
         # recompute failures from the trained-model marker rather than sacct state
