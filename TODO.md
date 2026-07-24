@@ -932,7 +932,7 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   descriptor-block comparison: the four checkpoints differ in corpus, size, and pretraining recipe
   at once, so a per-foundation delta cannot be attributed to corpus size alone. Not yet written up
   in `FINDINGS.md`.
-- [~] osmordred-on-surrogate-corpus control (in progress): `surrogate_adme` (frozen mean R-squared
+- [x] osmordred-on-surrogate-corpus control (complete): `surrogate_adme` (frozen mean R-squared
   0.369) is confounded two ways against the sweep `osmordred` (0.327): a different corpus (Novartis
   molecules) and a different target (25 ADME predictions vs 3585 osmordred descriptors). This
   control, `osmordred_surrogate`, computes the osmordred descriptor target on `surrogate_adme`'s
@@ -973,7 +973,17 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   only, since later batches already run strictly after it; this also closes the same latent failure
   in `run_all.sh`/`run_ablations.sh`. Relaunched the durable cpu driver (job 3426795): it skipped
   Phase A off the existing foundation, recognized the 50 done recipes, and resumed batch 2 (job
-  3426811) without the dependency error. Awaiting batches 2-3 and analyze. Not yet complete.
+  3426811) without the dependency error. All 120 recipes finished across the three batches and
+  analyze (job 3428536) wrote `results/osmordred_surrogate_metrics.csv` (736 rows).
+  **Result (2026-07-24).** `control_report.py` mean R² per condition, 5 finetune seeds for the
+  control and 6 for the reference arms: osmordred_surrogate 0.325 ± 0.004, surrogate_adme 0.369 ±
+  0.010, sweep osmordred 0.305 ± 0.016, chemeleon_stock 0.295 ± 0.009. The control clears the stock
+  baseline significantly (+0.031, Welch t=7.06, p<0.001) and lands nearest sweep osmordred
+  (|Δ|=0.020 vs 0.044 to surrogate_adme). Read: holding the corpus at surrogate_adme's Novartis set
+  while swapping its ADME target for the osmordred descriptor target drops transfer from 0.369 to
+  0.325, so surrogate_adme's lead was driven mostly by its on-task ADME target, not its chemical
+  space. The Novartis chemical space contributes a little (the control sits slightly above sweep
+  osmordred and above baseline), but the target dominates. Dedicated CSV only; report card untouched.
 
 ## Methodology watch-items
 
