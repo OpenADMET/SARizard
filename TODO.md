@@ -984,7 +984,7 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   0.325, so surrogate_adme's lead was driven mostly by its on-task ADME target, not its chemical
   space. The Novartis chemical space contributes a little (the control sits slightly above sweep
   osmordred and above baseline), but the target dominates. Dedicated CSV only; report card untouched.
-- [~] PXR external-test reduced-protocol rerun (in progress): the sweep PXR endpoint splits
+- [x] PXR external-test reduced-protocol rerun (complete): the sweep PXR endpoint splits
   `pxr_pec50.parquet` with an inline Butina `ClusterSplitter`, so the split membership moves with the
   finetune seed. This rerun instead evaluates every flavor (plus the stock reference) on two fixed
   external held-out test sets, the OpenADMET PXR-challenge Phase 1 (253) and Phase 2 (260) molecules
@@ -1005,7 +1005,17 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   end to end (train -> predict -> evaluate; atompair phase 1 R² 0.225) before the full launch.
   **Submitted (2026-07-24).** Durable cpu driver (`slurm/run_pxr_ext.sh`, job 3449313) generated the
   160 recipes (16 models x 5 seeds x 2 phases) and is finetuning them in batches via
-  `submit_batched.sh`, then submits `pxr_ext_analyze.sbatch`. Not yet complete.
+  `submit_batched.sh`, then submits `pxr_ext_analyze.sbatch`.
+  **Result (2026-07-24).** All 160 finetunes completed (driver 3449313) and analyze (3460820) wrote
+  `results/pxr_ext_metrics.csv` (160 rows). No pretrained flavor significantly beats stock CheMeleon
+  on either phase. `surrogate_adme` is the only flavor above stock on both, and not significantly:
+  phase 1 R² 0.361 vs stock 0.325 (+0.036, Welch p>0.05), phase 2 0.415 vs 0.413 (+0.003). Every
+  other flavor lands at or below stock; the binary fingerprints are worst by far (phase 1 ecfp 0.036,
+  e3fp 0.027 vs stock 0.325; phase 2 ecfp 0.100, e3fp 0.065 vs 0.413), both significant. Phase 2 is
+  easier than phase 1 for every model (stock 0.413 vs 0.325). Read against the sweep's internal
+  Butina-split PXR card, where `rdkit2d` led: on this external hold-out `rdkit2d` sits mid-pack and
+  below stock (phase 1 0.234, phase 2 0.336), so the internal-split PXR ranking does not carry to the
+  challenge molecules. Dedicated CSV only; report card untouched.
 
 ## Methodology watch-items
 
