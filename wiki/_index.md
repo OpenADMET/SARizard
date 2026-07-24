@@ -48,6 +48,10 @@ Learned-model targets:
 - [[minimol]] 🟣 — 512 minimol embedding (MSE)
 - [[surrogate_adme]] 🟣 — 25 surrogate ADME predictions (MSE)
 
+## Standalone controls (off the [[Report Card]])
+
+- [[osmordred_surrogate]] 🔵: the [[osmordred]] target on [[surrogate_adme]]'s corpus, isolating that flavor's chemical space from its target
+
 ## Endpoint families
 
 - [[Clearance]] · [[Permeability]] · [[Solubility]] · [[Lipophilicity]] · [[Potency]] · [[CYP Inhibition]] · [[hERG]]
