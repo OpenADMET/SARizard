@@ -8,8 +8,9 @@ Reads the tidy metrics CSV produced by ``analysis.evaluate`` for the ablation re
 - the two flavor-style report cards (reused from :mod:`sarizard.analysis.report_card`): an R²
   card whose cells are the 5-seed mean with a per-cell ``±`` seed standard deviation, with the
   stock-CheMeleon base model as the baseline column; and an MAE %-change card whose cells compare
-  each ablation's per-seed MAE against the stock baseline's per-seed MAE, painted white where the
-  unpaired two-sample Welch t-test gives ``p > SIGNIFICANCE_ALPHA``;
+  each ablation's per-seed MAE against the stock baseline's per-seed MAE, painted white where
+  Dunnett's test gives ``p > SIGNIFICANCE_ALPHA`` (the row's ablations are corrected together as
+  one family against the shared baseline);
 - a summary CSV and bar chart ranking each ablation by its mean metric across endpoints and the
   number of endpoints it wins, the read used to pick the production prescaling recipe.
 
@@ -167,9 +168,9 @@ def report_one_mode(
     """Render one protocol's two report cards and ranking; return its per-ablation mean series.
 
     Writes the R² card (5-seed mean with ± seed std) and the MAE %-change card (each ablation's
-    seeds vs the stock-CheMeleon baseline's seeds, unpaired Welch t-test, white where not
-    significant) via the shared flavor-card renderers, plus the ranking CSV and bar chart. Frozen
-    keeps the unsuffixed filenames; the LR protocols add a ``_<mode>`` suffix.
+    seeds vs the stock-CheMeleon baseline's seeds, Dunnett's test across the row's ablations,
+    white where not significant) via the shared flavor-card renderers, plus the ranking CSV and
+    bar chart. Frozen keeps the unsuffixed filenames; the LR protocols add a ``_<mode>`` suffix.
 
     Parameters
     ----------
