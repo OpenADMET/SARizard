@@ -16,16 +16,23 @@ and `README` are filtered out of the graph.
 ## Color legend
 
 Status is carried in each note's `tags`. Until a flavor is finetuned and evaluated it is
-planned (purple); once results land, recolor it by its report-card verdict.
+planned (purple); once results land, recolor it by its verdict against the stock-CheMeleon
+baseline. The verdict is Dunnett's test on the 5 finetune seeds of each flavor's mean R² across
+the 32 endpoint-columns, at p ≤ 0.05, under the frozen and reduced protocols (unlocked is
+excluded: it washes every flavor out, so it separates nothing). The 15 flavors within a protocol
+are corrected together as one comparison family, since they all share the one stock control; an
+uncorrected per-flavor t-test called six more flavors significant than survive that correction.
 
 | Color | Meaning |
 |---|---|
 | 🟠 orange | Reference backbone (stock CheMeleon), not one of our flavors |
-| 🔵 blue | Method or endpoint-family node |
+| 🔵 blue | Method, control, or endpoint-family node |
 | 🟣 purple | Planned flavor (not yet pretrained, finetuned, or evaluated) |
-| 🟢 green | Flavor that wins its endpoint family on the report card |
-| 🟡 yellow | Flavor that is competitive but not best |
-| 🔴 red | Flavor that underperforms |
+| 🟢 green | Significantly above the stock baseline under frozen or reduced |
+| 🟡 yellow | No significant difference from stock under either |
+| 🔴 red | Significantly below stock under frozen or reduced |
+
+As of the full-corpus 5-seed sweep no flavor is purple: every registry flavor has results.
 
 ## Source of record
 

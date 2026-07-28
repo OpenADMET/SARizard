@@ -18,6 +18,10 @@ tags: [method, status/green]
 > (`chemeleon_baseline` drops to 5th of 7 under frozen there), so the recipe ranking is
 > corpus-size sensitive; see the 250K section below and [[Shared Corpus and Regime]] for why
 > that matters. See `FINDINGS.md` for the full ranking.
+>
+> **Caveat added after the 5-seed redo:** every number on this page is single-seed. The triage
+> was later re-run at 5 finetune seeds, and that redo covers six of the seven recipes,
+> **excluding `chemeleon_baseline`**, the one the decision names. See the section below.
 
 ## Why first
 
@@ -46,13 +50,13 @@ column drops and transforms are applied to every row.
 
 ## Ablation ladder
 
-- `minimal` — clean + z-score only (floor: does winsorization even help?)
-- `chemeleon_baseline` — reproduces today's `split.py` (std winsorize + raw-stat z-score, entangled order)
-- `order_fix` — winsorize (percentile) first, then z-score on the winsorized data
-- `plus_drop_corr` — `order_fix` + correlated-column drop
-- `plus_drop_low_var` — `order_fix` + low-variance drop
-- `plus_yeo_johnson` — `order_fix` + Yeo-Johnson
-- `full` — all steps stacked
+- `minimal`: clean + z-score only (floor: does winsorization even help?)
+- `chemeleon_baseline`: reproduces today's `split.py` (std winsorize + raw-stat z-score, entangled order)
+- `order_fix`: winsorize (percentile) first, then z-score on the winsorized data
+- `plus_drop_corr`: `order_fix` + correlated-column drop
+- `plus_drop_low_var`: `order_fix` + low-variance drop
+- `plus_yeo_johnson`: `order_fix` + Yeo-Johnson
+- `full`: all steps stacked
 
 Each `plus_*` isolates one step's marginal effect over `order_fix`; `full` stacks them.
 
@@ -165,10 +169,44 @@ ranking should not be assumed to transfer to a different corpus size, including 
 corpus the flavor sweep itself uses. See `FINDINGS.md` for the full tables and the pooled
 ranked-choice comparison.
 
+## 5-seed redo, and the gap it leaves
+
+The whole triage was re-run at 5 finetune seeds off the same fixed s42 ablation foundations,
+across all three protocols (2160 finetunes), so the ranking could be read with error bars.
+Mean R² across the 24 ablation endpoints, per seed then averaged over seeds 1-5:
+
+| recipe | frozen | reduced | unlocked |
+|---|---|---|---|
+| plus_yeo_johnson | **0.313 ± 0.009** | 0.354 ± 0.006 | 0.295 ± 0.020 |
+| plus_drop_low_var | 0.310 ± 0.015 | **0.356 ± 0.008** | **0.312 ± 0.014** |
+| plus_drop_corr | 0.299 ± 0.013 | 0.350 ± 0.014 | 0.304 ± 0.031 |
+| full | 0.298 ± 0.011 | 0.341 ± 0.011 | 0.297 ± 0.018 |
+| order_fix | 0.294 ± 0.007 | 0.347 ± 0.008 | 0.307 ± 0.026 |
+| minimal | 0.286 ± 0.016 | 0.336 ± 0.020 | 0.293 ± 0.015 |
+| [[Stock CheMeleon]] | 0.295 ± 0.009 | 0.316 ± 0.014 | 0.337 ± 0.008 |
+
+**`chemeleon_baseline` is missing from this table**, and it is the recipe the decision names.
+The redo covers six recipes: `chemeleon_baseline` kept only its single-seed s42 result dirs, its
+configs were cleared with the other stale s42 recipes, and it never entered
+`results/ablation_metrics.csv`. The 5-seed data can therefore neither confirm nor overturn the
+ranking that selected it.
+
+What the six that were re-run show is that the single-seed frozen ordering did not survive seed
+averaging: `plus_yeo_johnson` now leads frozen (3rd of 7 single-seed) and `plus_drop_low_var`
+leads both non-frozen protocols despite having been the single-seed bottom performer, eliminated
+first in every ranked-choice round. The six also sit within roughly one seed standard deviation
+of each other under frozen, which is the more useful read: at 5 seeds the prescaling choice is
+close to noise under the protocol the sweep uses.
+
+Nothing operational depends on closing this. `split.py` already produces `chemeleon_baseline`,
+so a revision would change a recorded rationale, not code. Closing it properly means finetuning
+`chemeleon_baseline` at seeds 1-5 across the three protocols: 360 recipes off the existing
+foundation, no pretraining.
+
 ## Related
 
-- Feeds [[Shared Corpus and Regime]] (the prescaling becomes part of the fixed regime); note
-  the corpus-size mismatch flagged there (the triage decision comes from the full corpus, the
-  flavor sweep runs on 250K)
+- Feeds [[Shared Corpus and Regime]] (the prescaling becomes part of the fixed regime). The
+  corpus-size mismatch this page used to flag is resolved: the flavor sweep now runs on the same
+  full corpus the triage decision came from, not the 250K screening set.
 - Uses the [[osmordred]] target as the representative continuous flavor
 - Read against the [[Report Card]] format (endpoints by ablation instead of by flavor)

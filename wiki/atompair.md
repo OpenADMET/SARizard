@@ -1,5 +1,5 @@
 ---
-tags: [flavor, status/planned]
+tags: [flavor, status/yellow]
 ---
 # atompair
 
@@ -14,6 +14,13 @@ tags: [flavor, status/planned]
 
 Atom-pair encoding emphasizes through-bond distance pattern, a different bias than ECFP's local
 environments. It tests whether the choice of fingerprint among leaky pretexts matters at all.
+
+## Result (frozen sweep, 5 seeds)
+Frozen mean R² 0.270 ± 0.011 against a 0.294 ± 0.010 stock baseline, below it but not
+significantly once the flavors are corrected as one family (p=0.08); reduced and unlocked are
+statistical ties too, so it never separates from stock under any protocol. Beats stock on 11 of 32 endpoint-columns frozen, its best being
+expansionrx MPPB (+0.25). Consistent with the leaky-and-weak-pretext prior for binary
+fingerprint targets.
 
 ## Related
 

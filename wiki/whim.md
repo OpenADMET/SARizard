@@ -1,5 +1,5 @@
 ---
-tags: [flavor, status/planned]
+tags: [flavor, status/red]
 ---
 # whim
 
@@ -15,6 +15,17 @@ tags: [flavor, status/planned]
 Whole-molecule geometry may inform distribution and shape-sensitive endpoints: [[Permeability]],
 [[Potency]], and [[hERG]]. It contrasts with [[usrcat]]'s shape-plus-pharmacophore framing on
 the same conformers.
+
+## Result (frozen sweep, 5 seeds)
+Frozen mean R² 0.210 ± 0.024, significantly below the 0.294 ± 0.010 stock baseline, and
+significantly below under reduced (0.276). Under unlocked it climbs to 0.304 and the deficit is
+no longer significant, the largest frozen-to-unlocked recovery of any flavor: its pretext needs
+backbone adaptation to pay off at all. Beats stock on only 8 of 32
+endpoint-columns frozen, the fewest of any flavor. The weakest continuous-descriptor target in
+the study.
+
+Holistic 3D geometry on a single generated conformer per molecule appears to carry little that
+transfers; the conformer dependence also makes the target only approximately reproducible.
 
 ## Related
 
