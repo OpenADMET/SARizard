@@ -37,7 +37,15 @@ p-value is already family-wise. This replaced an uncorrected per-cell Welch t-te
 independent tests per card and let false positives scale with the number of flavors shown; the
 change costs the frozen card 143 colored cells down to 95. Correcting per row and not across the
 whole card is deliberate, so error across the 32 rows is not controlled: scanning the entire card
-for the single best cell is still an uncontrolled search. See `FINDINGS.md` for the caveats,
+for the single best cell is still an uncontrolled search.
+
+The **AVERAGE row runs a second, separate Dunnett family**, since summarizing a flavor across all
+32 endpoints is a different question from any single cell. Each group is one value per finetune
+seed: that seed's mean MAE %-change across the card's endpoints, with the baseline put through
+the same aggregation as the control. The row was previously colored by its mean change no matter
+what; it is now whitened when the seed spread does not separate it from the baseline, which
+leaves 7 of 15 flavors colored under frozen, 7 under reduced, and 4 under unlocked. See
+`FINDINGS.md` for the caveats,
 notably that the pooled-variance assumption cannot be checked at five seeds and that no
 correction touches the single-pretraining-seed limitation.
 

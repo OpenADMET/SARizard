@@ -11,12 +11,13 @@ Two cards are rendered per setup from the tidy metrics CSV written by ``analysis
   differs significantly from the baseline's (Dunnett's test, p at or below
   ``SIGNIFICANCE_ALPHA``), so only differences the seed spread supports carry color. Each
   endpoint row is one comparison family: its flavors are all measured against the same baseline,
-  so they are corrected together rather than tested one cell at a time.
+  so they are corrected together rather than tested one cell at a time. Its AVERAGE row is gated
+  the same way, off a separate Dunnett test on each flavor's per-seed mean change across all the
+  card's endpoints, so a column that only looks better overall is painted white too.
 
 The R² card annotates every endpoint cell (flavors and the multi-seed baseline column) with a
-``±`` seed standard deviation under its value; the delta card annotates each cell with its change
-and the test p-value. The AVERAGE row shows a bare mean, since its spread is over endpoints, not
-seeds.
+``±`` seed standard deviation under its value, and shows a bare mean on its AVERAGE row; the
+delta card annotates each cell with its change and the test p-value, its AVERAGE row included.
 
 Both cards group the endpoint rows by their source dataset (asap, chembl, expansionrx, ...)
 with a bold black separator line and a bold source label per group.
@@ -63,6 +64,10 @@ DELTA_EXTENT_CAP = 25.0
 # the spacers carry no data (painted white) and their tick labels are blanked at render
 BASELINE_LABEL = "chemeleon\nbaseline"
 AVERAGE_LABEL = "AVERAGE"
+
+# pivot key standing in for a missing seed number, so an unseeded label (the legacy single-run
+# baseline) still groups as one replicate instead of being dropped by the pivot's NaN index
+_UNSEEDED_KEY = -1
 _SPACER_LEFT = " "  # figure space: a unique, blank column label before the flavor block
 _SPACER_ROW = " "
 
@@ -113,9 +118,15 @@ def collapse_seed_variants(frame: pd.DataFrame, column: str = "flavor") -> pd.Da
     labels lets ``build_matrix`` average the seed replicates into one cell per (endpoint, base)
     via its ``aggfunc="mean"`` pivot. Plain labels (no seed suffix) pass through unchanged. The
     base may itself carry a namespace prefix (``ablation_<name>``, ``lr_<mode>__<flavor>``).
+
+    The stripped seed is kept in a ``seed`` column (NaN for an unseeded label) so a caller that
+    needs to line one seed's rows up across endpoints, as the AVERAGE-row test does, can recover
+    the replicate identity the collapsed label no longer carries.
     """
     frame = frame.copy()
-    frame[column] = frame[column].map(lambda label: parse_seed_variant(label)[0])
+    parsed = frame[column].map(parse_seed_variant)
+    frame[column] = parsed.map(lambda base_seed: base_seed[0])
+    frame["seed"] = parsed.map(lambda base_seed: base_seed[1])
     return frame
 
 
@@ -673,17 +684,119 @@ def plot_card(
     logger.info("wrote %s and %s", out_png, out_csv)
 
 
-def _blank_summary_rows(aux: pd.DataFrame) -> pd.DataFrame:
+def _blank_summary_rows(aux: pd.DataFrame, *, keep_average: bool = False) -> pd.DataFrame:
     """Null the auxiliary annotation (error bar or p-value) on the spacer and AVERAGE rows.
 
     ``append_average_row`` would otherwise mean the per-cell auxiliary values into the AVERAGE row,
     conflating a per-cell quantity (seed spread, or a per-cell significance test) with the
     endpoint-to-endpoint AVERAGE. The AVERAGE row shows a bare mean, so its auxiliary is nulled
     along with the spacer row.
+
+    ``keep_average`` spares the AVERAGE row for a caller that has already replaced that row with a
+    quantity computed for it directly, as the MAE-delta card does with its own across-endpoint
+    Dunnett p-values; the spacer row is always nulled.
     """
     aux = aux.copy()
-    aux.iloc[-2:, :] = np.nan
+    if keep_average:
+        aux.iloc[-2, :] = np.nan
+    else:
+        aux.iloc[-2:, :] = np.nan
     return aux
+
+
+def _per_seed_average_delta(
+    frame: pd.DataFrame, flavor: str, rows: pd.Index, baseline_mae: pd.Series
+) -> np.ndarray:
+    """Per-seed mean MAE %-change across ``rows`` for one flavor, one value per finetune seed.
+
+    Raw MAE cannot be averaged across endpoints (they carry different units and ranges), so each
+    endpoint is first expressed as the percentage change against that endpoint's baseline mean,
+    which is what the card's cells already show, and those scale-free changes are then meaned.
+    Averaging a seed's endpoints before comparing groups keeps the endpoint-to-endpoint
+    correlation within a seed inside the seed-level spread instead of counting each endpoint as an
+    independent observation.
+    """
+    subset = frame[frame["flavor"] == flavor]
+    if subset.empty:
+        return np.empty(0, dtype=float)
+
+    # an unseeded label (the legacy single-run baseline) still forms one group of its own, so give
+    # it a sentinel key rather than dropping it from the pivot
+    table = (
+        subset.assign(seed=subset["seed"].fillna(_UNSEEDED_KEY))
+        .pivot_table(index="seed", columns="row", values="mae", aggfunc="mean")
+        .reindex(columns=rows)
+    )
+    base = baseline_mae.reindex(rows)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        delta = 100.0 * table.sub(base, axis=1).div(base, axis=1)
+    per_seed = delta.where(np.isfinite(delta)).mean(axis=1, skipna=True)
+    return per_seed.dropna().to_numpy(dtype=float)
+
+
+def mae_average_pvalues(
+    matrix_frame: pd.DataFrame,
+    frame: pd.DataFrame,
+    baseline_flavor: str,
+    mae_matrix: pd.DataFrame,
+    baseline_mae: pd.Series,
+) -> pd.Series:
+    """Family-wise p-value per flavor for the AVERAGE row's across-endpoint mean change.
+
+    The AVERAGE row asks a different question from the cells above it: not whether a flavor beats
+    the baseline on one endpoint, but whether its mean change across every endpoint on the card
+    differs from the baseline's. That is its own family of many flavors against one control, so it
+    gets its own Dunnett test rather than inheriting or averaging the per-cell p-values, which
+    would conflate a per-endpoint result with a summary across endpoints.
+
+    Each group is one value per finetune seed: that seed's mean MAE %-change across the card's
+    endpoints (see ``_per_seed_average_delta``). The control group is the baseline's own seeds put
+    through the same aggregation, so it is centered near zero and carries the baseline's seed
+    spread. Because every group is expressed against the same per-endpoint baseline means, the
+    control and the treatments are not independent of those denominators; read the row as a
+    summary of the card, not as a standalone claim of overall superiority.
+
+    Two consequences of the pooling are worth knowing before reading a white AVERAGE cell. The
+    verdict is driven by the mean shift against the *family's* pooled spread, not against the
+    column's own, so one unusually noisy column raises the bar for every other column, and two
+    columns with equal mean shifts get equal p-values however different their own spreads are.
+    And where the seed-by-endpoint grid is ragged (a flavor short a finetune), this function's
+    group mean is a mean over seeds of a mean over endpoints while the row above it means the
+    per-endpoint values, so the two can differ slightly; the gap is under a tenth of a
+    percentage point on the current sweep.
+
+    Parameters
+    ----------
+    matrix_frame : pandas.DataFrame
+        Prepared, seed-collapsed metrics for the flavor columns (carries ``row``, ``flavor``,
+        ``seed``, ``mae``).
+    frame : pandas.DataFrame
+        Prepared, seed-collapsed metrics that include the baseline flavor's rows.
+    baseline_flavor : str
+        The baseline flavor label (e.g. ``chemeleon_stock``).
+    mae_matrix : pandas.DataFrame
+        The per-flavor MAE matrix whose columns the returned p-values align to, and whose index
+        fixes the endpoint set the average runs over.
+    baseline_mae : pandas.Series
+        Baseline mean MAE per endpoint, indexed like ``mae_matrix``'s rows.
+
+    Returns
+    -------
+    pandas.Series
+        One p-value per column of ``mae_matrix``, NaN where the comparison is undefined (fewer
+        than ``MIN_GROUP_SIZE`` seeds on either side, or no residual variance in the family).
+    """
+    rows = mae_matrix.index
+    control = _per_seed_average_delta(frame, baseline_flavor, rows, baseline_mae)
+    samples = {
+        flavor: values
+        for flavor in mae_matrix.columns
+        if (values := _per_seed_average_delta(matrix_frame, flavor, rows, baseline_mae)).size
+    }
+    pvalues = pd.Series(np.nan, index=mae_matrix.columns, dtype=float)
+    for flavor, pvalue in dunnett_pvalues(samples, control).items():
+        pvalues[flavor] = pvalue
+    return pvalues
 
 
 def render_r2_card(
@@ -762,6 +875,12 @@ def render_mae_delta_card(
     The row's flavors form one comparison family, so those p-values are already family-wise; see
     :func:`mae_significance_pvalues`.
 
+    The AVERAGE row is gated on its own test rather than on the cells above it: each flavor's
+    per-seed mean change across every endpoint on the card, against the baseline put through the
+    same aggregation, corrected as one family (see :func:`mae_average_pvalues`). So a column can
+    carry a visible mean improvement and still be painted white when the seed spread does not
+    separate it from the baseline overall.
+
     Parameters
     ----------
     matrix_frame, frame, baseline_flavor, out_png
@@ -786,13 +905,22 @@ def render_mae_delta_card(
     significant = pvalues.le(SIGNIFICANCE_ALPHA)
     color_delta = delta.mask((~significant) & delta.notna(), 0.0)
 
+    # the AVERAGE row runs its own family of tests on the across-endpoint mean, so it is gated by
+    # those p-values rather than by anything derived from the per-cell tests above it
+    average_pvalues = mae_average_pvalues(
+        matrix_frame, frame, baseline_flavor, mae, baseline_mae
+    )
+    average_significant = average_pvalues.le(SIGNIFICANCE_ALPHA)
+
     groups = source_groups(delta.index)
     matrix, average_row = append_average_row(delta)
     color_matrix, _ = append_average_row(color_delta)
-    # the AVERAGE row summarizes across endpoints, not a per-cell test, so color it by its true
-    # mean change rather than the significance-gated values
-    color_matrix.iloc[-1] = matrix.iloc[-1].to_numpy()
+    average_delta = matrix.iloc[-1]
+    color_matrix.iloc[-1] = average_delta.mask(
+        (~average_significant) & average_delta.notna(), 0.0
+    ).to_numpy()
     pvalue_matrix, _ = append_average_row(pvalues)
+    pvalue_matrix.iloc[-1] = average_pvalues.reindex(pvalue_matrix.columns).to_numpy()
 
     finite = matrix.to_numpy(dtype=float)
     finite = finite[np.isfinite(finite)]
@@ -808,11 +936,12 @@ def render_mae_delta_card(
         annotate=lambda v, p: f"{v:+.0f}%\n{_format_pvalue(p)}".rstrip(),
         title=f"{title_prefix}: MAE % change vs chemeleon baseline (green = lower MAE / better, "
         f"red = worse; white where p > {SIGNIFICANCE_ALPHA:g}, Dunnett's test on the seeds, "
-        "family-wise across the flavors within each endpoint row)",
+        "family-wise across the flavors within each endpoint row, and across endpoints on "
+        "AVERAGE)",
         cbar_ticks=[-extent, 0.0, extent],
         cbar_labels=[f"-{extent:.0f}%", "0% (baseline or not significant)", f"+{extent:.0f}%"],
         spacer_cols=[], ref_cols=[], groups=groups, average_row=average_row,
-        aux=_blank_summary_rows(pvalue_matrix), color_values=color_matrix,
+        aux=_blank_summary_rows(pvalue_matrix, keep_average=True), color_values=color_matrix,
         emphasis_source=EMPHASIS_SOURCE,
     )
 
