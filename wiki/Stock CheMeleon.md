@@ -15,7 +15,7 @@ column for the [[Report Card]] at no extra pretraining cost.
 
 ## Why it is a reference, not an arm
 
-Our flavors are pretrained on a fixed 250K subset under a reduced shared regime to isolate the
+Our flavors are pretrained on a fixed 944K-molecule corpus under a shared regime to isolate the
 effect of the target block. Stock CheMeleon was trained on 1M molecules with a different
 target and schedule, so it is not apples-to-apples; read it as a strong external baseline.
 

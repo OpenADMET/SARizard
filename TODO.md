@@ -25,10 +25,16 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   foundations, results, plots) are archived at `archive/flavor_sweep_250k/` rather than
   overwritten, mirroring the ablation-triage archive precedent. See Milestones 6-9 below
   for the rerun's progress.
-- [ ] 3. Drive osmordred end to end as the validation flavor: compute target, pretrain
+- [x] 3. Drive osmordred end to end as the validation flavor: compute target, pretrain
   (MeanAggregation, DEFAULT featurizer), convert checkpoint, finetune one endpoint,
   confirm the foundation loads and a sane R-squared lands. This validates the checkpoint
   bridge and the featurizer-dim match before any fan-out.
+  **Complete: validated by every run since.** The checkpoint bridge and featurizer-dim match
+  were confirmed on the first osmordred foundation and have held through the Milestone-4
+  prescaling triage, the full-corpus flavor sweep, and the external-foundation comparison
+  (which reuses the same format/dim validation gate on four foreign checkpoints). osmordred
+  now carries full 5-seed results under all three protocols (frozen mean R-squared
+  0.301 +/- 0.013); see Milestone 6 and `FINDINGS.md`.
 - [x] 4. Prescaling ablation triage (runs BEFORE the flavor sweep). Drive osmordred through
   every prescaling recipe in `sarizard/pretraining/prescaling.py` (`chemeleon_baseline`, `order_fix`,
   `plus_drop_corr`, `plus_drop_low_var`, `plus_yeo_johnson`, `full`, and the `minimal` floor),
@@ -144,6 +150,32 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   `chemeleon_stock_reduced__s1-5`, `chemeleon_stock_unlocked__s1-5`), and the two previously
   missing cards (`plots/ablation_report_card_mae_delta_reduced.png` and `..._unlocked.png`) are on
   disk alongside the frozen one. Milestone 4 is now rendered across all three protocols.
+  **5-seed numbers, and the gap they leave (recorded 2026-07-27).** Mean R-squared across the 24
+  ablation endpoints, per seed then averaged over seeds 1-5, from `results/ablation_metrics.csv`:
+
+  | recipe | frozen | reduced | unlocked |
+  |---|---|---|---|
+  | plus_yeo_johnson | **0.313 +/- 0.009** | 0.354 +/- 0.006 | 0.295 +/- 0.020 |
+  | plus_drop_low_var | 0.310 +/- 0.015 | **0.356 +/- 0.008** | **0.312 +/- 0.014** |
+  | plus_drop_corr | 0.299 +/- 0.013 | 0.350 +/- 0.014 | 0.304 +/- 0.031 |
+  | full | 0.298 +/- 0.011 | 0.341 +/- 0.011 | 0.297 +/- 0.018 |
+  | order_fix | 0.294 +/- 0.007 | 0.347 +/- 0.008 | 0.307 +/- 0.026 |
+  | minimal | 0.286 +/- 0.016 | 0.336 +/- 0.020 | 0.293 +/- 0.015 |
+  | chemeleon_stock (reference) | 0.295 +/- 0.009 | 0.316 +/- 0.014 | 0.337 +/- 0.008 |
+
+  **The recipe the Milestone-5 decision names has no 5-seed data.** This leg ran 6 recipes, not
+  7: `chemeleon_baseline` kept only its single-seed s42 dirs
+  (`results/ablation_chemeleon_baseline__s42[__<mode>]/`), its configs were cleared with the
+  other stale s42 recipes, and it does not appear in `results/ablation_metrics.csv` at all. So
+  the 5-seed redo cannot confirm or overturn the single-seed frozen ranking that put
+  `chemeleon_baseline` first; it only shows that among the other six, the single-seed frozen
+  order does not survive (`plus_yeo_johnson` now leads frozen where `order_fix` did, and
+  `plus_drop_low_var` leads both non-frozen protocols where `order_fix`/`plus_drop_corr` did).
+  Closing this properly needs `chemeleon_baseline` finetuned at seeds 1-5 across the three
+  protocols (360 recipes off the existing s42 foundation, no pretraining). Whether that is worth
+  running is an open call: the decision is already baked in and `split.py` needs no change
+  either way, so this would confirm or revise the recorded rationale, not the pipeline. See the
+  Milestone-5 note below and `FINDINGS.md`.
 - [x] 5. (GATED on 4) Harden the chosen prescaling into the core flavor-sweep workflow. Wire
   the winning `PrescalingConfig` into the default `split.py` path (or insert a prescale step
   ahead of it) so every flavor pretrains on the same, vetted preprocessing. Until this lands,
@@ -155,6 +187,13 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   The flavor sweep (Milestone 6) can proceed unmodified. The subsequent cross-protocol LR
   sweep (Future experiments, below) confirmed the frozen-protocol win but found the margin
   over `order_fix` narrow, not decisive; see `FINDINGS.md` for the full picture.
+  **The decision's evidence base is single-seed and was never re-tested (noted 2026-07-27).**
+  The 5-seed ablation redo under Milestone 4 covers the other six recipes but not
+  `chemeleon_baseline`, so the ranking that put it first has no error bars, while the six that
+  do carry them reordered against their single-seed selves. This does not destabilize the
+  pipeline (`split.py` already produces `chemeleon_baseline`, so any revision would be a
+  recorded rationale change rather than a code change), but the recorded margin should be read
+  as a single-seed result, not a seed-averaged one.
   **250K corpus-size check (in progress):** repeats the same 7 recipes x 3 protocols triage
   on the original 250K screening corpus (`corpus/corpus_250k.parquet`, the milestone-2
   default) instead of the full corpus, now that the regime fix makes the run valid there too
@@ -307,7 +346,7 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   report-card cell carries error bars rather than a lone s42 point. The single-seed frozen and
   reduced results already on disk stand as historical; the Milestone-8 per-protocol stock baseline
   / meta-model and six report cards are now gated behind the 5-seed non-frozen legs.
-- [ ] 7. Add the learned-model flavors: minimol, surrogate_adme. Each runs its
+- [x] 7. Add the learned-model flavors: minimol, surrogate_adme. Each runs its
   source model over the shared corpus in an isolated environment and caches the target.
   **`ml_qm` dropped from scope (decision, 2026-07-08): we are not running it.** Its qmdesc
   target legitimately contains ~1.4% NaN (qmdesc fails on some molecules), which, combined with
@@ -367,9 +406,21 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   Novartis-molecule corpus (unaffected by the full-corpus switch, per the AGENTS.md
   invariant) and has not been touched. Prescale/split/pretrain/finetune/analyze for
   `surrogate_adme` (and every other flavor) are submitted as part of the same chain described in
-  Milestone 6's note above (jobs 33586-33592). **Pretrain is now complete:
-  `minimol` and `surrogate_adme` foundations are on disk (part of the 15 in-scope full-corpus
-  foundations).** Finetune + analyze still to be submitted (see Milestone 6's note).
+  Milestone 6's note above (jobs 33586-33592). Pretrain completed with the
+  `minimol` and `surrogate_adme` foundations on disk (part of the 15 in-scope full-corpus
+  foundations).
+  **Complete: both flavors are finetuned and evaluated on all three protocols at 5 seeds**,
+  through the same 5-seed legs as every other flavor (see the 5-seed redo under Future
+  experiments). Both lead the report card: frozen mean R-squared `surrogate_adme` 0.370 +/- 0.011
+  and `minimol` 0.343 +/- 0.006 against a 0.294 +/- 0.010 stock baseline, the two largest
+  significant margins on the card, and both hold their lead under reduced (0.374, 0.371 vs
+  0.316). Under unlocked neither clears stock family-wise: `surrogate_adme` is nominally ahead
+  (0.368 vs 0.337) but not significantly so once the 15 flavors are corrected together
+  (Dunnett p=0.11), and `minimol` sits below it (0.308), the same wash-out every pretrained
+  flavor shows once the backbone can move freely. `surrogate_adme` remains a different-corpus
+  reference arm, and the
+  `osmordred_surrogate` control (below) attributes its lead to the ADME target rather than the
+  Novartis chemical space. Written up in `FINDINGS.md`.
 - [x] 8. Report card: heatmap of endpoints by flavors with a selectable metric (default R-squared).
   Regenerated across all 10 completed flavors (the 9 Milestone-6 flavors plus `minimol`) by
   resubmitting `analyze.sbatch` with no `FLAVOR_SUBSET` (job 19230968, completed clean);
@@ -551,6 +602,22 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   143 of 480 cells significant, on 23 of 32 endpoints, all concentrated on the high-signal
   endpoints; on PXR every flavor is white (none significant vs stock at 5 seeds). The same gating
   applies automatically to the reduced/unlocked cards when they are rendered.
+  **Per-cell test corrected for multiplicity (2026-07-27).** The per-cell Welch test ran 480
+  independent uncorrected comparisons per card, so the false-positive count scaled with the number
+  of flavors shown rather than holding at the nominal 5%. Replaced with Dunnett's test, treating
+  one endpoint row as one comparison family (15 flavors against the shared stock control): new
+  `sarizard/analysis/multicomp.py` (`dunnett_pvalues`, fixed `DUNNETT_SEED` so a re-render is
+  reproducible, NaN where a group is undersized or the family has no residual variance),
+  `report_card.mae_significance_pvalues` rewritten to call it per row, card caption and
+  `SIGNIFICANCE_ALPHA` comment updated, `tests/test_multicomp.py` added (9 tests, including one
+  pinning the documented case where pooling beats Welch). Colored cells: frozen 143 -> 95,
+  reduced 126 -> 106, unlocked 67 -> 40. The qualitative read is unchanged (same leading flavors,
+  same separating endpoints, PXR still entirely white). Correcting per row and not across the
+  whole card is deliberate; error across the 32 rows stays uncontrolled by design. All 18 cards
+  re-rendered off the cached CSVs (job 3812374, cpu, 2:08, peak RSS 2.9G; the render needs ~3G so
+  it OOMs in a 2G interactive session). Caveats recorded in `FINDINGS.md`: the pooled-variance
+  assumption is not verifiable at 5 seeds, 7-18% of cells got *more* significant because pooling
+  buys degrees of freedom, and no correction touches the single-pretraining-seed limitation.
   **Reduced and unlocked stock baselines submitted (2026-07-13):**
   each as an independent cpu driver, `STOCK_LR_MODE=reduced STOCK_SEEDS="1 2 3 4" bash
   slurm/run_stock_baseline.sh` (driver job 1595754) and the same with `STOCK_LR_MODE=unlocked`
@@ -669,7 +736,7 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   effect from initialization variance. Set `FLAVOR_SEEDS` for `run_all.sh` (and
   `ABLATION_SEEDS` for the triage); the report card and meta-model average the seeds per
   flavor, and re-running with more seeds fills in only the new ones.
-- [~] 5-seed finetune-only redo (in progress): replicate finetuning across 5 fresh seeds
+- [x] 5-seed finetune-only redo (complete for the flavor legs): replicate finetuning across 5 fresh seeds
   (1-5) off the fixed s42 foundations to put error bars on every report-card cell, without
   pretraining anything new. `generate.py` decouples the two seeds (commit 6a75165):
   `--foundation-seed` pins the foundation while `--seeds`/`--finetune-seed` vary the finetune,
@@ -786,6 +853,17 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   can be deleted. Unlocked coverage is complete and balanced, verified from the CSV rather than
   the job log: 15 base flavors x 5 seeds x 32 endpoint-dataset cells = 2400 rows, no gaps and no
   NaN R-squared. Only the per-mode meta-models remain for Milestone 8.
+  **All three flavor legs are complete, and so is the ablation leg.** Every report-card cell now
+  carries a 5-seed error bar under frozen, reduced, and unlocked (15 flavors x 32
+  endpoint-columns x 5 seeds per protocol, plus a 5-seed stock baseline per protocol). The
+  ablation leg landed as 2160 rather than the planned 2520 finetunes because it covers 6
+  recipes, not 7: `chemeleon_baseline` was left on its single-seed s42 run and is absent from
+  `results/ablation_metrics.csv`, so the recipe the Milestone-5 decision actually names has no
+  5-seed data. See Milestone 4 for that leg's account and the resulting protocol-dependent
+  winners. The full 5-seed headline tables are in `FINDINGS.md`.
+  Remaining from this line of work, and the last open Milestone-8/9 step: the per-mode
+  meta-models (`meta_model.py --lr-mode reduced|unlocked`), which are wired but never run, so
+  only the frozen meta-model (`results/meta_model_lgbm.csv`) exists.
 - [x] **Blocker for Milestone 7, raised in urgency:** target-dropout fraction for small
   flavors. The masked-pretext dropout in `losses.py` (`DROPOUT_FRACTION`, applied per target
   element to every flavor) keeps a fixed fraction, not a fixed count. Its rationale (stop the
@@ -852,7 +930,7 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   custom Lightning callback or a sequential two-recipe approach. This is the one LR experiment
   `run_lr_experiments.sh` does not cover (it only sweeps single-rate protocols: reduced,
   unlocked); wiring it needs that anvil feature first.
-- [ ] PCA-compressed osmordred target (wiring in progress, not yet run): osmordred only, backbone/corpus/regime
+- [x] PCA-compressed osmordred target (complete): osmordred only, backbone/corpus/regime
   held fixed as usual. Run the descriptor matrix through the full prescaling pipeline (the
   `full` recipe: order-fixed winsorize/z-score plus correlation drop, low-variance drop, and
   Yeo-Johnson), then fit PCA on the resulting matrix and pretrain against the component scores
@@ -876,9 +954,34 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   derived flavor's own target/prescale stage and treat its PCA output as already prescaled.
   Recipes are generated (`configs/osmordred_pca{80,90,95}__s42/`); its target-derivation
   stage is job 33588 in the full-corpus `run_all.sh` chain described in Milestone 6, and
-  pretrain/finetune ride the same chain (jobs 33590/33591) once split completes. **Pretrain
-  is now complete: all three `osmordred_pca80/90/95` foundations are on disk (pca90 via the
-  93729_14 resubmit after a transient GPU failure); finetune still pending, see Milestone 6.**
+  pretrain/finetune ride the same chain (jobs 33590/33591) once split completes. Pretrain
+  completed with all three `osmordred_pca80/90/95` foundations on disk (pca90 via the
+  93729_14 resubmit after a transient GPU failure).
+  **Complete: finetuned and evaluated on all three protocols at 5 seeds**, riding the same
+  5-seed legs as every other flavor (frozen in `results/metrics.csv`, reduced and unlocked in
+  `results/lr_metrics.csv`, 160 and 480 rows per PCA flavor). Component counts, from
+  `cache/targets/osmordred_pca_summary.json`: 70 (80.1% variance), 147 (90.1%), 237 (95.0%),
+  all well above the 30-dim dropout-override threshold, so they pretrain
+  under the standard masked-pretext regime like full osmordred.
+  **Result: compression is free, not a win.** Mean R-squared across the 32 endpoint-columns
+  (mean +/- seed std over 5 finetune seeds), with full `osmordred` and the same-protocol stock
+  baseline for reference:
+
+  | flavor | frozen | reduced | unlocked |
+  |---|---|---|---|
+  | osmordred (3585 dims) | 0.301 +/- 0.013 | 0.341 +/- 0.010 | 0.298 +/- 0.022 |
+  | osmordred_pca80 (70) | 0.315 +/- 0.010 | 0.338 +/- 0.009 | 0.304 +/- 0.014 |
+  | osmordred_pca90 (147) | 0.315 +/- 0.022 | 0.336 +/- 0.008 | 0.287 +/- 0.025 |
+  | osmordred_pca95 (237) | 0.304 +/- 0.009 | 0.345 +/- 0.019 | 0.283 +/- 0.014 |
+  | chemeleon_stock | 0.294 +/- 0.010 | 0.316 +/- 0.014 | 0.337 +/- 0.008 |
+
+  Every PCA variant lands within one seed standard deviation of full osmordred under every
+  protocol, and the three thresholds do not order consistently (pca80 leads frozen and unlocked,
+  pca95 leads reduced), so the spread between them is seed noise rather than an
+  explained-variance effect. Reading: a 15-to-50x narrower, decorrelated target trains an
+  equally transferable foundation for a fraction of the pretraining cost, but does not train a
+  better one. The dropout-math motivation is moot at these widths, all three staying
+  above the 30-dim threshold. Written up in `FINDINGS.md`.
 - [x] External-foundation comparison (complete 2026-07-16): finetune the same
   24 endpoints on four externally pretrained CheMeleon-format foundations that carry no target or
   pretraining in this repo, to compare pretraining datasets and sizes rather than descriptor
@@ -930,8 +1033,14 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   the same scale as the seed spread. `expansion_gen` is last under frozen and reduced. Reading
   these as a pretraining-corpus comparison is therefore weaker than the flavor sweep's
   descriptor-block comparison: the four checkpoints differ in corpus, size, and pretraining recipe
-  at once, so a per-foundation delta cannot be attributed to corpus size alone. Not yet written up
-  in `FINDINGS.md`.
+  at once, so a per-foundation delta cannot be attributed to corpus size alone.
+  **Every deficit is significant (verified 2026-07-27 from `results/external_metrics.csv`).**
+  Re-reading the CSV on the per-seed basis the report cards use (mean R-squared across the 32
+  endpoint-columns per seed, then mean +/- std over seeds) gives stock 0.295 +/- 0.009 frozen
+  (6 seeds there: the legacy 42 plus 1-5), 0.316 +/- 0.014 reduced, 0.337 +/- 0.008 unlocked, and
+  all twelve foundation-by-protocol deltas against it are negative at Welch p <= 0.003, the
+  largest being `expansion_gen` frozen (-0.109) and `molpile_10M` unlocked (-0.124). Written up in
+  `FINDINGS.md` and `wiki/External Foundations.md`.
 - [x] osmordred-on-surrogate-corpus control (complete): `surrogate_adme` (frozen mean R-squared
   0.369) is confounded two ways against the sweep `osmordred` (0.327): a different corpus (Novartis
   molecules) and a different target (25 ADME predictions vs 3585 osmordred descriptors). This
@@ -983,7 +1092,8 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   while swapping its ADME target for the osmordred descriptor target drops transfer from 0.369 to
   0.325, so surrogate_adme's lead was driven mostly by its on-task ADME target, not its chemical
   space. The Novartis chemical space contributes a little (the control sits slightly above sweep
-  osmordred and above baseline), but the target dominates. Dedicated CSV only; report card untouched.
+  osmordred and above baseline), but the target dominates. Dedicated CSV only; report card
+  untouched. Written up in `FINDINGS.md` and `wiki/osmordred_surrogate.md`.
 - [x] PXR external-test reduced-protocol rerun (complete): the sweep PXR endpoint splits
   `pxr_pec50.parquet` with an inline Butina `ClusterSplitter`, so the split membership moves with the
   finetune seed. This rerun instead evaluates every flavor (plus the stock reference) on two fixed
@@ -1015,7 +1125,8 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   easier than phase 1 for every model (stock 0.413 vs 0.325). Read against the sweep's internal
   Butina-split PXR card, where `rdkit2d` led: on this external hold-out `rdkit2d` sits mid-pack and
   below stock (phase 1 0.234, phase 2 0.336), so the internal-split PXR ranking does not carry to the
-  challenge molecules. Dedicated CSV only; report card untouched.
+  challenge molecules. Dedicated CSV only; report card untouched. Written up in `FINDINGS.md`
+  and `wiki/PXR External Test.md`.
 
 ## Methodology watch-items
 

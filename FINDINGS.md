@@ -11,12 +11,35 @@ per-flavor finetuned predictions into a meta-model beat the best single foundati
 
 ## Status
 
-**Current (2026-07-08): the full-corpus frozen flavor sweep is complete for all 15 flavors.**
-`results/metrics.csv`, `plots/report_card_r2.png`, and `results/meta_model_lgbm.csv` are the
-live frozen report card and meta-model; see the full-corpus table under Report card below. The
-reduced and unlocked protocols on the full corpus, the per-protocol stock baseline and
-meta-model, and the six final report cards remain to run. The rest of this section is the
-prior history leading here.
+**Current (2026-07-27): every planned run is finished and nothing is queued.** The full-corpus
+flavor sweep covers all 15 flavors under all three finetune protocols at 5 finetune seeds each,
+against a 5-seed stock-CheMeleon baseline per protocol, and all six report cards are rendered.
+Four side studies are also complete: the 5-seed prescaling ablation redo, the
+external-foundation comparison, the `osmordred_surrogate` chemical-space control, and the PXR
+external-test rerun. Each has its own section below.
+
+The headline answers as they now stand:
+
+- **Descriptor target matters, but less than the finetune protocol.** Under frozen and reduced,
+  the learned-model flavors (`surrogate_adme`, `minimol`) and `rdkit2d` clear the stock baseline
+  significantly; the binary fingerprints fall well below it. Under unlocked, almost everything
+  collapses back to or below stock, so the pretraining target only shows through while the
+  backbone is held still or nearly still.
+- **Specialization is real but narrow.** The per-endpoint winner changes across families, but no
+  flavor beats stock on an entire family the way the fit-to-purpose premise would predict, and
+  the PXR external test shows the one clean specialization signal (`rdkit2d` on the internal
+  Butina split) does not survive a fixed external hold-out.
+- **Stacking beats any single foundation.** The LGBM meta-model wins 21 of 32 endpoint-columns
+  (mean delta R-squared +0.082 over the best single flavor per endpoint).
+- **Pretraining corpus size is not the lever.** Four externally pretrained foundations, spanning
+  1M to 10M molecules, all lose to stock CheMeleon under every protocol, significantly.
+
+Only one step from the original plan remains unrun: the per-mode (reduced/unlocked) meta-models,
+which are wired but never launched, so `results/meta_model_lgbm.csv` is frozen-only. One gap is
+worth naming rather than closing silently: the Milestone-5 prescaling decision rests on
+single-seed data that the 5-seed redo did not re-test (see Prescaling below).
+
+The rest of this section is the prior history leading here.
 
 Prescaling ablation triage complete on the full corpus with the regime fix, including the
 cross-protocol check (frozen/reduced/unlocked; see below): `chemeleon_baseline` wins under
@@ -81,7 +104,44 @@ justify the extra pipeline steps. This reverses the historical 250K read below
 (`plus_yeo_johnson` winning under frozen), which is expected since that run was confounded
 by the training collapse, not a real signal.
 
-### Cross-protocol check (reduced/unlocked, full corpus, regime-fixed)
+### 5-seed redo, and the gap it leaves in the decision
+
+Every prescaling number in the sections below is single-seed. The triage was later re-run at 5
+finetune seeds off the same fixed s42 ablation foundations, across all three protocols (2160
+finetunes); `results/ablation_metrics.csv` and the per-protocol
+`plots/ablation_report_card_r2[_<mode>].png` cards hold it. Mean R-squared across the 24
+ablation endpoints, per seed then averaged over seeds 1-5:
+
+| recipe | frozen | reduced | unlocked |
+|---|---|---|---|
+| plus_yeo_johnson | **0.313 +/- 0.009** | 0.354 +/- 0.006 | 0.295 +/- 0.020 |
+| plus_drop_low_var | 0.310 +/- 0.015 | **0.356 +/- 0.008** | **0.312 +/- 0.014** |
+| plus_drop_corr | 0.299 +/- 0.013 | 0.350 +/- 0.014 | 0.304 +/- 0.031 |
+| full | 0.298 +/- 0.011 | 0.341 +/- 0.011 | 0.297 +/- 0.018 |
+| order_fix | 0.294 +/- 0.007 | 0.347 +/- 0.008 | 0.307 +/- 0.026 |
+| minimal | 0.286 +/- 0.016 | 0.336 +/- 0.020 | 0.293 +/- 0.015 |
+| chemeleon_stock (reference) | 0.295 +/- 0.009 | 0.316 +/- 0.014 | 0.337 +/- 0.008 |
+
+**`chemeleon_baseline`, the recipe the Milestone-5 decision names, is not in this table.** The
+redo covers six recipes, not seven: `chemeleon_baseline` kept only its single-seed s42 result
+dirs, its configs were cleared along with the other stale s42 recipes, and it never entered
+`results/ablation_metrics.csv`. So the 5-seed data can neither confirm nor overturn the ranking
+that selected it.
+
+What the six that were re-run do show is that the single-seed frozen ordering did not survive
+seed averaging: `plus_yeo_johnson` now leads frozen (it was 3rd of 7 single-seed) and
+`plus_drop_low_var` leads both non-frozen protocols (it was the single-seed bottom performer,
+eliminated first in every ranked-choice round). The recipes also sit within roughly one seed
+standard deviation of each other under frozen, which is the more useful read: at 5 seeds the
+prescaling choice is close to noise under the protocol the sweep uses.
+
+This does not destabilize anything operationally. `split.py` already produces
+`chemeleon_baseline`, so revisiting the decision would change a recorded rationale, not code.
+But the recorded margin should be read as single-seed, and closing the gap properly means
+finetuning `chemeleon_baseline` at seeds 1-5 across the three protocols (360 recipes off the
+existing foundation, no pretraining).
+
+### Cross-protocol check (reduced/unlocked, full corpus, regime-fixed, single-seed)
 
 The frozen-only result above was later crossed with the two other finetune protocols
 (`reduced`, `mpnn_lr=1e-4`; `unlocked`, `mpnn_lr=1e-3`) on the same seven full-corpus
@@ -322,59 +382,125 @@ overridable to a nonzero value. See the resolved blocker in `TODO.md` and the in
 
 ## Report card
 
-### Full-corpus frozen sweep (current headline, 2026-07-08)
+### Full-corpus sweep, 5 seeds, all three protocols (current headline)
 
-All 15 flavors on the full corpus (`corpus/corpus_full.parquet`, 944,296 molecules), frozen
-protocol, seed 42; `results/metrics.csv` (512 rows = 15 flavors + the `chemeleon_stock`
-reference column) and `plots/report_card_r2.png`/`.csv` hold the numbers. Mean R-squared
-across the 32 endpoint-columns:
+All 15 flavors on the full corpus (`corpus/corpus_full.parquet`, 944,296 molecules), finetuned
+at 5 seeds (1-5) off the fixed seed-42 foundations under each of frozen, reduced, and unlocked,
+against a 5-seed stock-CheMeleon baseline per protocol. `results/metrics.csv` (frozen) and
+`results/lr_metrics.csv` (reduced, unlocked) hold the rows; the six cards are
+`plots/report_card_{r2,mae_delta}[_reduced,_unlocked}.png`.
 
-| Flavor | Frozen mean R-squared |
-|---|---|
-| surrogate_adme | 0.369 |
-| minimol | 0.355 |
-| rdkit2d | 0.339 |
-| osmordred | 0.327 |
-| osmordred_pca95 | 0.325 |
-| osmordred_pca90 | 0.322 |
-| osmordred_pca80 | 0.321 |
-| chemeleon_stock (reference) | 0.297 |
-| jazzy | 0.284 |
-| usrcat | 0.281 |
-| erg | 0.271 |
-| pubchem | 0.270 |
-| atompair | 0.261 |
-| e3fp | 0.239 |
-| ecfp | 0.223 |
-| whim | 0.204 |
+Each cell is the mean R-squared across the 32 endpoint-columns within a seed, then averaged over
+the 5 seeds, plus or minus the seed standard deviation. Bold marks a flavor significantly above
+its own protocol's stock baseline, "(below)" one significantly beneath it. The 15 flavors within
+a protocol are one comparison family, tested together with Dunnett's test at p at or below 0.05
+(see Multiple comparisons); these are family-wise verdicts, not 45 independent tests. Sorted by
+the frozen column:
 
-The two learned-model flavors lead (`surrogate_adme` 0.369, `minimol` 0.355), both above
-`rdkit2d` (0.339), the strongest direct-compute descriptor. `surrogate_adme` is a
-different-corpus reference arm (it pretrains on its own Novartis molecules per the AGENTS.md
-invariant), so it is not an apples-to-apples column; read it as such. Whether that lead comes from
-its Novartis chemical space or from the ADME target itself is separated by the
-`osmordred_surrogate` standalone control, which holds the target identical to sweep `osmordred`
-(the 3585-dim descriptor block) while borrowing `surrogate_adme`'s corpus: landing near `osmordred`
-(0.327) would credit the target, landing near `surrogate_adme` (0.369) the chemical space. It is
-off the report card by construction; its result lands in `results/osmordred_surrogate_metrics.csv`
-and `TODO.md` tracks its status. It came back at 0.325 ± 0.004 (5 seeds), nearest sweep osmordred
-(0.305, |Δ|=0.020) rather than surrogate_adme (0.369, |Δ|=0.044): holding surrogate_adme's Novartis
-corpus but swapping its ADME target for the osmordred descriptor target drops transfer to near
-sweep osmordred, so surrogate_adme's lead was driven mostly by its on-task ADME target, not its
-chemical space (the space contributes a little, the control clearing stock by +0.031, Welch
-p<0.001). The three PCA-compressed
-osmordred targets land within 0.006 of full osmordred (0.321-0.325 vs. 0.327), so compressing
-the 3585-dim block to 70-237 components costs almost nothing on frozen transfer. Ten of the
-15 flavors clear the stock-CheMeleon baseline (0.297); the five below it are the binary
-fingerprint flavors (ecfp, atompair, e3fp) plus erg/whim/pubchem's weakest, consistent with
-the leaky-pretext prior. The LGBM meta-model beats the best single flavor on 24 of 32
-endpoint-columns (mean delta R-squared +0.118; `results/meta_model_lgbm.csv`).
+| Flavor | Frozen | Reduced | Unlocked |
+|---|---|---|---|
+| surrogate_adme | **0.370 +/- 0.011** | **0.374 +/- 0.023** | 0.368 +/- 0.016 |
+| minimol | **0.343 +/- 0.006** | **0.371 +/- 0.020** | 0.308 +/- 0.020 |
+| rdkit2d | **0.323 +/- 0.011** | **0.356 +/- 0.013** | 0.324 +/- 0.026 |
+| osmordred_pca80 | 0.315 +/- 0.010 | 0.338 +/- 0.009 | 0.304 +/- 0.014 |
+| osmordred_pca90 | 0.315 +/- 0.022 | 0.336 +/- 0.008 | 0.287 +/- 0.025 (below) |
+| jazzy | 0.305 +/- 0.009 | 0.343 +/- 0.008 | 0.322 +/- 0.018 |
+| osmordred_pca95 | 0.304 +/- 0.009 | **0.345 +/- 0.019** | 0.283 +/- 0.014 (below) |
+| osmordred | 0.301 +/- 0.013 | 0.341 +/- 0.010 | 0.298 +/- 0.022 (below) |
+| chemeleon_stock (reference) | 0.294 +/- 0.010 | 0.316 +/- 0.014 | 0.337 +/- 0.008 |
+| usrcat | 0.285 +/- 0.018 | 0.314 +/- 0.018 | 0.313 +/- 0.017 |
+| atompair | 0.270 +/- 0.011 | 0.310 +/- 0.007 | 0.303 +/- 0.028 |
+| pubchem | 0.270 +/- 0.014 | 0.303 +/- 0.007 | 0.306 +/- 0.012 |
+| erg | 0.265 +/- 0.005 (below) | 0.322 +/- 0.015 | 0.303 +/- 0.026 |
+| e3fp | 0.233 +/- 0.008 (below) | 0.254 +/- 0.006 (below) | 0.263 +/- 0.011 (below) |
+| ecfp | 0.214 +/- 0.020 (below) | 0.253 +/- 0.022 (below) | 0.243 +/- 0.016 (below) |
+| whim | 0.210 +/- 0.024 (below) | 0.276 +/- 0.027 (below) | 0.304 +/- 0.021 |
 
-This ran via frozen finetune job 477538 (`ml_qm`'s block failed as expected, the flavor being
-dropped) and analyze job 510881 (a first analyze attempt, job 509950, died on a bad GPU node
-and was resubmitted with that node excluded). The reduced and unlocked protocols on the full
-corpus are not yet run; the 250K partial sweep below is superseded by this table for the
-flavors it covers.
+Three reads come out of this table.
+
+**Reduced is the protocol where pretraining pays, and the effect is narrower than it first
+looked.** Four flavors clear the stock baseline significantly under reduced against three under
+frozen, and the same three lead both. Under unlocked the picture inverts: the stock baseline
+(0.337) is the best column on the card, **no flavor clears it significantly**, and five fall
+significantly below. Letting the backbone move at the full head learning rate overwrites
+whatever the descriptor pretraining installed, which is what a protocol that retrains the
+representation should do.
+
+Much of the apparent structure here was multiplicity. Before correcting, this table showed 10,
+11 and 12 significant flavors per protocol; 7, 7 and 5 survive, and `surrogate_adme`'s unlocked
+lead over stock (+0.032, family-wise p=0.11) does not survive at all. The flavors that drop out
+are the ones that were marginal to begin with: `osmordred` and the three PCA variants under
+frozen and reduced, `atompair` and `pubchem`'s frozen deficits, `jazzy`'s reduced margin.
+
+**The learned-model flavors lead, and one of them is not a fair column.** `surrogate_adme` tops
+all three protocols, but it pretrains on its own Novartis corpus per the AGENTS.md invariant, so
+it is a different-corpus reference arm rather than an apples-to-apples column. The
+`osmordred_surrogate` control (below) attributes most of its lead to its on-task ADME target
+rather than its chemical space. `minimol`, which does share the corpus, is the strongest
+legitimate flavor under frozen and reduced.
+
+**The binary fingerprint flavors are consistently worst.** `ecfp` and `e3fp` sit significantly
+below stock under all three protocols, and `whim` under frozen and reduced; `atompair` and
+`pubchem` trail without separating significantly once corrected. This is
+the leaky-and-weak-pretext prior in the methodology watch-items showing up as a result: a target
+the message-passing network can read off the graph deterministically teaches it little.
+
+Note that these numbers are lower across the board than the single-seed seed-42 table this
+section used to carry (which had `surrogate_adme` 0.369, `osmordred` 0.327, stock 0.297). That
+table was one finetune seed per flavor. The 5-seed averages are the honest version; the ordering
+of the top flavors survived, the middle of the table reshuffled inside its error bars, and the
+lesson is the same one the multi-seed baseline work below found on PXR.
+
+#### PCA-compressed osmordred targets
+
+`osmordred_pca80`, `pca90`, and `pca95` pretrain against PCA component scores fitted on the
+`full`-recipe-prescaled osmordred matrix (train rows only) rather than the raw 3585-dim block:
+70, 147, and 237 components respectively (`cache/targets/osmordred_pca_summary.json`). All three
+land within one seed standard deviation of full `osmordred` under every protocol, and the three
+thresholds do not order consistently with each other (pca80 leads frozen and unlocked, pca95
+leads reduced), so the spread between them is seed noise rather than an explained-variance
+effect.
+
+Compression is therefore free, not a win: a 15-to-50x narrower, decorrelated target trains an
+equally transferable foundation for a fraction of the pretraining cost, but not a better one.
+The secondary motivation, that a narrow target changes the masked-pretext dropout's
+keep-count-per-step math, does not apply here since all three stay well above the 30-dim
+override threshold.
+
+#### Endpoint families
+
+Mean R-squared pooled across the 15 flavors under the frozen protocol, with the stock baseline
+and the best single flavor for comparison. Families are assigned by endpoint and dataset name
+(the assignment is editorial, not something the analysis code computes); the count in
+parentheses is how many of the 32 endpoint-columns fall in each.
+
+| Family | Pooled flavors | Stock | Best flavor |
+|---|---|---|---|
+| PXR (1) | 0.640 | 0.668 | minimol (0.688) |
+| Lipophilicity (3) | 0.536 | 0.562 | surrogate_adme (0.782) |
+| Permeability/binding (6) | 0.443 | 0.465 | surrogate_adme (0.558) |
+| Potency (2) | 0.411 | 0.490 | jazzy (0.558) |
+| Solubility (3) | 0.230 | 0.247 | surrogate_adme (0.334) |
+| Clearance (11) | 0.185 | 0.164 | surrogate_adme (0.258) |
+| hERG (1) | 0.159 | 0.148 | minimol (0.220) |
+| CYP inhibition (5) | 0.122 | 0.118 | surrogate_adme (0.180) |
+
+The family difficulty ordering is stable and unsurprising: PXR and lipophilicity are easy for
+everything, CYP inhibition and hERG are hard for everything, which tracks assay noise and
+mechanistic directness rather than anything about pretraining.
+
+What the fit-to-purpose premise predicted, and this table does not show, is a family where some
+flavor's descriptor block gives it a decisive edge. The pooled flavor mean beats stock on only
+three of eight families (clearance, hERG, CYP inhibition), and those three are exactly the
+hardest ones, where every column is close to the noise floor. On the five families with real
+signal, the average flavor is worse than stock and only the best flavor clears it. Read
+conservatively: descriptor pretraining buys a per-endpoint best-of, not a family-level
+specialization, and picking the right flavor per endpoint matters more than any flavor's family
+profile. Note also that `surrogate_adme` is the best flavor in five of eight families, and it is
+the different-corpus arm, so even that best-of read leans on the column that is not directly
+comparable.
+
+Per-flavor detail and the 250K-era comparison are below.
 
 ### Multi-seed stock baseline and per-cell error bars (2026-07-13)
 
@@ -383,14 +509,16 @@ single-seed stock-CheMeleon baseline (seed 42), which made both the R-squared ba
 and the entire MAE %-change card an unpaired, high-variance reference. The stock reference is
 now finetuned at five seeds (frozen: the original seed 42 plus seeds 1-4), and `report_card.py`
 averages it. The R-squared card annotates every endpoint cell (flavors and the baseline column)
-with a plus/minus seed standard deviation. The MAE %-change card now colors a cell only where the
-flavor's per-seed MAE differs significantly from the baseline's (two-sample Welch t-test, p at or
-below 0.05); a non-significant cell is painted white and every cell is annotated with its p-value,
-so the card highlights only the differences the seed spread supports.
-`results/metrics.csv` and `plots/report_card_r2.png`/`report_card_mae_delta.png` are regenerated
-with the 5-seed baseline. Across the whole frozen card, 143 of 480 cells are significant, on 23
-of 32 endpoints, concentrated on the high-signal, low-variance endpoints (LogD, Caco-2 efflux,
-clearance) where flavors separate cleanly from stock.
+with a plus/minus seed standard deviation. The MAE %-change card colors a cell only where the
+flavor's MAE differs significantly from the baseline's; a non-significant cell is painted white
+and every cell is annotated with its p-value, so the card highlights only the differences the
+seed spread supports.
+
+That test was originally an uncorrected two-sample Welch t-test run independently in each cell,
+which is now corrected; see Multiple comparisons below. Under the corrected test, 95 of 480
+cells are significant on the frozen card, on 20 of 32 endpoints, concentrated on the
+high-signal, low-variance endpoints (LogD leads with 13 of 15 flavors separating) where flavors
+pull away from stock cleanly.
 
 The correction matters most where the single seed happened to be unrepresentative. On PXR:
 
@@ -403,8 +531,10 @@ Seed 42 was the best of the five stock seeds on PXR (the five range 0.525 to 0.7
 R-squared), so the old single-seed baseline flattered stock and made every flavor look 9 to 27
 percent worse on MAE. Against the 5-seed average, PXR is roughly a wash: minimol (-3.1 percent
 MAE versus baseline), rdkit2d (-1.7 percent), and osmordred (-0.2 percent) beat it, and the rest
-are worse but not by much. Under the significance test, every flavor on PXR is white (p from 0.057
-to 0.99), so no flavor differs significantly from stock on PXR MAE at five seeds. The earlier "PXR
+are worse but not by much. Under the significance test, every flavor on PXR is white, so no flavor
+differs significantly from stock on PXR MAE at five seeds; that held under the original
+uncorrected test (p from 0.057 to 0.99) and holds more comfortably under the corrected one
+(every PXR p at or near 1.0). The earlier "PXR
 delta is bad across the board" read was an artifact of comparing 5-seed flavor averages against
 one lucky stock point, not a real deficit of descriptor pretraining on PXR. The lesson
 generalizes: the stock baseline is as seed-unstable as the flavors, so a single-seed reference is
@@ -496,7 +626,194 @@ shape/pharmacophore descriptor) wins instead, the one specialization signal in t
 partial sweep: 3D shape appears to carry more signal for potency and hERG (both driven by
 binding-site geometry) than for the ADMET properties `rdkit2d` otherwise dominates.
 
+## Multiple comparisons
+
+**The MAE %-change card ran one uncorrected test per cell, and now corrects within each endpoint
+row.** Every cell asked "does this flavor's MAE differ from stock on this endpoint" with an
+independent two-sample Welch t-test, 480 times per card. With 15 flavors measured against one
+shared control, that is 15 comparisons per row, so the card's false-positive count grew with the
+number of flavors shown rather than staying at the nominal 5%.
+
+The fix is Dunnett's test, which is built for this design: many treatments against one control,
+family-wise error controlled across the family, and a variance pooled across all groups in the
+family. One endpoint row is one family. Correcting per row rather than across the whole card is
+a deliberate choice, since each endpoint is a separate question; error across the card's 32 rows
+is therefore not controlled, and a reader scanning the whole card for the single greenest cell
+is still exposed to that.
+
+What it changes, per protocol, on cells colored at p at or below 0.05:
+
+| protocol | uncorrected (old) | Dunnett (current) | lost | newly significant |
+|---|---|---|---|---|
+| frozen | 143 | 95 | 51 | 3 |
+| reduced | 126 | 106 | 30 | 10 |
+| unlocked | 67 | 40 | 30 | 3 |
+
+Roughly a third of the frozen card's colored cells did not survive. Nothing in the qualitative
+read changed: the flavors that separate most (`surrogate_adme` on 13 endpoints, `whim`, `ecfp`
+and `e3fp` on 9-10 as clear losses) and the endpoints that separate most (LogD, clearance) are
+the same ones, and PXR remains entirely white.
+
+**Some cells got *more* significant, which is worth understanding rather than glossing.** In
+7-18% of cells the corrected p-value is smaller than the uncorrected one. Dunnett pools variance
+across the whole family, so a flavor whose own seed spread is much wider than the pool borrows
+precision from its neighbours, and the resulting gain in error degrees of freedom (about 64,
+against the 5 to 8 a two-group Welch test scrapes together at five seeds) can outweigh the
+multiplicity penalty. That is a symptom of unequal variances between flavors, not a bug, and it
+cuts both ways: quiet flavors are penalized by the same pooling.
+
+**The assumption this rests on is not verifiable at five seeds.** Dunnett assumes the groups
+share a common variance. Within an endpoint row the observed variance ratios run a median of 31x
+and a maximum of 352x, which is large; Levene rejects on almost no rows, but Levene has very
+little power with 16 groups of 5, so that non-rejection is not evidence of homogeneity. The
+honest statement is that pooling is an assumption made for the degrees of freedom it buys, and
+that the direction of its error differs per flavor. A variance-free alternative (Holm on the
+Welch p-values, valid under arbitrary dependence) is more conservative still: 74 cells on the
+frozen card against Dunnett's 95.
+
+**What no correction fixes.** The five seeds are finetune seeds off a single seed-42 pretraining
+run per flavor. Every p-value on every card therefore speaks to finetune variance only, and none
+of them licenses a claim about the pretraining target having produced a better foundation, since
+pretraining variance is unsampled at n=1. This is the larger threat to the study's central claim
+than the multiplicity was.
+
+## Standalone controls
+
+Both studies below are standalone by construction: they write their own metrics CSV, never the
+shared `results/metrics.csv`, and no column of theirs appears on the report card.
+
+### osmordred_surrogate: was surrogate_adme's lead its corpus or its target?
+
+`surrogate_adme` leads every protocol, but it is confounded two ways against sweep `osmordred`:
+a different corpus (Novartis molecules) and a different target (25 ADME predictions against
+3585 osmordred descriptors). This control computes the osmordred descriptor target on
+`surrogate_adme`'s Novartis corpus, holding the target identical to sweep `osmordred` and the
+corpus identical to `surrogate_adme`, so where it lands attributes the lead. Frozen protocol, 5
+finetune seeds off one s42 foundation; `results/osmordred_surrogate_metrics.csv`.
+
+| condition | frozen mean R-squared |
+|---|---|
+| surrogate_adme (Novartis corpus, ADME target) | 0.369 +/- 0.010 |
+| **osmordred_surrogate (Novartis corpus, osmordred target)** | **0.325 +/- 0.004** |
+| sweep osmordred (shared corpus, osmordred target) | 0.305 +/- 0.016 |
+| chemeleon_stock | 0.295 +/- 0.009 |
+
+The control is 5 seeds; the three reference arms are 6 (the legacy seed 42 plus 1-5), which is
+why their values differ by ~0.001-0.004 from the same flavors on the report card above.
+
+The control lands nearest sweep osmordred (|delta| 0.020) rather than surrogate_adme (0.044).
+Holding the Novartis corpus while swapping the ADME target for the descriptor target drops
+transfer from 0.369 to 0.325, so **surrogate_adme's lead came mostly from its on-task ADME
+target, not its chemical space.** The space does contribute something: the control clears stock
+by +0.031 (Welch t=7.06, p<0.001) and sits above sweep osmordred, so Novartis molecules are a
+modestly better pretraining set than the shared PubChem corpus for these endpoints. But the
+target dominates.
+
+The practical implication is uncomfortable for the fit-to-purpose premise: the strongest column
+on the card is strong because its pretraining target is itself a set of ADME predictions, which
+is closer to distilling an existing ADME model than to learning a general representation. The
+Novartis corpus is ~273K molecules against the sweep's 944K, a size confound that runs against
+this reading rather than for it (a smaller corpus scoring higher strengthens the case that
+corpus is not what mattered).
+
+### PXR external test: the internal specialization does not transfer
+
+The sweep's PXR endpoint splits `pxr_pec50.parquet` with an inline Butina `ClusterSplitter`, so
+split membership moves with the finetune seed. This rerun instead evaluates every flavor plus
+stock on two fixed external hold-outs, the OpenADMET PXR-challenge Phase 1 (253 molecules) and
+Phase 2 (260), with a single fixed 90/10 train/val split (1950/217, seed 42) shared across every
+flavor and seed, so the finetune seed varies only head init and training. Reduced protocol, 5
+seeds; `results/pxr_ext_metrics.csv`.
+
+Sorted by phase 1; an asterisk marks a delta against stock that is significant at Welch
+p at or below 0.05.
+
+| flavor | Phase 1 R-squared | Phase 2 R-squared |
+|---|---|---|
+| surrogate_adme | 0.361 +/- 0.027 | 0.415 +/- 0.028 |
+| erg | 0.336 +/- 0.032 | 0.348 +/- 0.015* |
+| **chemeleon_stock** | **0.325 +/- 0.043** | **0.413 +/- 0.021** |
+| minimol | 0.299 +/- 0.036 | 0.372 +/- 0.027* |
+| jazzy | 0.287 +/- 0.038 | 0.321 +/- 0.055* |
+| atompair | 0.280 +/- 0.044 | 0.385 +/- 0.033 |
+| usrcat | 0.245 +/- 0.026* | 0.334 +/- 0.046* |
+| osmordred | 0.241 +/- 0.054* | 0.331 +/- 0.054* |
+| rdkit2d | 0.234 +/- 0.078 | 0.336 +/- 0.024* |
+| osmordred_pca95 | 0.216 +/- 0.028* | 0.333 +/- 0.033* |
+| osmordred_pca80 | 0.204 +/- 0.059* | 0.359 +/- 0.024* |
+| whim | 0.157 +/- 0.041* | 0.230 +/- 0.040* |
+| osmordred_pca90 | 0.134 +/- 0.033* | 0.300 +/- 0.013* |
+| pubchem | 0.134 +/- 0.047* | 0.258 +/- 0.030* |
+| ecfp | 0.036 +/- 0.043* | 0.100 +/- 0.045* |
+| e3fp | 0.027 +/- 0.024* | 0.065 +/- 0.035* |
+
+**No pretrained flavor significantly beats stock CheMeleon on either phase.** `surrogate_adme`
+is the only flavor above stock on both, and neither margin is significant (+0.036 phase 1,
++0.003 phase 2). Most flavors land significantly below.
+
+The load-bearing result is `rdkit2d`. On the sweep's internal Butina-split PXR column it was the
+leading flavor, which was the cleanest specialization signal the whole study produced. Here it
+sits mid-pack and below stock on both phases (0.234, 0.336). **A specialization measured on an
+internally generated split did not survive a fixed external hold-out**, which is a warning about
+how much weight any single report-card cell can carry, not just about PXR. Phase 2 is easier
+than phase 1 for every model (stock 0.413 against 0.325), so the two phases differ in difficulty
+as well as membership.
+
+The binary fingerprints fail here far worse than on the report card (phase 1 `ecfp` 0.036,
+`e3fp` 0.027 against stock 0.325), consistent with their leaky-pretext read but much starker on
+molecules that are genuinely held out.
+
+## External foundations: pretraining corpus and size
+
+A comparison of pretraining datasets rather than descriptor blocks. Four externally pretrained
+CheMeleon-format foundations, carrying no target or pretraining in this repo, were finetuned on
+the same 24 endpoints at 5 seeds under all three protocols (1440 finetunes): `molpile_1M`,
+`molpile_5M`, `molpile_10M`, and `expansion_gen`. Each checkpoint passed the same
+`{hyper_parameters, state_dict}` format and message-passing-dim validation gate the repo's own
+foundations do. The existing 5-seed stock-CheMeleon baseline is the reference column.
+`results/external_metrics.csv` and `plots/external_foundations/`; the sweep's
+`results/metrics.csv` is untouched.
+
+Mean R-squared across the 32 endpoint-columns, per seed then averaged over seeds. The frozen
+stock column here is 6 seeds (the legacy seed 42 plus 1-5) rather than the report card's 5
+(42 plus 1-4), because `results/external_metrics.csv` folded in the seed-5 stock run; that
+accounts for the 0.001 difference between this row and the report card's, and the reduced and
+unlocked stock columns are the same 5 seeds in both.
+
+| foundation | frozen | reduced | unlocked |
+|---|---|---|---|
+| **chemeleon_stock** | **0.295 +/- 0.009** | **0.316 +/- 0.014** | **0.337 +/- 0.008** |
+| molpile_5M | 0.255 +/- 0.009 | 0.264 +/- 0.015 | 0.242 +/- 0.025 |
+| molpile_10M | 0.220 +/- 0.013 | 0.250 +/- 0.009 | 0.213 +/- 0.007 |
+| molpile_1M | 0.217 +/- 0.015 | 0.241 +/- 0.022 | 0.292 +/- 0.019 |
+| expansion_gen | 0.186 +/- 0.013 | 0.250 +/- 0.016 | 0.231 +/- 0.015 |
+
+**Every external foundation loses to stock CheMeleon under every protocol, and all twelve
+deficits are significant** (Welch against the same-protocol stock seeds, worst p 0.003; largest
+deficits are `expansion_gen` frozen at -0.109 and `molpile_10M` unlocked at -0.124).
+
+**Pretraining size does not buy accuracy monotonically.** `molpile_5M` leads `1M` and `10M`
+under frozen and reduced, but under unlocked the order inverts to `1M` first and `10M` last. The
+spread between the three sizes (0.04-0.08) is the same scale as the deficit to stock, and the
+ordering is not stable across protocols, so a 10x corpus increase is not visible as a
+consistent gain.
+
+Read this as a weaker comparison than the flavor sweep, and say so plainly: the four checkpoints
+differ in corpus, size, and pretraining recipe simultaneously, so a per-foundation delta cannot
+be attributed to corpus size alone. What it does support is a negative claim that matters for
+the study's framing: stock CheMeleon is a strong baseline that is not easily beaten by
+pretraining on more molecules, which is consistent with the flavor sweep's finding that beating
+it takes a well-chosen target rather than more data.
+
 ## Per-flavor read
+
+The reads below were written against the 250K partial sweep and are kept for their per-flavor
+reasoning; the current numbers are the 5-seed table under Report card, not the values quoted
+here. Where the two disagree, the 5-seed table wins. The notable revisions: `rdkit2d` remains
+the strongest same-corpus direct-compute descriptor but is no longer the top flavor overall
+(`minimol` is, among same-corpus flavors), and its PXR specialization does not survive the
+external test above; `usrcat`'s potency and hERG wins do not reappear on the full-corpus 5-seed
+card, where `jazzy` takes potency and `minimol` takes hERG.
 
 - **rdkit2d**: strongest general foundation in this partial sweep, winning 16 of 32
   endpoint-columns frozen and leading 6 of 8 endpoint families. Confirms the "continuous
@@ -542,15 +859,28 @@ binding-site geometry) than for the ADMET properties `rdkit2d` otherwise dominat
 
 ## Meta-model
 
-First result, across the 10 flavors with finetuned results (the 9 Milestone-6 flavors plus
-`minimol`; `osmordred`, `surrogate_adme` not yet in this table). Stacking with LGBM
-on out-of-fold per-flavor predictions beats the best single flavor on 23 of 32
-endpoint-columns: mean R-squared 0.481 for the meta-model vs. 0.390 for the best single
-flavor per endpoint (mean delta +0.091). `rdkit2d` and `minimol` are the two flavors the
-meta-model most often has to beat (11 and 9 endpoint-columns respectively where one of them
-is the single-flavor winner), consistent with both being the strongest general-purpose
-flavors in the per-flavor read above. The ensemble does not win everywhere: it loses on 9 of
-32 endpoints, mostly where one flavor already specializes strongly (e.g. `usrcat` on potency,
-where stacking in weaker flavors dilutes rather than helps). See `results/meta_model_lgbm.csv`
-for the per-endpoint table. Not yet run: RF/MLP alternative estimators, and osmordred/
-surrogate_adme once they join the merged table.
+**Current (frozen protocol, all 15 flavors, 5 seeds).** Stacking with LGBM on out-of-fold
+per-flavor predictions beats the best single flavor on 21 of 32 endpoint-columns: mean
+R-squared 0.500 for the meta-model against 0.417 for the best single flavor per endpoint
+(mean delta +0.082). The stacker is scored independently per seed and averaged, so its column
+carries the same seed error bars every report-card cell does; 18 of the 21 wins exceed one
+standard deviation of their own delta. `results/meta_model_lgbm.csv` holds the per-endpoint
+table.
+
+The flavor the meta-model most often has to beat is `surrogate_adme` (the single-flavor winner
+on 18 of 32 endpoint-columns), with `minimol` next at 4. That concentration is itself a caution:
+the bar the ensemble is measured against is set largely by the different-corpus reference arm.
+
+The gains are largest where no single flavor does well, and the losses are where one already
+does. Biggest wins: Caco-2 efflux (meta 0.710 against `osmordred_pca95` 0.332), ChEMBL RLM
+clearance (0.376 against `surrogate_adme` 0.096), Caco-2 permeability (0.667 against
+`osmordred` 0.421). Biggest losses: Biogen solubility (0.106 against `surrogate_adme` 0.210)
+and Biogen RLM clearance (0.541 against 0.606). Stacking recovers signal that is spread thinly
+across flavors and dilutes signal that is concentrated in one.
+
+Not run: the RF and MLP alternative estimators, and the per-mode (reduced/unlocked)
+meta-models. The latter are fully wired (`meta_model.py --lr-mode`, writing a mode-scoped
+`meta_model_<estimator>_<mode>.csv`) and are the only remaining step from the original plan, so
+the ensemble question is currently answered under frozen finetuning only. Given that reduced is
+the protocol where pretraining pays for single flavors, the reduced meta-model is the one most
+worth running.
