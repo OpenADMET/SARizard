@@ -269,6 +269,11 @@ slurm/logs/
 *.h5
 *.hdf5
 
+# Published foundation checkpoints: the weights themselves ship as GitHub release assets rather
+# than in the tree (the blanket *.pt rule above keeps them out), while checkpoints/README.md,
+# MANIFEST.csv, and SHA256SUMS are tracked so the metadata and digests stay version-controlled
+# alongside the study that produced them.
+
 # Obsidian per-user UI state (keep graph/app config, drop the machine-local layout)
 wiki/.obsidian/workspace.json
 
