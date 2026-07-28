@@ -16,6 +16,7 @@ from sarizard.analysis.report_card import (
     build_reference_series,
     collapse_seed_variants,
     filter_lr_mode,
+    mae_average_pvalues,
     mae_delta_matrix,
     mae_delta_std,
     mae_significance_pvalues,
@@ -272,6 +273,81 @@ def test_mae_significance_tests_a_flavor_with_no_seed_spread():
         pvalues = mae_significance_pvalues(frame, frame, "chemeleon_stock", mae_matrix)
 
     assert not np.isnan(pvalues.loc["herg · herg", "flat"])
+
+
+_AVERAGE_ENDPOINTS = ["e1", "e2", "e3"]
+
+
+def _multi_endpoint_seed_frame(per_flavor: dict[str, list[list[float]]]) -> pd.DataFrame:
+    """Prepared frame of three endpoints per flavor per seed, from ``__s<seed>`` labels."""
+    rows = [
+        {"flavor": f"{flavor}__s{seed}", "recipe": "herg_st", "dataset": "herg",
+         "endpoint": endpoint, "mae": mae}
+        for flavor, seeds in per_flavor.items()
+        for seed, values in enumerate(seeds, start=1)
+        for endpoint, mae in zip(_AVERAGE_ENDPOINTS, values, strict=True)
+    ]
+    return prepare_rows(collapse_seed_variants(pd.DataFrame(rows)))
+
+
+def test_collapse_seed_variants_keeps_the_seed_number():
+    frame = pd.DataFrame({"flavor": ["ecfp__s3", "chemeleon_stock"]})
+
+    collapsed = collapse_seed_variants(frame)
+
+    # the AVERAGE-row test needs the replicate identity the collapsed label drops, to line one
+    # seed's rows up across endpoints
+    assert list(collapsed["flavor"]) == ["ecfp", "chemeleon_stock"]
+    assert collapsed["seed"].iloc[0] == 3
+    assert np.isnan(collapsed["seed"].iloc[1])
+
+
+def test_mae_average_pvalues_gates_a_small_mean_change_but_not_a_large_one():
+    # both columns improve on the baseline across every endpoint and seed; only the one whose
+    # mean change clears the family's pooled seed spread should carry color on the AVERAGE row
+    frame = _multi_endpoint_seed_frame({
+        "chemeleon_stock": [
+            [0.500, 0.600, 0.700], [0.510, 0.610, 0.690], [0.490, 0.590, 0.710],
+            [0.505, 0.605, 0.705], [0.495, 0.595, 0.695],
+        ],
+        "big": [
+            [0.450, 0.545, 0.625], [0.462, 0.544, 0.624], [0.437, 0.532, 0.646],
+            [0.458, 0.541, 0.630], [0.443, 0.538, 0.622],
+        ],
+        "small": [
+            [0.495, 0.596, 0.692], [0.503, 0.607, 0.680], [0.487, 0.581, 0.706],
+            [0.502, 0.597, 0.702], [0.488, 0.592, 0.687],
+        ],
+    })
+    mae = build_matrix(frame, "mae", columns=["big", "small"])
+    baseline = build_reference_series(frame, "chemeleon_stock", "mae")
+
+    pvalues = mae_average_pvalues(frame, frame, "chemeleon_stock", mae, baseline)
+
+    assert pvalues["big"] <= 0.05
+    assert pvalues["small"] > 0.05
+
+
+def test_mae_average_pvalues_tolerates_a_ragged_seed_grid():
+    # a flavor missing one (seed, endpoint) result is the real-data case (one sweep flavor is
+    # short a single finetune); it must still produce a p-value rather than raise or go NaN
+    frame = _multi_endpoint_seed_frame({
+        "chemeleon_stock": [
+            [0.500, 0.600, 0.700], [0.510, 0.610, 0.690], [0.490, 0.590, 0.710],
+            [0.505, 0.605, 0.705], [0.495, 0.595, 0.695],
+        ],
+        "ragged": [
+            [0.450, 0.545, 0.625], [0.462, 0.544, 0.624], [0.437, 0.532, 0.646],
+            [0.458, 0.541, 0.630], [0.443, 0.538, 0.622],
+        ],
+    })
+    frame = frame.drop(frame[(frame["flavor"] == "ragged") & (frame["seed"] == 2)].index[:1])
+    mae = build_matrix(frame, "mae", columns=["ragged"])
+    baseline = build_reference_series(frame, "chemeleon_stock", "mae")
+
+    pvalues = mae_average_pvalues(frame, frame, "chemeleon_stock", mae, baseline)
+
+    assert not np.isnan(pvalues["ragged"])
 
 
 def test_assemble_r2_card_orders_baseline_first_then_flavors(tidy_metrics):

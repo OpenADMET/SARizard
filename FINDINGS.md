@@ -671,6 +671,25 @@ that the direction of its error differs per flavor. A variance-free alternative 
 Welch p-values, valid under arbitrary dependence) is more conservative still: 74 cells on the
 frozen card against Dunnett's 95.
 
+**The AVERAGE row is gated on its own test.** The row summarizes each flavor across all 32
+endpoints, which is a different question from any cell above it, so it runs its own Dunnett
+family rather than inheriting the per-cell p-values: one value per finetune seed, that seed's
+mean MAE %-change across the card's endpoints, against the baseline seeds put through the same
+aggregation. It used to be colored by its mean change unconditionally, which read as a verdict
+the seed spread often did not support. Colored AVERAGE cells now stand at 7 of 15 flavors under
+frozen (3 better, 4 worse), 7 of 15 under reduced (4 better, 3 worse), and 4 of 15 under
+unlocked (1 better, 3 worse). The change bites hardest where a mean looked meaningful and was
+not: 7 frozen columns, 4 reduced and 10 unlocked, carry a mean change of at least one percentage
+point and are still painted white. Under frozen, `osmordred` at -2% and `jazzy` at -2% are two
+such columns.
+
+Two properties of that row follow from the pooling and are worth holding in mind. The verdict
+runs on the mean shift against the family's pooled spread rather than the column's own, so a
+single noisy column raises the bar for every other column, and two columns with equal mean shifts
+get equal p-values however different their own spreads. And the control group is centered at
+exactly zero by construction, since it is the baseline measured against its own per-endpoint
+means; its spread, not its location, is what the treatments are judged against.
+
 **What no correction fixes.** The five seeds are finetune seeds off a single seed-42 pretraining
 run per flavor. Every p-value on every card therefore speaks to finetune variance only, and none
 of them licenses a claim about the pretraining target having produced a better foundation, since
