@@ -1,6 +1,7 @@
 """Tests for the report-card pivots, row disambiguation, MAE-delta, and card assembly."""
 
 import sys
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -230,6 +231,47 @@ def test_mae_significance_is_nan_without_enough_seeds():
     pvalues = mae_significance_pvalues(frame, frame, "chemeleon_stock", mae_matrix)
 
     assert np.isnan(pvalues.loc["herg · herg", "single"])
+
+
+def test_mae_significance_family_is_the_displayed_columns():
+    # the correction is sized to the columns the card actually shows, not to every flavor present
+    # in the metrics frame, so a standalone --columns card pays for its own column set only
+    frame = _seeded_mae_frame({
+        "chemeleon_stock": [0.500, 0.518, 0.492, 0.511, 0.487],
+        "shown": [0.545, 0.560, 0.538, 0.556, 0.533],
+        "q1": [0.501, 0.502, 0.5005, 0.5015, 0.501],
+        "q2": [0.502, 0.503, 0.5015, 0.5025, 0.502],
+        "q3": [0.503, 0.504, 0.5025, 0.5035, 0.503],
+    })
+    alone = pd.DataFrame({"shown": [0.546]}, index=["herg · herg"])
+    with_family = pd.DataFrame(
+        {name: [0.546] for name in ("shown", "q1", "q2", "q3")}, index=["herg · herg"]
+    )
+
+    p_alone = mae_significance_pvalues(frame, frame, "chemeleon_stock", alone)
+    p_family = mae_significance_pvalues(frame, frame, "chemeleon_stock", with_family)
+
+    assert p_alone.loc["herg · herg", "shown"] != p_family.loc["herg · herg", "shown"]
+
+
+def test_mae_significance_tests_a_flavor_with_no_seed_spread():
+    # Dunnett pools variance across the family, so a flavor whose own seeds are identical is still
+    # testable against the pooled estimate; the per-cell Welch test this replaced skipped such a
+    # group for having zero variance and left the cell painted white
+    frame = _seeded_mae_frame({
+        "chemeleon_stock": [0.500, 0.518, 0.492, 0.511, 0.487],
+        "flat": [0.800] * 5,   # identical across seeds: no spread of its own
+        "spread": [0.545, 0.560, 0.538, 0.556, 0.533],
+    })
+    mae_matrix = pd.DataFrame({"flat": [0.800], "spread": [0.546]}, index=["herg · herg"])
+
+    # scipy warns of precision loss on a group this degenerate, so pin only that the cell enters
+    # the family at all rather than the magnitude it comes back with
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        pvalues = mae_significance_pvalues(frame, frame, "chemeleon_stock", mae_matrix)
+
+    assert not np.isnan(pvalues.loc["herg · herg", "flat"])
 
 
 def test_assemble_r2_card_orders_baseline_first_then_flavors(tidy_metrics):

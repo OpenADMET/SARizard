@@ -8,8 +8,10 @@ Two cards are rendered per setup from the tidy metrics CSV written by ``analysis
 - a delta card whose cells are the percentage change in MAE relative to the stock-CheMeleon
   baseline (green where a flavor's MAE beats the baseline, red where it is worse), flavor columns
   only, with the same AVERAGE row. A cell is painted white unless the flavor's per-seed MAE
-  differs significantly from the baseline's (two-sample Welch t-test, p at or below
-  ``SIGNIFICANCE_ALPHA``), so only differences the seed spread supports carry color.
+  differs significantly from the baseline's (Dunnett's test, p at or below
+  ``SIGNIFICANCE_ALPHA``), so only differences the seed spread supports carry color. Each
+  endpoint row is one comparison family: its flavors are all measured against the same baseline,
+  so they are corrected together rather than tested one cell at a time.
 
 The R² card annotates every endpoint cell (flavors and the multi-seed baseline column) with a
 ``±`` seed standard deviation under its value; the delta card annotates each cell with its change
@@ -39,17 +41,17 @@ import matplotlib.pyplot as plt  # noqa: E402 - set backend before importing pyp
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm  # noqa: E402
-from scipy.stats import ttest_ind  # noqa: E402
 
 from sarizard.analysis.metrics_spec import DATASETS, dataset_of  # noqa: E402
+from sarizard.analysis.multicomp import MIN_GROUP_SIZE, dunnett_pvalues  # noqa: E402
 from sarizard.analysis.paths import METRICS_CSV, PLOTS_DIR, parse_seed_variant  # noqa: E402
 from sarizard.pretraining.flavors import flavor_names  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 # significance threshold for the MAE-delta card: a flavor whose per-seed MAE does not differ from
-# the baseline's at this level (two-sample Welch t-test, p above the threshold) is painted white,
-# so only differences the seed spread supports carry color
+# the baseline's at this level (Dunnett's test, family-wise within the endpoint row, p above the
+# threshold) is painted white, so only differences the seed spread supports carry color
 SIGNIFICANCE_ALPHA = 0.05
 
 # cap the MAE-delta diverging color scale at this magnitude (percentage points) in both
@@ -346,13 +348,22 @@ def _per_seed_values(frame: pd.DataFrame, metric: str) -> dict[tuple[str, str], 
 def mae_significance_pvalues(
     matrix_frame: pd.DataFrame, frame: pd.DataFrame, baseline_flavor: str, mae_matrix: pd.DataFrame
 ) -> pd.DataFrame:
-    """Two-sample p-value per (endpoint, flavor) for the flavor's MAE differing from baseline.
+    """Family-wise p-value per (endpoint, flavor) for the flavor's MAE differing from baseline.
 
-    Each cell runs a two-sample Welch t-test (unequal variance) between the flavor's per-seed MAE
-    sample and the stock baseline's per-seed MAE sample for that endpoint. The seed sets are not
-    paired (the baseline and flavor seeds only partly overlap), so an unpaired test is used. A cell
-    is NaN where either side has fewer than two seeds or zero variance, which the card treats as
-    not significant (painted white).
+    One endpoint row is one comparison family: its flavors are all measured against the same stock
+    baseline on the same molecules, so they are corrected together with Dunnett's test rather than
+    tested pairwise. Correcting per row and not across the whole card is deliberate, since each
+    endpoint asks its own question; error across the card's rows is therefore not controlled.
+
+    This replaced a per-cell unpaired Welch t-test, which ran one uncorrected test per cell and so
+    let the card's false-positive count grow with the number of flavors shown. The seed sets are
+    still unpaired (the baseline and flavor seeds only partly overlap, and the seed-randomized
+    splits resample per seed), which Dunnett assumes; what changed is the multiplicity, not the
+    pairing.
+
+    A cell is NaN where the comparison is undefined (fewer than ``MIN_GROUP_SIZE`` seeds on either
+    side, or no residual variance anywhere in the row), which the card treats as not significant
+    and paints white.
 
     Parameters
     ----------
@@ -376,13 +387,17 @@ def mae_significance_pvalues(
     pvalues = pd.DataFrame(np.nan, index=mae_matrix.index, columns=mae_matrix.columns)
     for row in mae_matrix.index:
         base = baseline_samples.get((row, baseline_flavor))
-        if base is None or np.size(base) < 2 or np.ptp(base) == 0:
+        if base is None or np.size(base) < MIN_GROUP_SIZE:
             continue
-        for flavor in mae_matrix.columns:
-            sample = flavor_samples.get((row, flavor))
-            if sample is None or np.size(sample) < 2 or np.ptp(sample) == 0:
-                continue
-            pvalues.loc[row, flavor] = float(ttest_ind(sample, base, equal_var=False).pvalue)
+        # the family is the flavors actually shown in this row, so a standalone card (--columns)
+        # pays a correction sized to its own column set rather than the full registry
+        samples = {
+            flavor: sample
+            for flavor in mae_matrix.columns
+            if (sample := flavor_samples.get((row, flavor))) is not None
+        }
+        for flavor, pvalue in dunnett_pvalues(samples, base).items():
+            pvalues.loc[row, flavor] = pvalue
     return pvalues
 
 
@@ -741,10 +756,11 @@ def render_mae_delta_card(
     """Render the MAE %-change card, coloring only cells that differ significantly from baseline.
 
     Each cell's color still encodes the percentage change in MAE (green better, red worse), but a
-    cell whose per-seed MAE does not differ significantly from the baseline's (two-sample Welch
-    t-test p above ``SIGNIFICANCE_ALPHA``) is painted white regardless of the change, so the card
-    highlights only differences the seed spread supports. Every cell is annotated with its change
-    and its p-value.
+    cell whose per-seed MAE does not differ significantly from the baseline's (Dunnett p above
+    ``SIGNIFICANCE_ALPHA``) is painted white regardless of the change, so the card highlights only
+    differences the seed spread supports. Every cell is annotated with its change and its p-value.
+    The row's flavors form one comparison family, so those p-values are already family-wise; see
+    :func:`mae_significance_pvalues`.
 
     Parameters
     ----------
@@ -791,8 +807,8 @@ def render_mae_delta_card(
         cmap=_DELTA_CMAP, norm=norm,
         annotate=lambda v, p: f"{v:+.0f}%\n{_format_pvalue(p)}".rstrip(),
         title=f"{title_prefix}: MAE % change vs chemeleon baseline (green = lower MAE / better, "
-        f"red = worse; white where p > {SIGNIFICANCE_ALPHA:g}, two-sample Welch t-test on the "
-        "seeds)",
+        f"red = worse; white where p > {SIGNIFICANCE_ALPHA:g}, Dunnett's test on the seeds, "
+        "family-wise across the flavors within each endpoint row)",
         cbar_ticks=[-extent, 0.0, extent],
         cbar_labels=[f"-{extent:.0f}%", "0% (baseline or not significant)", f"+{extent:.0f}%"],
         spacer_cols=[], ref_cols=[], groups=groups, average_row=average_row,
