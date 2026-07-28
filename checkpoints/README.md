@@ -10,12 +10,11 @@ fraction, pretraining corpus, source, size, and sha256 of each one.
 
 ## Getting the weights
 
-The checkpoints are **release assets, not files in this repository**: 898 MB of binaries would
-sit in the git history of every clone forever. A clone gives you this README, `MANIFEST.csv`, and
-`SHA256SUMS`; the weights come from the repository's GitHub releases page.
+The checkpoints are tracked in this repository, so a clone brings them with it. That makes the
+clone about 900 MB; if you only want the code and the metadata, `git clone --filter=blob:none`
+fetches the blobs lazily and skips them until something asks for one.
 
-Download them into this directory, preserving the category subdirectories below, and the paths in
-`MANIFEST.csv` and `SHA256SUMS` will resolve as written.
+The paths in `MANIFEST.csv` and `SHA256SUMS` are relative to this directory.
 
 ## What these are
 
@@ -26,8 +25,6 @@ only intended difference between two `flavors/` checkpoints is the target block.
 read on each flavor are in `FINDINGS.md` at the repository root.
 
 ## Layout
-
-Category directories, as the release assets are packaged:
 
 | directory | count | what |
 |---|---|---|

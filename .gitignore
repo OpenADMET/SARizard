@@ -269,10 +269,11 @@ slurm/logs/
 *.h5
 *.hdf5
 
-# Published foundation checkpoints: the weights themselves ship as GitHub release assets rather
-# than in the tree (the blanket *.pt rule above keeps them out), while checkpoints/README.md,
-# MANIFEST.csv, and SHA256SUMS are tracked so the metadata and digests stay version-controlled
-# alongside the study that produced them.
+# Published foundation checkpoints. The distributable copies under checkpoints/ are tracked
+# deliberately so they ship with the repository, unlike the regenerable foundations/ exports they
+# are copied from. The blanket *.pt rule above would otherwise catch them; the parent directories
+# are not ignored, so re-including the files alone is enough.
+!checkpoints/**/*.pt
 
 # Obsidian per-user UI state (keep graph/app config, drop the machine-local layout)
 wiki/.obsidian/workspace.json
