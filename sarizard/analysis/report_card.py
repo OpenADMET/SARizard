@@ -19,8 +19,10 @@ The R² card annotates every endpoint cell (flavors and the multi-seed baseline 
 ``±`` seed standard deviation under its value, and shows a bare mean on its AVERAGE row; the
 delta card annotates each cell with its change and the test p-value, its AVERAGE row included.
 
-Both cards group the endpoint rows by their source dataset (asap, chembl, expansionrx, ...)
-with a bold black separator line and a bold source label per group.
+Both cards group the endpoint rows by their source dataset (asap, chembl, expansionrx, ...),
+bracketing each group in a left-margin box labelled with the source's display name and its
+split strategy. The styling follows the sibling information-gain-metric repo's heatmaps so the
+two projects' figures read as one family.
 
 This step depends only on pandas, numpy, and matplotlib, so it runs without openadmet or a GPU.
 
@@ -42,6 +44,12 @@ import matplotlib.pyplot as plt  # noqa: E402 - set backend before importing pyp
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm  # noqa: E402
+from matplotlib.transforms import blended_transform_factory  # noqa: E402
+
+# match the sibling information-gain-metric repo's heatmap styling, so the two projects' figures
+# read as one family: a clean white ground with no axis spines, cells separated by white gridlines
+# rather than drawn borders, and the dataset grouping carried by left-margin boxes
+plt.style.use("seaborn-v0_8-white")
 
 from sarizard.analysis.metrics_spec import DATASETS, dataset_of  # noqa: E402
 from sarizard.analysis.multicomp import MIN_GROUP_SIZE, dunnett_pvalues  # noqa: E402
@@ -75,40 +83,98 @@ _SPACER_ROW = " "
 # white = no change, red = MAE above baseline (worse)
 _DELTA_CMAP = LinearSegmentedColormap.from_list("mae_delta", ["#1a9850", "#ffffff", "#d73027"])
 
-# report-card font sizes (points), enlarged for legibility at print scale. FONT_CELL drives the
-# per-cell annotation, which is two lines (value over its error bar or p-value); the per-row cell
-# height (CELL_ROW_INCHES) is scaled with it so those two lines always sit inside the cell rules
-FONT_TITLE = 19
-FONT_AXIS = 15  # x tick labels and the per-group source labels
-FONT_YTICK = 14  # endpoint row labels
-FONT_CELL = 12  # per-cell value and error-bar/p-value annotation
-FONT_CBAR = 13  # colorbar tick labels
+# report-card font sizes (points), following the sibling repo's heatmap scale. FONT_CELL sits
+# below its 13 pt default because these cells carry two lines (a value over its error bar or
+# p-value) where that repo's carry one, which is the adjustment its renderer anticipates
+FONT_TITLE = 11
+FONT_AXIS = 9  # x tick labels, bold, and the per-group source labels
+FONT_YTICK = 8  # endpoint row labels
+FONT_CELL = 8  # per-cell value and error-bar/p-value annotation
+FONT_CBAR = 7  # colorbar tick labels
 
-# cell grid geometry (inches). CELL_ROW_INCHES is the per-row height; it is scaled up alongside
-# FONT_CELL from the previous (0.42 in, 8 pt) so the two-line cell annotation keeps the same
-# fits-inside-the-cell ratio at the larger font. CELL_COL_INCHES is the per-column width, also
-# the divisor for the group-label margin (GROUP_LABEL_INCHES), so keep the two consistent
-CELL_ROW_INCHES = 0.64
-CELL_COL_INCHES = 1.15
+# cell grid geometry (inches), and the fixed margins the figure size adds around it: the
+# left-margin group boxes, the endpoint row labels, the colorbar, and the height taken by the
+# title and rotated column labels. Sizing from the grid plus fixed margins (rather than the grid
+# plus one lump) keeps the cells the same size on a narrow ablation card and a wide flavor one.
+# The per-column width is below the sibling repo's 1.55 because these cards carry 15 to 17
+# columns against its handful of metric columns, which at 1.55 would run past 30 inches wide
+CELL_ROW_INCHES = 0.55
+CELL_COL_INCHES = 1.05
+DATASET_LABEL_INCHES = 1.1
+TICK_LABEL_INCHES = 1.8
+COLORBAR_INCHES = 1.0
+FIG_HEIGHT_PAD_INCHES = 1.8
 
-# additive figure margins (inches) around the cell grid. The width margin must cover the whole
-# non-grid footprint (the long endpoint row labels, the rotated group labels reaching
-# GROUP_LABEL_INCHES to the left, and the colorbar on the right); if it under-provisions,
-# constrained_layout steals width from the grid, squeezing the columns of a few-column card
-# (e.g. the 6-column ablation MAE-delta) until the per-cell annotations overlap. Sizing it to the
-# footprint keeps the cells full width on narrow and wide cards alike. Height covers the title,
-# the rotated column labels, and the bottom axis.
-MARGIN_WIDTH_INCHES = 8.5
-MARGIN_HEIGHT_INCHES = 3.2
+# output resolution. The sibling repo renders at 600, which suits its compact figures; these
+# cards are roughly 22 x 20 inches, where 600 dpi would mean a 150-megapixel PNG, so they stay
+# at 300 and reach about 6500 px wide
+_DPI = 300
 
 # source group whose last endpoint gets a thicker separator line directly after it
 EMPHASIS_SOURCE = "pxr"
 
-# clearance (inches) left of the grid for the rotated per-group source labels, enough to clear
-# the longest endpoint tick label. Converted to an axes fraction per card from the grid width
-# (CELL_COL_INCHES per column, matching the figsize) so narrow ablation cards get the same gap as
-# the wide flavor card rather than a width-scaled one that collides on the narrow layout.
-GROUP_LABEL_INCHES = 5.5
+# Display names and split strategy per dataset group, for the left-margin group boxes. Both are
+# taken from the sibling information-gain-metric repo's analyze.py so the two projects' heatmaps
+# name the same sources the same way. The split types were re-derived from this repo's own
+# recipes rather than copied on trust: a template carrying train_resource/test_resource uses the
+# dataset's predefined split, one without uses anvil's inline ClusterSplitter.
+_DATASET_DISPLAY: dict[str, str] = {
+    "asap": "ASAP",
+    "asap_potency": "ASAP",
+    "biogen": "Biogen",
+    "chembl": "ChEMBL",
+    "expansionrx": "ExpRx",
+    "openadmet_cyp": "ChEMBL 37",
+    "herg": "ChEMBL 37",
+    "pxr": "Octant",
+}
+_SPLIT_TYPE: dict[str, str] = {
+    "asap": "predefined",
+    "asap_potency": "predefined",
+    "biogen": "cluster",
+    "chembl": "cluster",
+    "expansionrx": "predefined",
+    "openadmet_cyp": "cluster",
+    "herg": "cluster",
+    "pxr": "cluster",
+}
+
+# Endpoint column -> short row label, also from the sibling repo, so a row reads "CLint HLM"
+# rather than "LOG_CLint_HLM". A disambiguating "(<recipe>)" suffix survives the mapping
+_COL_DISPLAY: dict[str, str] = {
+    "LOG_CLint_HLM": "CLint HLM",
+    "LOG_CLint_MLM": "CLint MLM",
+    "LOG_CLint_RLM": "CLint RLM",
+    "LOG_MDR1": "MDR1",
+    "LogD": "LogD",
+    "LOG_KSOL": "KSOL",
+    "LOG_SOL": "SOL",
+    "LOG_CACO2_PAPP": "Caco2 Papp",
+    "LOG_CACO2_EFFLUX": "Caco2 Efflux",
+    "LOG_MPPB": "MPPB",
+    "LOG_MBPB": "MBPB",
+    "pIC50_MERS_Mpro": "MERS pIC50",
+    "pIC50_SARS2_Mpro": "SARS2 pIC50",
+    "OPENADMET_LOGAC50_cyp3a4": "CYP3A4 IC50",
+    "OPENADMET_LOGAC50_cyp2c9": "CYP2C9 IC50",
+    "OPENADMET_LOGAC50_cyp2d6": "CYP2D6 IC50",
+    "OPENADMET_LOGAC50_cyp1a2": "CYP1A2 IC50",
+    "pchembl_value_mean": "hERG pIC50",
+    "PXR_pEC50": "PXR pEC50",
+}
+
+# Left-margin dataset-group-box x bounds, in axes fraction; the right edge touches the grid
+_BOX_X_L = -0.27
+_BOX_X_R = -0.005
+
+# cell text flips to white once the cell color is this far from the colormap's midpoint, where
+# the RdYlGn and delta ramps are dark enough at both ends to swallow black text
+_TEXT_FLIP_DISTANCE = 0.36
+
+# fitting a rotated group-box label to its box height: the average width of a bold glyph in em,
+# and the fraction of the box the label is allowed to fill so adjacent short groups keep a gap
+_BOLD_EM_WIDTH = 0.68
+_GROUP_LABEL_SLACK = 0.85
 
 
 def collapse_seed_variants(frame: pd.DataFrame, column: str = "flavor") -> pd.DataFrame:
@@ -480,11 +546,20 @@ def source_groups(index: pd.Index) -> list[tuple[int, int, str]]:
 
 
 def _endpoint_labels(index: pd.Index) -> list[str]:
-    """Strip the ``"<source> · "`` prefix from endpoint rows; keep AVERAGE and spacer labels."""
+    """Row tick labels: the source prefix dropped and the endpoint given its short display name.
+
+    The ``"<source> · "`` prefix is redundant once the left-margin group boxes name the source,
+    and the endpoint itself is shortened via ``_COL_DISPLAY`` (``LOG_CLint_HLM`` reads
+    ``CLint HLM``). A disambiguating ``" (<recipe>)"`` suffix is preserved, since it is the only
+    thing separating two rows measuring the same endpoint. An endpoint missing from the display
+    map falls through unchanged rather than being dropped. AVERAGE and spacer labels pass through.
+    """
     labels = []
     for row in index:
         text = str(row)
-        labels.append(text.split(" · ", 1)[1] if " · " in text else text)
+        endpoint = text.split(" · ", 1)[1] if " · " in text else text
+        name, sep, suffix = endpoint.partition(" (")
+        labels.append(_COL_DISPLAY.get(name, name) + sep + suffix)
     return labels
 
 
@@ -500,6 +575,81 @@ def _draw_hline(ax, y: float, n_cols: int, spacer_cols: list[int], *, linewidth:
             ax.plot([x, col - 0.5], [y, y], color="black", linewidth=linewidth, zorder=3)
         x = col + 0.5
     ax.plot([x, n_cols - 0.5], [y, y], color="black", linewidth=linewidth, zorder=3)
+
+
+def _merge_by_display(groups: list[tuple[int, int, str]]) -> list[tuple[int, int, str]]:
+    """Fuse adjacent source runs that share a display name into one box.
+
+    Two source keys can map to the same name (``asap`` and ``asap_potency`` are both ASAP). Where
+    such runs are adjacent they are one dataset as far as the reader is concerned, so they get one
+    bracket rather than two identically labelled boxes stacked on each other.
+    """
+    merged: list[tuple[int, int, str]] = []
+    for start, end, source in groups:
+        display = _DATASET_DISPLAY.get(source, source)
+        if merged and _DATASET_DISPLAY.get(merged[-1][2], merged[-1][2]) == display:
+            merged[-1] = (merged[-1][0], end, merged[-1][2])
+            continue
+        merged.append((start, end, source))
+    return merged
+
+
+def _group_label_fontsize(label: str, n_rows: int) -> float:
+    """Shrink a group-box label until its longest line fits the box height.
+
+    The label is rotated upright, so its length runs along the rows and a one- or two-row group
+    has very little room. Bold glyphs average around 0.68 em, and the fit is left a little slack
+    on top of that, so a single-row group's label stays inside its own bracket instead of running
+    into its neighbours'. Never grows past ``FONT_AXIS``.
+    """
+    longest = max((len(line) for line in label.splitlines()), default=1)
+    available_points = n_rows * CELL_ROW_INCHES * 72.0 * _GROUP_LABEL_SLACK
+    return max(4.5, min(float(FONT_AXIS), available_points / (_BOLD_EM_WIDTH * longest)))
+
+
+def _draw_group_boxes(
+    ax, groups: list[tuple[int, int, str]], n_cols: int, spacer_cols: list[int]
+) -> None:
+    """Bracket each source's rows with a left-margin box carrying its name and split strategy.
+
+    One box per contiguous source run: a rule along the top of the run reaching from the box's
+    left edge across the grid, a vertical closing the box on the left, a bottom rule on the last
+    run only (each run's top rule closes the one above it), and the source's display name over
+    its split strategy set vertically in the margin.
+
+    The grid-crossing part of each rule is broken over any blank spacer column, so no rule runs
+    through the white gap that separates the baseline column from the flavor block.
+    """
+    # x in axes fraction, y in data coordinates, so the boxes track the rows while sitting at a
+    # fixed distance from the grid regardless of how many columns the card has
+    trans = blended_transform_factory(ax.transAxes, ax.transData)
+    groups = _merge_by_display(groups)
+    for index, (start, end, source) in enumerate(groups):
+        y_top, y_bottom = start - 0.5, end - 0.5
+        for y in (y_top, y_bottom) if index == len(groups) - 1 else (y_top,):
+            ax.plot([_BOX_X_L, 0.0], [y, y], transform=trans, color="black", lw=1.0, clip_on=False)
+            _draw_hline(ax, y, n_cols, spacer_cols, linewidth=1.0)
+        ax.plot(
+            [_BOX_X_L, _BOX_X_L],
+            [y_top, y_bottom],
+            transform=trans,
+            color="black",
+            lw=1.0,
+            clip_on=False,
+        )
+        label = f"{_DATASET_DISPLAY.get(source, source)}\n({_SPLIT_TYPE.get(source, 'cluster')})"
+        ax.text(
+            (_BOX_X_L + _BOX_X_R) / 2,
+            (start + end - 1) / 2.0,
+            label,
+            transform=trans,
+            ha="center",
+            va="center",
+            fontsize=_group_label_fontsize(label, end - start),
+            fontweight="bold",
+            rotation=90,
+            clip_on=False,
+        )
 
 
 def plot_card(
@@ -588,17 +738,35 @@ def plot_card(
     cmap = cmap.copy()
     cmap.set_bad("lightgrey")  # missing (flavor, endpoint) cells
 
-    # additive margins (+4.2 wide, +3.2 tall) leave room for the enlarged title, tick labels, and
-    # colorbar so constrained_layout does not shrink the cells to fit the bigger text
+    # figure size is built from the grid plus each fixed margin it has to carry, the sibling
+    # repo's sizing rule, so the cells stay the same size on a narrow ablation card and a wide
+    # flavor one instead of being squeezed by whatever the labels need
     fig, ax = plt.subplots(
         figsize=(
-            CELL_COL_INCHES * n_cols + MARGIN_WIDTH_INCHES,
-            CELL_ROW_INCHES * n_rows + MARGIN_HEIGHT_INCHES,
+            DATASET_LABEL_INCHES + TICK_LABEL_INCHES + CELL_COL_INCHES * n_cols + COLORBAR_INCHES,
+            max(4.0, CELL_ROW_INCHES * n_rows + FIG_HEIGHT_PAD_INCHES),
         ),
-        constrained_layout=True,
+        layout="constrained",
     )
     imshow_kwargs = {"norm": norm} if norm is not None else {"vmin": vmin, "vmax": vmax}
-    im = ax.imshow(np.ma.masked_invalid(color_layer), aspect="auto", cmap=cmap, **imshow_kwargs)
+    im = ax.imshow(
+        np.ma.masked_invalid(color_layer),
+        aspect="auto",
+        cmap=cmap,
+        interpolation="nearest",
+        **imshow_kwargs,
+    )
+
+    # normalized cell colors in [0, 1], so the annotation can flip to white where the ramp goes
+    # dark at either end; im.norm is whichever of norm/vmin-vmax was passed above
+    with np.errstate(invalid="ignore"):
+        normed = np.ma.filled(im.norm(np.ma.masked_invalid(color_layer)), 0.5)
+
+    # separate the cells with white gridlines on the minor ticks rather than drawn borders
+    ax.set_xticks(np.arange(n_cols) - 0.5, minor=True)
+    ax.set_yticks(np.arange(n_rows) - 0.5, minor=True)
+    ax.grid(which="minor", color="white", linewidth=0.6)
+    ax.tick_params(which="minor", length=0)
 
     # the blank spacer row sits directly above the AVERAGE row; its white band is where the
     # vertical divider lines break so no rule crosses empty space
@@ -616,32 +784,17 @@ def plot_card(
             )
     ax.axhspan(spacer_row_top, spacer_row_bottom, color="white", zorder=2)
 
-    # bold source-group separators (each broken across the white spacer columns) and per-group
-    # labels on the left margin; the label x is a fixed absolute gap left of the grid, so a narrow
-    # card clears its row labels as well as the wide one does (see GROUP_LABEL_INCHES)
-    group_label_x = -GROUP_LABEL_INCHES / (CELL_COL_INCHES * n_cols)
-    for start, end, source in groups:
-        if start > 0:
-            _draw_hline(ax, start - 0.5, n_cols, spacer_cols, linewidth=2.2)
-        ax.text(
-            group_label_x,
-            (start + end - 1) / 2.0,
-            source,
-            transform=ax.get_yaxis_transform(),
-            rotation=90,
-            ha="center",
-            va="center",
-            fontsize=FONT_AXIS,
-            fontweight="bold",
-        )
-    # emphasis line directly after the requested source group's last endpoint, matching the
-    # weight of the other group separators
+    # left-margin boxes carrying each source's display name and split strategy, bracketing its
+    # endpoint rows
+    _draw_group_boxes(ax, groups, n_cols, spacer_cols)
+    # emphasis line directly after the requested source group's last endpoint, heavier than the
+    # group brackets so the endpoint the study leans on stays findable
     if emphasis_source is not None:
         for _, end, source in groups:
             if source == emphasis_source:
-                _draw_hline(ax, end - 0.5, n_cols, spacer_cols, linewidth=2.2)
-    # bold line above the AVERAGE row
-    _draw_hline(ax, average_row - 0.5, n_cols, spacer_cols, linewidth=2.2)
+                _draw_hline(ax, end - 0.5, n_cols, spacer_cols, linewidth=1.8)
+    # rule above the AVERAGE row, separating the summary from the endpoints it summarizes
+    _draw_hline(ax, average_row - 0.5, n_cols, spacer_cols, linewidth=1.8)
 
     # pin the view to the imshow extent so the added line segments do not re-margin the axes
     ax.set_xlim(-0.5, n_cols - 0.5)
@@ -655,10 +808,8 @@ def plot_card(
         rotation=45,
         ha="left",
         fontsize=FONT_AXIS,
+        fontweight="bold",
     )
-    for pos, label in zip(x_positions, ax.get_xticklabels(), strict=True):
-        if pos in ref_cols:
-            label.set_fontweight("bold")
     ax.xaxis.set_label_position("top")
     ax.xaxis.tick_top()
 
@@ -673,11 +824,13 @@ def plot_card(
         if pos == average_row:
             label.set_fontweight("bold")
 
-    # annotate each cell with its value and, where defined, its auxiliary (error bar or p-value)
+    # annotate each cell with its value and, where defined, its auxiliary (error bar or p-value),
+    # flipping the text to white once the cell color is dark enough to swallow black
     for i in range(n_rows):
         for j in range(n_cols):
             value = values[i, j]
             if np.isfinite(value):
+                dark = abs(float(normed[i, j]) - 0.5) > _TEXT_FLIP_DISTANCE
                 ax.text(
                     j,
                     i,
@@ -685,16 +838,16 @@ def plot_card(
                     ha="center",
                     va="center",
                     fontsize=FONT_CELL,
-                    color="black",
+                    color="white" if dark else "black",
                 )
 
-    ax.set_title(title, fontsize=FONT_TITLE, pad=28)
-    cbar = fig.colorbar(im, ax=ax, shrink=0.5, pad=0.02)
+    fig.suptitle(title, fontsize=FONT_TITLE)
+    cbar = fig.colorbar(im, ax=ax, shrink=0.55, pad=0.02)
     cbar.set_ticks(cbar_ticks)
     cbar.set_ticklabels(cbar_labels, fontsize=FONT_CBAR)
 
     out_png.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_png, dpi=300, bbox_inches="tight")
+    fig.savefig(out_png, dpi=_DPI, bbox_inches="tight")
     plt.close(fig)
     matrix.to_csv(out_csv)
     logger.info("wrote %s and %s", out_png, out_csv)
