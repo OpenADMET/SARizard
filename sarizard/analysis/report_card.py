@@ -570,7 +570,8 @@ def plot_card(
         emphasized.
     """
     values = matrix.to_numpy(dtype=float)
-    # align the auxiliary matrix to the value matrix so the annotation loop indexes them in lockstep
+    # align the auxiliary matrix to the value matrix so the annotation loop indexes them
+    # in lockstep
     aux_values = (
         aux.reindex(index=matrix.index, columns=matrix.columns).to_numpy(dtype=float)
         if aux is not None
@@ -623,8 +624,15 @@ def plot_card(
         if start > 0:
             _draw_hline(ax, start - 0.5, n_cols, spacer_cols, linewidth=2.2)
         ax.text(
-            group_label_x, (start + end - 1) / 2.0, source, transform=ax.get_yaxis_transform(),
-            rotation=90, ha="center", va="center", fontsize=FONT_AXIS, fontweight="bold",
+            group_label_x,
+            (start + end - 1) / 2.0,
+            source,
+            transform=ax.get_yaxis_transform(),
+            rotation=90,
+            ha="center",
+            va="center",
+            fontsize=FONT_AXIS,
+            fontweight="bold",
         )
     # emphasis line directly after the requested source group's last endpoint, matching the
     # weight of the other group separators
@@ -642,10 +650,13 @@ def plot_card(
     # place ticks only on real columns, so a blank spacer column carries no tick mark or label
     x_positions = [i for i in range(n_cols) if i not in spacer_cols]
     ax.set_xticks(
-        x_positions, labels=[str(matrix.columns[i]) for i in x_positions],
-        rotation=45, ha="left", fontsize=FONT_AXIS,
+        x_positions,
+        labels=[str(matrix.columns[i]) for i in x_positions],
+        rotation=45,
+        ha="left",
+        fontsize=FONT_AXIS,
     )
-    for pos, label in zip(x_positions, ax.get_xticklabels()):
+    for pos, label in zip(x_positions, ax.get_xticklabels(), strict=True):
         if pos in ref_cols:
             label.set_fontweight("bold")
     ax.xaxis.set_label_position("top")
@@ -658,7 +669,7 @@ def plot_card(
     ax.set_yticks(
         y_positions, labels=[endpoint_labels[i] for i in y_positions], fontsize=FONT_YTICK
     )
-    for pos, label in zip(y_positions, ax.get_yticklabels()):
+    for pos, label in zip(y_positions, ax.get_yticklabels(), strict=True):
         if pos == average_row:
             label.set_fontweight("bold")
 
@@ -668,8 +679,13 @@ def plot_card(
             value = values[i, j]
             if np.isfinite(value):
                 ax.text(
-                    j, i, annotate(value, aux_values[i, j]),
-                    ha="center", va="center", fontsize=FONT_CELL, color="black",
+                    j,
+                    i,
+                    annotate(value, aux_values[i, j]),
+                    ha="center",
+                    va="center",
+                    fontsize=FONT_CELL,
+                    color="black",
                 )
 
     ax.set_title(title, fontsize=FONT_TITLE, pad=28)
@@ -838,13 +854,22 @@ def render_r2_card(
     matrix, average_row = append_average_row(matrix)
     std, _ = append_average_row(std)
     plot_card(
-        matrix, out_png, out_png.with_suffix(".csv"),
-        cmap=plt.get_cmap("RdYlGn"), vmin=0.0, vmax=1.0,
+        matrix,
+        out_png,
+        out_png.with_suffix(".csv"),
+        cmap=plt.get_cmap("RdYlGn"),
+        vmin=0.0,
+        vmax=1.0,
         annotate=lambda v, s: f"{v:.3f}" if not np.isfinite(s) else f"{v:.3f}\n±{s:.3f}",
         title=f"{title_prefix}: R² (red = 0, green = 1; ± is the seed standard deviation)",
-        cbar_ticks=[0.0, 0.5, 1.0], cbar_labels=["0.0", "0.5", "1.0"],
-        spacer_cols=spacer_cols, ref_cols=ref_cols, groups=groups, average_row=average_row,
-        aux=_blank_summary_rows(std), emphasis_source=EMPHASIS_SOURCE,
+        cbar_ticks=[0.0, 0.5, 1.0],
+        cbar_labels=["0.0", "0.5", "1.0"],
+        spacer_cols=spacer_cols,
+        ref_cols=ref_cols,
+        groups=groups,
+        average_row=average_row,
+        aux=_blank_summary_rows(std),
+        emphasis_source=EMPHASIS_SOURCE,
     )
 
 
@@ -893,9 +918,7 @@ def render_mae_delta_card(
     """
     baseline_mae = build_reference_series(frame, baseline_flavor, "mae")
     if baseline_mae.empty:
-        logger.warning(
-            "no %s MAE in the metrics; skipping the MAE-delta card", baseline_flavor
-        )
+        logger.warning("no %s MAE in the metrics; skipping the MAE-delta card", baseline_flavor)
         return
     mae = build_matrix(matrix_frame, "mae", columns=columns)
     delta = mae_delta_matrix(mae, baseline_mae)
@@ -907,9 +930,7 @@ def render_mae_delta_card(
 
     # the AVERAGE row runs its own family of tests on the across-endpoint mean, so it is gated by
     # those p-values rather than by anything derived from the per-cell tests above it
-    average_pvalues = mae_average_pvalues(
-        matrix_frame, frame, baseline_flavor, mae, baseline_mae
-    )
+    average_pvalues = mae_average_pvalues(matrix_frame, frame, baseline_flavor, mae, baseline_mae)
     average_significant = average_pvalues.le(SIGNIFICANCE_ALPHA)
 
     groups = source_groups(delta.index)
@@ -931,8 +952,11 @@ def render_mae_delta_card(
     extent = min(observed, DELTA_EXTENT_CAP)
     norm = TwoSlopeNorm(vcenter=0.0, vmin=-extent, vmax=extent)
     plot_card(
-        matrix, out_png, out_png.with_suffix(".csv"),
-        cmap=_DELTA_CMAP, norm=norm,
+        matrix,
+        out_png,
+        out_png.with_suffix(".csv"),
+        cmap=_DELTA_CMAP,
+        norm=norm,
         annotate=lambda v, p: f"{v:+.0f}%\n{_format_pvalue(p)}".rstrip(),
         title=f"{title_prefix}: MAE % change vs chemeleon baseline (green = lower MAE / better, "
         f"red = worse; white where p > {SIGNIFICANCE_ALPHA:g}, Dunnett's test on the seeds, "
@@ -940,8 +964,12 @@ def render_mae_delta_card(
         "AVERAGE)",
         cbar_ticks=[-extent, 0.0, extent],
         cbar_labels=[f"-{extent:.0f}%", "0% (baseline or not significant)", f"+{extent:.0f}%"],
-        spacer_cols=[], ref_cols=[], groups=groups, average_row=average_row,
-        aux=_blank_summary_rows(pvalue_matrix, keep_average=True), color_values=color_matrix,
+        spacer_cols=[],
+        ref_cols=[],
+        groups=groups,
+        average_row=average_row,
+        aux=_blank_summary_rows(pvalue_matrix, keep_average=True),
+        color_values=color_matrix,
         emphasis_source=EMPHASIS_SOURCE,
     )
 
@@ -954,13 +982,16 @@ def main() -> None:
         "--out-dir", type=Path, default=PLOTS_DIR, help="directory for the two card PNGs"
     )
     parser.add_argument(
-        "--baseline-flavor", default="chemeleon_stock",
+        "--baseline-flavor",
+        default="chemeleon_stock",
         help="flavor label for the stock-CheMeleon reference / MAE-delta baseline (see "
         "slurm/run_stock_baseline.sh); the R² baseline column and the whole MAE-delta card are "
         "skipped if it is absent from --metrics-csv",
     )
     parser.add_argument(
-        "--lr-mode", choices=("reduced", "unlocked"), default=None,
+        "--lr-mode",
+        choices=("reduced", "unlocked"),
+        default=None,
         help="render a learning-rate-experiment setup: filter --metrics-csv (typically "
         "results/lr_metrics.csv) to this protocol's lr_<mode>__<flavor> rows and strip the "
         "prefix so the columns match the flavor registry. The references still read from the "
@@ -968,7 +999,21 @@ def main() -> None:
         "(chemeleon_stock_<mode>). The frozen setup needs no filter (bare-flavor metrics.csv)",
     )
     parser.add_argument(
-        "--columns", nargs="*", default=None,
+        "--exclude-recipe",
+        nargs="*",
+        default=None,
+        dest="exclude_recipes",
+        metavar="RECIPE",
+        help="drop these recipes' rows from the card entirely (e.g. --exclude-recipe cyp1a2_st "
+        "expansionrx_logd_st_rand). Filtering happens before the row identities are built, so a "
+        "sibling recipe left alone on a (dataset, endpoint) also loses its disambiguating "
+        "'(<recipe>)' suffix. The AVERAGE row and its test run over the endpoints that remain, "
+        "so a card rendered with exclusions is not comparable to one rendered without them",
+    )
+    parser.add_argument(
+        "--columns",
+        nargs="*",
+        default=None,
         help="explicit column set (values of the flavor field), overriding the registry-flavor "
         "default so a standalone card shows an arbitrary foundation set (e.g. the external "
         "checkpoints: --columns molpile_1M molpile_5M molpile_10M expansion_gen). The baseline "
@@ -981,9 +1026,20 @@ def main() -> None:
 
     if not args.metrics_csv.exists():
         raise SystemExit(f"{args.metrics_csv} not found; run analysis.evaluate first")
+    raw = pd.read_csv(args.metrics_csv)
+    # drop excluded recipes before the row identities are built, so a sibling recipe left alone
+    # on a (dataset, endpoint) sheds its now-redundant "(<recipe>)" suffix. A name that matches
+    # nothing is a typo that would otherwise silently exclude nothing, so refuse it
+    if args.exclude_recipes:
+        unknown = sorted(set(args.exclude_recipes) - set(raw["recipe"].unique()))
+        if unknown:
+            raise SystemExit(
+                f"--exclude-recipe: no rows in {args.metrics_csv} for {', '.join(unknown)}"
+            )
+        raw = raw[~raw["recipe"].isin(args.exclude_recipes)]
     # re-derive the dataset from the recipe and build the disambiguated row identity once on the
     # full frame, so build_matrix and the reference series share one consistent set of row labels
-    frame = prepare_rows(collapse_seed_variants(pd.read_csv(args.metrics_csv)))
+    frame = prepare_rows(collapse_seed_variants(raw))
     # for a reduced/unlocked setup, keep only that protocol's rows as bare-flavor columns; the
     # references still read from the full frame so the mode's stock baseline survives
     matrix_frame = frame
@@ -1001,12 +1057,16 @@ def main() -> None:
 
     suffix = f"_{args.lr_mode}" if args.lr_mode else ""
     render_r2_card(
-        matrix_frame, frame, args.baseline_flavor,
+        matrix_frame,
+        frame,
+        args.baseline_flavor,
         args.out_dir / f"report_card_r2{suffix}.png",
         columns=columns,
     )
     render_mae_delta_card(
-        matrix_frame, frame, args.baseline_flavor,
+        matrix_frame,
+        frame,
+        args.baseline_flavor,
         args.out_dir / f"report_card_mae_delta{suffix}.png",
         columns=columns,
     )

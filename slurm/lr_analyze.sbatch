@@ -52,11 +52,21 @@ done
 python -m sarizard.analysis.evaluate --accelerator "$ACCELERATOR" \
     --flavors "${LABELS[@]}" --out results/lr_metrics.csv
 
+# endpoints dropped from the reduced cards: the cyp1a2 and ExpansionRx LogD single-task rows,
+# each of which has a multi-task sibling measuring the same endpoint that stays on the card.
+# Scoped to reduced by CARD_EXCLUDE_RECIPES; the frozen and unlocked cards keep every row, so
+# their AVERAGE rows run over a different endpoint set and are not comparable to reduced's
+CARD_EXCLUDE_RECIPES="${CARD_EXCLUDE_RECIPES:-cyp1a2_st expansionrx_logd_st_rand}"
+
 # render each protocol's two report cards against that protocol's own stock baseline; the cards
 # read the shared lr_metrics.csv and filter to the mode's rows internally (--lr-mode)
 for mode in "${MODES[@]}"; do
+    exclude=()
+    [[ "$mode" == "reduced" && -n "$CARD_EXCLUDE_RECIPES" ]] && \
+        exclude=(--exclude-recipe $CARD_EXCLUDE_RECIPES)
     python -m sarizard.analysis.report_card --lr-mode "$mode" \
-        --metrics-csv results/lr_metrics.csv --baseline-flavor "chemeleon_stock_${mode}"
+        --metrics-csv results/lr_metrics.csv --baseline-flavor "chemeleon_stock_${mode}" \
+        "${exclude[@]}"
 done
 
 # frozen-vs-LR ranking across whatever protocols are present; non-fatal so a partial-mode run
