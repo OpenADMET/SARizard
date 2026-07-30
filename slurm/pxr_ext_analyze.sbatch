@@ -27,7 +27,7 @@ mapfile -t LABELS < <(ls -d "$REPO_DIR"/configs/pxr_ext__*/ | xargs -n1 basename
 python -m sarizard.analysis.evaluate --accelerator "$ACCELERATOR" \
     --flavors "${LABELS[@]}" --out "$PXR_CSV"
 
-# print the per-phase flavor ranking and the Welch delta vs stock
+# print the per-phase flavor ranking and the family-wise (Dunnett) delta vs stock
 python -m sarizard.analysis.pxr_ext_report --metrics-csv "$PXR_CSV"
 
 echo "pxr_ext comparison printed above; dedicated metrics at $PXR_CSV (report card untouched)"
