@@ -1163,8 +1163,13 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   **Submitted (2026-07-30).** Durable cpu driver job 4453769 generated the 360
   `chemeleon_stock_reduced__s6-s20` recipes and is finetuning them through `submit_batched.sh` in
   batches of 50 (first batch job 4453852). The PXR leg (30 runs) is not submitted: it is gated on
-  the `run_pxr_ext.sh` flavor-subset override above. Re-render and the before/after significance
-  diff still to do once the finetunes land.
+  the `run_pxr_ext.sh` flavor-subset override above.
+  **Sweep leg complete (2026-07-30).** All 360 finetunes COMPLETED with no failures and no batch
+  retries; every result dir carries a `model.pth`. `results/chemeleon_stock_reduced__s1-s20` is now
+  20 seeds on disk against 5 per flavor. Not yet re-rendered: `results/lr_metrics.csv` still holds
+  the 5-seed control, so every reduced-protocol number and significance star in `FINDINGS.md`
+  predates the deepening until `bash slurm/run_lr_experiments.sh` reruns analyze for the reduced
+  protocol. The before/after significance diff and the methods note are still to do.
   **Watch-items for the re-render.** The control goes from 6% to 21% of the observations feeding
   Dunnett's pooled variance, so the common-variance assumption now materially drives every reduced
   p-value: report control spread against pooled-treatment spread and spot-check cells against an
