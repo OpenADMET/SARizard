@@ -24,14 +24,26 @@ source "$SCRIPT_DIR/env.sh"
 FOUNDATION_SEED=42
 FINETUNE_SEEDS="${FINETUNE_SEEDS:-1 2 3 4 5}"
 
+# labels to run: the whole registry plus the stock reference by default. PXR_FLAVORS narrows it,
+# which is what deepening one arm needs: adding control seeds with PXR_FLAVORS=chemeleon_stock
+# leaves the treatment arms at their existing seeds, where generating over the full registry would
+# silently add the same seeds to all 15 flavors and change what the comparison measures. Exported
+# so submit_batched.sh and the sbatch --export=ALL array see the same scoping the generation used.
+if [[ -z "${PXR_FLAVORS:-}" ]]; then
+    PXR_FLAVORS="$(conda run -n "$MAIN_ENV" python -c \
+        "from sarizard.pretraining.flavors import flavor_names; print(' '.join(flavor_names()))") chemeleon_stock"
+fi
+export PXR_FLAVORS FINETUNE_SEEDS
+
 # preflight: the recipes point at the flavor-sweep s42 foundations (stock downloads its own), and
 # the external-test split files must already exist
 MISSING=""
-while IFS= read -r flavor; do
-    [[ -n "$flavor" ]] || continue
+for flavor in $PXR_FLAVORS; do
+    # the stock reference downloads the released checkpoint, so it has no foundation to check
+    [[ "$flavor" == "chemeleon_stock" ]] && continue
     foundation="foundations/${flavor}__s${FOUNDATION_SEED}_mp.pt"
     [[ -f "$REPO_DIR/$foundation" ]] || MISSING+=" $foundation"
-done < <(flavor_list)
+done
 if [[ -n "$MISSING" ]]; then
     echo "ERROR: missing s$FOUNDATION_SEED foundations:$MISSING (run slurm/run_all.sh first)" >&2
     exit 1
@@ -43,14 +55,12 @@ for f in pxr_ext_train pxr_ext_val pxr_test_phase1 pxr_test_phase2; do
     }
 done
 
-# generate the reduced-protocol pxr_ext recipes for every flavor plus the stock reference, all
-# finetuning off the one s42 foundation (chemeleon_stock downloads the released checkpoint instead)
-FLAVORS=$(conda run -n "$MAIN_ENV" python -c \
-    "from sarizard.pretraining.flavors import flavor_names; print(' '.join(flavor_names()))")
-echo "generating pxr_ext recipes (reduced, seeds $FINETUNE_SEEDS, + stock)..."
+# generate the reduced-protocol pxr_ext recipes for the selected labels, all finetuning off the
+# one s42 foundation (chemeleon_stock downloads the released checkpoint instead)
+echo "generating pxr_ext recipes (reduced, seeds $FINETUNE_SEEDS, flavors: $PXR_FLAVORS)..."
 conda run -n "$MAIN_ENV" python -m sarizard.configs.generate \
     --baseline-dir "$REPO_DIR/configs/_pxr_ext" \
-    --flavors $FLAVORS chemeleon_stock \
+    --flavors $PXR_FLAVORS \
     --seeds $FINETUNE_SEEDS --foundation-seed "$FOUNDATION_SEED" \
     --mpnn-lr-mode reduced --label-prefix pxr_ext
 

@@ -169,9 +169,23 @@ lr_unlocked_recipe_list() {
 # print the PXR external-test recipe paths (configs/pxr_ext__<flavor>__s<seed>/), one per line,
 # for the reduced-protocol PXR rerun against the two OpenADMET challenge test phases. Namespaced
 # so it never aliases the flavor sweep, the LR experiments, or the stock baseline dirs; paired with
-# pxr_ext_finetune.sbatch, which maps the array index against this same glob
+# pxr_ext_finetune.sbatch, which maps the array index against this same list.
+# PXR_FLAVORS (space-separated labels, optional) narrows the list to those labels at
+# FINETUNE_SEEDS, in a fixed (flavor, seed) order, so a run that deepens one arm does not
+# re-enumerate the recipes already finetuned on disk; unset (the default) keeps the full glob.
 pxr_ext_recipe_list() {
-    ls "$REPO_DIR"/configs/pxr_ext__*/*.yaml 2>/dev/null
+    local flavor seed
+    local -a seeds
+    if [[ -z "${PXR_FLAVORS:-}" ]]; then
+        ls "$REPO_DIR"/configs/pxr_ext__*/*.yaml 2>/dev/null
+        return
+    fi
+    read -ra seeds <<<"${FINETUNE_SEEDS:-1 2 3 4 5}"
+    for flavor in $PXR_FLAVORS; do
+        for seed in "${seeds[@]}"; do
+            ls "$REPO_DIR/configs/pxr_ext__${flavor}__s${seed}"/*.yaml 2>/dev/null
+        done
+    done
 }
 
 # print the base config-dir label for the stock baseline under STOCK_LR_MODE: bare
