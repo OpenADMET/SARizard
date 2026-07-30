@@ -1171,6 +1171,23 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   treatment arm was regenerated. The driver chains `pxr_ext_analyze.sbatch`, which re-evaluates
   every pxr_ext label into `results/pxr_ext_metrics.csv` and prints the per-phase ranking, so the
   PXR arm re-renders itself on completion.
+  **Complete (2026-07-30).** All 390 finetunes landed clean. The PXR arm re-rendered itself
+  (analyze 4463428). The sweep arm re-rendered via `sbatch slurm/lr_analyze.sbatch` with
+  `LR_MODES="reduced unlocked" FLAVOR_SEEDS="1 2 3 4 5"` (job 4466921, 17m54s): `run_lr_experiments.sh`
+  was deliberately not used, since it pushes all ~3600 LR recipes through the finetune array as
+  no-ops before reaching the analyze it chains, and both modes were kept because `lr_analyze`
+  overwrites `lr_metrics.csv` with only the modes it is given.
+  **Result.** On reduced: MAE card 106 -> 121 of 480 cells colored (24 gained, 9 lost); the
+  R-squared summary goes 7 -> 10 flavors separating from stock (gaining `jazzy`, `osmordred`,
+  `osmordred_pca80`); the AVERAGE row 7 -> 10 of 15. On PXR, one cell moves (`osmordred_pca80`
+  phase 2 regains significance). The gains are a power increase (SE of a delta falls from
+  0.632 to 0.500 sigma, t inflates 1.26x, pooled df 64 -> 79); the pooled within-group variance
+  is unchanged (median ratio 1.000), so the common-variance worry that motivated caution was
+  unfounded. The 9 losses are a separate mechanism, a corrected control mean, and cluster on
+  `expansionrx · LOG_KSOL` where the 5-seed control had drawn badly (0.4104 against 0.3906 MAE).
+  Written up in `FINDINGS.md` under Control depth, with the cross-protocol caveat that reduced's
+  colored-cell count is no longer comparable to frozen's or unlocked's.
+  **Open.** Frozen and unlocked still run 5-seed controls; deepening them is not scheduled.
   **Sweep leg complete (2026-07-30).** All 360 finetunes COMPLETED with no failures and no batch
   retries; every result dir carries a `model.pth`. `results/chemeleon_stock_reduced__s1-s20` is now
   20 seeds on disk against 5 per flavor. Not yet re-rendered: `results/lr_metrics.csv` still holds

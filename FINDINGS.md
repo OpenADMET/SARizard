@@ -11,12 +11,15 @@ per-flavor finetuned predictions into a meta-model beat the best single foundati
 
 ## Status
 
-**Current (2026-07-27): every planned run is finished and nothing is queued.** The full-corpus
+**Current (2026-07-30): every planned run is finished and nothing is queued.** The full-corpus
 flavor sweep covers all 15 flavors under all three finetune protocols at 5 finetune seeds each,
 against a 5-seed stock-CheMeleon baseline per protocol, and all six report cards are rendered.
 Four side studies are also complete: the 5-seed prescaling ablation redo, the
 external-foundation comparison, the `osmordred_surrogate` chemical-space control, and the PXR
-external-test rerun. Each has its own section below.
+external-test rerun. Each has its own section below. The reduced-protocol stock baseline was
+then deepened from 5 finetune seeds to 20 (390 further runs), which is the allocation Dunnett's
+test wants and which changed enough of the reduced card to be read as its own result; see
+Control depth.
 
 The headline answers as they now stand:
 
@@ -24,7 +27,9 @@ The headline answers as they now stand:
   the learned-model flavors (`surrogate_adme`, `minimol`) and `rdkit2d` clear the stock baseline
   significantly; the binary fingerprints fall well below it. Under unlocked, almost everything
   collapses back to or below stock, so the pretraining target only shows through while the
-  backbone is held still or nearly still.
+  backbone is held still or nearly still. Under reduced, measured against the 20-seed control,
+  seven flavors clear stock rather than three, so part of what read as "the target barely
+  matters" was the thin baseline rather than the foundations.
 - **Specialization is real but narrow.** The per-endpoint winner changes across families, but no
   flavor beats stock on an entire family the way the fit-to-purpose premise would predict, and
   the PXR external test shows the one clean specialization signal (`rdkit2d` on the internal
@@ -402,12 +407,12 @@ the frozen column:
 | surrogate_adme | **0.370 +/- 0.011** | **0.374 +/- 0.023** | 0.368 +/- 0.016 |
 | minimol | **0.343 +/- 0.006** | **0.371 +/- 0.020** | 0.308 +/- 0.020 |
 | rdkit2d | **0.323 +/- 0.011** | **0.356 +/- 0.013** | 0.324 +/- 0.026 |
-| osmordred_pca80 | 0.315 +/- 0.010 | 0.338 +/- 0.009 | 0.304 +/- 0.014 |
+| osmordred_pca80 | 0.315 +/- 0.010 | **0.338 +/- 0.009** | 0.304 +/- 0.014 |
 | osmordred_pca90 | 0.315 +/- 0.022 | 0.336 +/- 0.008 | 0.287 +/- 0.025 (below) |
-| jazzy | 0.305 +/- 0.009 | 0.343 +/- 0.008 | 0.322 +/- 0.018 |
+| jazzy | 0.305 +/- 0.009 | **0.343 +/- 0.008** | 0.322 +/- 0.018 |
 | osmordred_pca95 | 0.304 +/- 0.009 | **0.345 +/- 0.019** | 0.283 +/- 0.014 (below) |
-| osmordred | 0.301 +/- 0.013 | 0.341 +/- 0.010 | 0.298 +/- 0.022 (below) |
-| chemeleon_stock (reference) | 0.294 +/- 0.010 | 0.316 +/- 0.014 | 0.337 +/- 0.008 |
+| osmordred | 0.301 +/- 0.013 | **0.341 +/- 0.010** | 0.298 +/- 0.022 (below) |
+| chemeleon_stock (reference) | 0.294 +/- 0.010 | 0.315 +/- 0.014 | 0.337 +/- 0.008 |
 | usrcat | 0.285 +/- 0.018 | 0.314 +/- 0.018 | 0.313 +/- 0.017 |
 | atompair | 0.270 +/- 0.011 | 0.310 +/- 0.007 | 0.303 +/- 0.028 |
 | pubchem | 0.270 +/- 0.014 | 0.303 +/- 0.007 | 0.306 +/- 0.012 |
@@ -418,9 +423,13 @@ the frozen column:
 
 Three reads come out of this table.
 
-**Reduced is the protocol where pretraining pays, and the effect is narrower than it first
-looked.** Four flavors clear the stock baseline significantly under reduced against three under
-frozen, and the same three lead both. Under unlocked the picture inverts: the stock baseline
+**Reduced is the protocol where pretraining pays.** Seven flavors clear the stock baseline
+significantly under reduced against three under frozen, and the same three lead both. That gap
+is partly a measurement difference rather than a physical one: the reduced baseline runs 20
+finetune seeds against frozen's 5, so the reduced column resolves smaller true differences (see
+Control depth below). Four of its seven, `osmordred_pca95`, `jazzy`, `osmordred`, and
+`osmordred_pca80`, sit between 0.338 and 0.345 and separate only once the control is deep enough
+to place stock precisely. Under unlocked the picture inverts: the stock baseline
 (0.337) is the best column on the card, **no flavor clears it significantly**, and five fall
 significantly below. Letting the backbone move at the full head learning rate overwrites
 whatever the descriptor pretraining installed, which is what a protocol that retrains the
@@ -430,7 +439,10 @@ Much of the apparent structure here was multiplicity. Before correcting, this ta
 11 and 12 significant flavors per protocol; 7, 7 and 5 survive, and `surrogate_adme`'s unlocked
 lead over stock (+0.032, family-wise p=0.11) does not survive at all. The flavors that drop out
 are the ones that were marginal to begin with: `osmordred` and the three PCA variants under
-frozen and reduced, `atompair` and `pubchem`'s frozen deficits, `jazzy`'s reduced margin.
+frozen and reduced, `atompair` and `pubchem`'s frozen deficits, `jazzy`'s reduced margin. The
+reduced count later rose from 7 to 10 when the control went to 20 seeds, recovering `jazzy`,
+`osmordred`, and `osmordred_pca80`; frozen and unlocked stand at 7 and 5 on 5-seed controls and
+are not comparable to it on that axis.
 
 **The learned-model flavors lead, and one of them is not a fair column.** `surrogate_adme` tops
 all three protocols, but it pretrains on its own Novartis corpus per the AGENTS.md invariant, so
@@ -649,6 +661,10 @@ What it changes, per protocol, on cells colored at p at or below 0.05:
 | reduced | 126 | 106 | 30 | 10 |
 | unlocked | 67 | 40 | 30 | 3 |
 
+The reduced row is the count against its original 5-seed control. It later moved to 121 when that
+control went to 20 seeds; see Control depth below, and read the reduced card's colored-cell count
+against frozen's and unlocked's only with that difference in mind.
+
 Roughly a third of the frozen card's colored cells did not survive. Nothing in the qualitative
 read changed: the flavors that separate most (`surrogate_adme` on 13 endpoints, `whim`, `ecfp`
 and `e3fp` on 9-10 as clear losses) and the endpoints that separate most (LogD, clearance) are
@@ -683,6 +699,11 @@ not: 7 frozen columns, 4 reduced and 10 unlocked, carry a mean change of at leas
 point and are still painted white. Under frozen, `osmordred` at -2% and `jazzy` at -2% are two
 such columns.
 
+The reduced figures above are against its original 5-seed control. At 20 seeds the reduced
+AVERAGE row colors 10 of 15 (7 better, 3 worse), adding `osmordred`, `jazzy`, and
+`osmordred_pca80`, and the count of reduced columns carrying at least a one-percentage-point
+mean change while still painted white falls from 4 to 1 (`osmordred_pca90`).
+
 Two properties of that row follow from the pooling and are worth holding in mind. The verdict
 runs on the mean shift against the family's pooled spread rather than the column's own, so a
 single noisy column raises the bar for every other column, and two columns with equal mean shifts
@@ -695,6 +716,60 @@ run per flavor. Every p-value on every card therefore speaks to finetune varianc
 of them licenses a claim about the pretraining target having produced a better foundation, since
 pretraining variance is unsampled at n=1. This is the larger threat to the study's central claim
 than the multiplicity was.
+
+### Control depth: 20 seeds on the reduced baseline (2026-07-30)
+
+**The control was the weak side of every comparison, and deepening it changed the reduced card
+more than the multiplicity correction did.** With k treatments at n seeds each, Dunnett's
+variance-optimal control allocation is n times the square root of k. At 15 flavors and 5 seeds
+that is 5 x sqrt(15) = 19.4, so 20. The stock baseline was finetuned at 15 further seeds (6-20)
+under the reduced protocol, 360 runs, leaving every treatment arm at its original 5. The PXR
+external test got the same treatment (30 runs, its own namespaced control). Frozen and unlocked
+still run 5-seed controls.
+
+Buying the same precision on the treatment side would have taken 15 extra seeds on each of 15
+flavors, 16,200 finetunes against 1,080. The asymmetry is the point of the allocation rule.
+
+What moved on the reduced protocol:
+
+| card | 5-seed control | 20-seed control |
+|---|---|---|
+| MAE %-change cells colored | 106 of 480 | 121 (24 gained, 9 lost) |
+| R-squared summary, flavors separating from stock | 7 | 10 |
+| AVERAGE row colored | 7 of 15 (4 better, 3 worse) | 10 of 15 (7 better, 3 worse) |
+
+**This is a power increase, not a looser threshold.** The standard error of a flavor-minus-control
+difference scales as the square root of (1/n_flavor + 1/n_control), which falls from 0.632 to
+0.500 standard deviations, so every t-statistic grows by a factor of 1.26 for an unchanged
+underlying difference. Pooled error degrees of freedom rise from 64 to 79 per endpoint row,
+lowering the critical value a little further. Before the deepening, 18 cells sat at p between
+0.05 and 0.10 and 16 more between 0.10 and 0.20, which is exactly the band a 1.26x inflation
+converts; 24 gains is the expected yield. The family-wise error rate is still pinned at 0.05
+throughout.
+
+**The pooled variance did not shift, which answers the concern that motivated caution here.**
+Enlarging one group to 21% of the observations could have distorted the common-variance
+assumption Dunnett rests on. It did not: the pooled within-group standard deviation has a median
+20-seed-to-5-seed ratio of 1.000 (IQR 0.976 to 1.025). The stock control's spread genuinely
+matches the flavors'.
+
+**The 9 losses come from a different mechanism than the 24 gains.** They cluster, 5 on
+`expansionrx · LOG_KSOL` and 3 on `expansionrx · LOG_CLint_MLM`, and the cause is the control
+mean rather than the control's precision. On `LOG_KSOL` the 5-seed control read 0.4104 MAE
+against a 20-seed value of 0.3906, so five flavors had been scoring above a control that drew
+badly. On `asap_potency · pIC50_MERS_Mpro` the failure ran the other way: the 5-seed control
+understated its own spread by a factor of 4 (0.0148 against 0.0596). Across all endpoints the
+median spread ratio is 1.03, so most were estimated well; the damage was concentrated in a few
+endpoints where five draws happened to mislead, and nothing in the 5-seed data could identify
+which. Gains are effects the thin control could not resolve, losses are false positives it
+manufactured, and the 20-seed card is the more trustworthy one in both directions.
+
+The baseline MAE denominator also moved (mean 0.010, max 0.040), so reduced cell percentages
+shift slightly everywhere, independent of any significance verdict.
+
+**Do not compare colored-cell counts across protocols.** The reduced card now resolves
+differences that frozen and unlocked, still on 5-seed controls, structurally cannot. A flavor
+that separates under reduced and not under unlocked may differ in nothing but control depth.
 
 ## Standalone controls
 
@@ -742,7 +817,8 @@ split membership moves with the finetune seed. This rerun instead evaluates ever
 stock on two fixed external hold-outs, the OpenADMET PXR-challenge Phase 1 (253 molecules) and
 Phase 2 (260), with a single fixed 90/10 train/val split (1950/217, seed 42) shared across every
 flavor and seed, so the finetune seed varies only head init and training. Reduced protocol, 5
-seeds; `results/pxr_ext_metrics.csv`.
+seeds per flavor against a 20-seed stock control (see Control depth above);
+`results/pxr_ext_metrics.csv`.
 
 Sorted by phase 1; an asterisk marks a delta against stock that is significant at Dunnett
 p at or below 0.05. One phase is one comparison family: every flavor is measured against the
@@ -753,7 +829,7 @@ together rather than tested pairwise, matching the report card's per-row treatme
 |---|---|---|
 | surrogate_adme | 0.361 +/- 0.027 | 0.415 +/- 0.028 |
 | erg | 0.336 +/- 0.032 | 0.348 +/- 0.015* |
-| **chemeleon_stock** | **0.325 +/- 0.043** | **0.413 +/- 0.021** |
+| **chemeleon_stock** (20 seeds) | **0.329 +/- 0.045** | **0.412 +/- 0.019** |
 | minimol | 0.299 +/- 0.036 | 0.372 +/- 0.027 |
 | jazzy | 0.287 +/- 0.038 | 0.321 +/- 0.055* |
 | atompair | 0.280 +/- 0.044 | 0.385 +/- 0.033 |
@@ -761,7 +837,7 @@ together rather than tested pairwise, matching the report card's per-row treatme
 | osmordred | 0.241 +/- 0.054* | 0.331 +/- 0.054* |
 | rdkit2d | 0.234 +/- 0.078* | 0.336 +/- 0.024* |
 | osmordred_pca95 | 0.216 +/- 0.028* | 0.333 +/- 0.033* |
-| osmordred_pca80 | 0.204 +/- 0.059* | 0.359 +/- 0.024 |
+| osmordred_pca80 | 0.204 +/- 0.059* | 0.359 +/- 0.024* |
 | whim | 0.157 +/- 0.041* | 0.230 +/- 0.040* |
 | osmordred_pca90 | 0.134 +/- 0.033* | 0.300 +/- 0.013* |
 | pubchem | 0.134 +/- 0.047* | 0.258 +/- 0.030* |
@@ -769,8 +845,8 @@ together rather than tested pairwise, matching the report card's per-row treatme
 | e3fp | 0.027 +/- 0.024* | 0.065 +/- 0.035* |
 
 **No pretrained flavor significantly beats stock CheMeleon on either phase.** `surrogate_adme`
-is the only flavor above stock on both, and neither margin is significant (+0.036 phase 1,
-+0.003 phase 2). Most flavors land significantly below.
+is the only flavor above stock on both, and neither margin is significant (+0.032 phase 1,
++0.004 phase 2). Most flavors land significantly below.
 
 The load-bearing result is `rdkit2d`. On the sweep's internal Butina-split PXR column it was the
 leading flavor, which was the cleanest specialization signal the whole study produced. Here it
@@ -793,6 +869,14 @@ significance, `minimol` (0.032 to 0.465) and `osmordred_pca80` (0.006 to 0.151),
 flavors penalized by the same pooling. The headline read is unchanged, and the `rdkit2d`
 conclusion is strengthened rather than weakened: the flavor that led the internal PXR column now
 lands significantly below stock on both external phases instead of one.
+
+**Deepening the control to 20 seeds then moved one cell back.** `osmordred_pca80` on phase 2
+regains significance (-0.053, the cell the correction above had cost it), which is the tighter
+control resolving a difference the 5-seed comparison could not. Nothing else changes: phase 1
+keeps the same ten starred flavors and phase 2 goes from 11 to 12. Stock itself barely moves
+(phase 1 0.325 to 0.329, phase 2 0.413 to 0.412), and its spread is steady at both depths
+(0.043 to 0.045, 0.021 to 0.019), so the 5-seed estimate of the PXR control was sound and only
+its precision was limiting.
 
 ## External foundations: pretraining corpus and size
 
