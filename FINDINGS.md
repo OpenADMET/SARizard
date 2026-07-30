@@ -744,22 +744,24 @@ Phase 2 (260), with a single fixed 90/10 train/val split (1950/217, seed 42) sha
 flavor and seed, so the finetune seed varies only head init and training. Reduced protocol, 5
 seeds; `results/pxr_ext_metrics.csv`.
 
-Sorted by phase 1; an asterisk marks a delta against stock that is significant at Welch
-p at or below 0.05.
+Sorted by phase 1; an asterisk marks a delta against stock that is significant at Dunnett
+p at or below 0.05. One phase is one comparison family: every flavor is measured against the
+same stock seeds on the same held-out molecules, so the 15 flavors within a phase are corrected
+together rather than tested pairwise, matching the report card's per-row treatment.
 
 | flavor | Phase 1 R-squared | Phase 2 R-squared |
 |---|---|---|
 | surrogate_adme | 0.361 +/- 0.027 | 0.415 +/- 0.028 |
 | erg | 0.336 +/- 0.032 | 0.348 +/- 0.015* |
 | **chemeleon_stock** | **0.325 +/- 0.043** | **0.413 +/- 0.021** |
-| minimol | 0.299 +/- 0.036 | 0.372 +/- 0.027* |
+| minimol | 0.299 +/- 0.036 | 0.372 +/- 0.027 |
 | jazzy | 0.287 +/- 0.038 | 0.321 +/- 0.055* |
 | atompair | 0.280 +/- 0.044 | 0.385 +/- 0.033 |
 | usrcat | 0.245 +/- 0.026* | 0.334 +/- 0.046* |
 | osmordred | 0.241 +/- 0.054* | 0.331 +/- 0.054* |
-| rdkit2d | 0.234 +/- 0.078 | 0.336 +/- 0.024* |
+| rdkit2d | 0.234 +/- 0.078* | 0.336 +/- 0.024* |
 | osmordred_pca95 | 0.216 +/- 0.028* | 0.333 +/- 0.033* |
-| osmordred_pca80 | 0.204 +/- 0.059* | 0.359 +/- 0.024* |
+| osmordred_pca80 | 0.204 +/- 0.059* | 0.359 +/- 0.024 |
 | whim | 0.157 +/- 0.041* | 0.230 +/- 0.040* |
 | osmordred_pca90 | 0.134 +/- 0.033* | 0.300 +/- 0.013* |
 | pubchem | 0.134 +/- 0.047* | 0.258 +/- 0.030* |
@@ -772,15 +774,25 @@ is the only flavor above stock on both, and neither margin is significant (+0.03
 
 The load-bearing result is `rdkit2d`. On the sweep's internal Butina-split PXR column it was the
 leading flavor, which was the cleanest specialization signal the whole study produced. Here it
-sits mid-pack and below stock on both phases (0.234, 0.336). **A specialization measured on an
-internally generated split did not survive a fixed external hold-out**, which is a warning about
-how much weight any single report-card cell can carry, not just about PXR. Phase 2 is easier
+sits mid-pack and significantly below stock on both phases (0.234, 0.336). **A specialization
+measured on an internally generated split did not survive a fixed external hold-out**, which is
+a warning about how much weight any single report-card cell can carry, not just about PXR. Phase 2 is easier
 than phase 1 for every model (stock 0.413 against 0.325), so the two phases differ in difficulty
 as well as membership.
 
 The binary fingerprints fail here far worse than on the report card (phase 1 `ecfp` 0.036,
 `e3fp` 0.027 against stock 0.325), consistent with their leaky-pretext read but much starker on
 molecules that are genuinely held out.
+
+**The family-wise correction moves three of the 30 cells**, in both directions, for the reasons
+set out under Multiple comparisons above. `rdkit2d` on phase 1 becomes significant (uncorrected
+Welch p 0.059, Dunnett p 0.015): its own seed spread is the widest in the phase (+/- 0.078), so
+pooling replaces that inflated variance estimate with the family's and the extra error degrees
+of freedom outweigh the multiplicity penalty. Two phase-2 cells go the other way and lose
+significance, `minimol` (0.032 to 0.465) and `osmordred_pca80` (0.006 to 0.151), both quiet
+flavors penalized by the same pooling. The headline read is unchanged, and the `rdkit2d`
+conclusion is strengthened rather than weakened: the flavor that led the internal PXR column now
+lands significantly below stock on both external phases instead of one.
 
 ## External foundations: pretraining corpus and size
 
