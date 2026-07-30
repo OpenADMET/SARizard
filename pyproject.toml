@@ -25,7 +25,6 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8",
-    "pyright>=1.1",
     "pre-commit>=3",
 ]
 
@@ -71,18 +70,6 @@ convention = "numpy"
 # gates there rather than diverging from upstream.
 "sarizard/pretraining/**" = ["D", "E402"]
 "notebooks/**" = ["D", "E402", "E501", "B905", "B007"]
-
-# Basic mode: catch real defects (undefined names, bad calls, arity) without
-# demanding strict annotations on untyped pandas/matplotlib/numpy returns in
-# this analysis codebase. The rules below are disabled because they fire almost
-# entirely on missing or loose third-party stubs (pandas scalar indexing and
-# groupby/iterrows, rdkit and matplotlib partial stubs), not on real defects.
-[tool.pyright]
-typeCheckingMode = "basic"
-reportArgumentType = false
-reportCallIssue = false
-reportGeneralTypeIssues = false
-reportAttributeAccessIssue = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

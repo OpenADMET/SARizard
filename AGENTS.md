@@ -130,7 +130,7 @@ foundation, so treat each as a gate.
 
 ## Standing gates
 
-- ruff (lint + format) and pyright (basic) run via pre-commit on the package; the
+- ruff (lint + format) runs via pre-commit on the package; the
   vendored `sarizard/pretraining/` tree relaxes docstring and import-order gates to stay close to
   upstream. notebooks are exempt from docstring and import-order gates but not correctness.
 - Commit-message conventions are enforced by a commit-msg hook.

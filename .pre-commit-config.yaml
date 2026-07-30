@@ -18,10 +18,3 @@ repos:
         language: system
         stages: [commit-msg]
         entry: bash -c 'head -1 "$1" | grep -qE "^(feat|fix|chore|docs|refactor|test|style|perf|build|ci)(\\(.+\\))?\\!?:" && { echo "No conventional-commit prefixes; use a bare imperative verb"; exit 1; }; grep -qiE "^co-authored-by:" "$1" && { echo "No authorship footers in commit messages"; exit 1; }; grep -qE "^🤖|Generated with \\[" "$1" && { echo "No generator footers in commit messages"; exit 1; }; exit 0' --
-      - id: pyright
-        name: pyright
-        entry: npx pyright
-        language: system
-        types: [python]
-        pass_filenames: false
-        exclude: '^pretraining/'
