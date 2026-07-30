@@ -1127,6 +1127,52 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   below stock (phase 1 0.234, phase 2 0.336), so the internal-split PXR ranking does not carry to the
   challenge molecules. Dedicated CSV only; report card untouched. Written up in `FINDINGS.md`
   and `wiki/PXR External Test.md`.
+  **Significance correction (2026-07-30, `dd02a3f`).** The per-flavor Welch t-tests quoted above
+  were replaced by Dunnett's test, treating one phase as one comparison family. Three of the 30
+  cells move: `rdkit2d` phase 1 gains significance (Welch p 0.059, Dunnett 0.015), `minimol`
+  (0.032 to 0.465) and `osmordred_pca80` (0.006 to 0.151) lose it on phase 2. The read above is
+  unchanged except that `rdkit2d` now lands significantly below stock on both phases, not one.
+
+- [ ] 20-seed reduced-protocol stock control (sweep control submitted 2026-07-30): every flavor-vs-stock
+  significance call currently rests on a 5-seed control, which is the weak side of the comparison.
+  For Dunnett's test with k treatments at n seeds each, the variance-optimal control allocation is
+  n x sqrt(k); at k=15 flavors and n=5 that is 5 x sqrt(15) = 19.4, so 20 control seeds. Going from
+  5 to 20 narrows the standard error of every flavor-vs-stock delta from 0.632*sigma to 0.500*sigma
+  (a 21% tighter interval) and lifts pooled error df per endpoint row from 64 to 79. Buying the
+  same precision on the treatment side instead would take 15 extra seeds on each of 15 flavors,
+  16,200 finetunes against 1,080, for less gain: the asymmetry is the point.
+  **Scoped to the reduced protocol only.** Reduced is the headline protocol and is already what
+  the PXR external test runs under. Frozen and unlocked stay at 5 control seeds.
+  **Treatments are untouched at 5 seeds.** This deepens the control arm and nothing else.
+  **What runs.** `chemeleon_stock_reduced__s6-s20` over the 24 sweep recipes (360 finetunes) via
+  `STOCK_LR_MODE=reduced STOCK_SEEDS="6 ... 20" bash slurm/run_stock_baseline.sh`, launched as a
+  durable cpu driver job since `submit_batched.sh` blocks; plus `pxr_ext__chemeleon_stock__s6-s20`
+  over the 2 challenge phases (30 finetunes). About 390 runs, roughly 13 GPU-hours at the observed
+  43s-5min per stock finetune. The reduced control lives in `results/lr_metrics.csv` as
+  `chemeleon_stock_reduced__s<seed>`, currently s1-s5 with no legacy unseeded run, so the count
+  lands at exactly 20 with no archiving needed (the bare seed-42 `chemeleon_stock` dir is a
+  frozen-only artifact and is not involved).
+  **What it lifts, for free.** Four reduced-protocol families read the same control result dirs and
+  improve on re-render: the reduced report card, the reduced arm of the external-foundation
+  comparison, the reduced arm of the prescaling ablation, and the PXR external test. The
+  frozen-only `osmordred_surrogate` control is unaffected.
+  **Code change required first.** `run_pxr_ext.sh` hardcodes recipe generation for every flavor
+  plus stock, so running it at seeds 6-20 as-is would also generate 15 new seeds for all 15
+  flavors (480 runs) and deepen the treatments. Add a flavor-subset override to the driver so it
+  can generate stock-only; do not rely on the resume check to skip 450 unwanted runs.
+  **Submitted (2026-07-30).** Durable cpu driver job 4453769 generated the 360
+  `chemeleon_stock_reduced__s6-s20` recipes and is finetuning them through `submit_batched.sh` in
+  batches of 50 (first batch job 4453852). The PXR leg (30 runs) is not submitted: it is gated on
+  the `run_pxr_ext.sh` flavor-subset override above. Re-render and the before/after significance
+  diff still to do once the finetunes land.
+  **Watch-items for the re-render.** The control goes from 6% to 21% of the observations feeding
+  Dunnett's pooled variance, so the common-variance assumption now materially drives every reduced
+  p-value: report control spread against pooled-treatment spread and spot-check cells against an
+  unequal-variance alternative. `mae_average_pvalues` computes deltas against the control's
+  per-endpoint mean, so reported MAE percentage changes shift slightly even where significance does
+  not flip. And the reduced card will carry 20-deep control error bars while frozen and unlocked
+  carry 5, so cross-protocol statements in `FINDINGS.md` are no longer like-for-like on precision;
+  say so in the methods note rather than widening the scope.
 
 ## Methodology watch-items
 
