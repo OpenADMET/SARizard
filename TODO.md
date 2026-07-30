@@ -1162,8 +1162,15 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   can generate stock-only; do not rely on the resume check to skip 450 unwanted runs.
   **Submitted (2026-07-30).** Durable cpu driver job 4453769 generated the 360
   `chemeleon_stock_reduced__s6-s20` recipes and is finetuning them through `submit_batched.sh` in
-  batches of 50 (first batch job 4453852). The PXR leg (30 runs) is not submitted: it is gated on
-  the `run_pxr_ext.sh` flavor-subset override above.
+  batches of 50 (first batch job 4453852).
+  **PXR leg submitted (2026-07-30).** The `run_pxr_ext.sh` flavor-subset override landed as
+  `ae57a18` (`PXR_FLAVORS` narrows generation, the recipe enumeration, and the foundation
+  preflight; the analyze stage keeps its own unscoped glob so it still evaluates every label).
+  Driver job 4462516 generated exactly 30 stock-only recipes
+  (`pxr_ext__chemeleon_stock__s6-s20` x 2 phases) and is finetuning them (job 4462520); no
+  treatment arm was regenerated. The driver chains `pxr_ext_analyze.sbatch`, which re-evaluates
+  every pxr_ext label into `results/pxr_ext_metrics.csv` and prints the per-phase ranking, so the
+  PXR arm re-renders itself on completion.
   **Sweep leg complete (2026-07-30).** All 360 finetunes COMPLETED with no failures and no batch
   retries; every result dir carries a `model.pth`. `results/chemeleon_stock_reduced__s1-s20` is now
   20 seeds on disk against 5 per flavor. Not yet re-rendered: `results/lr_metrics.csv` still holds
