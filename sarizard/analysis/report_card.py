@@ -83,27 +83,31 @@ _SPACER_ROW = " "
 # white = no change, red = MAE above baseline (worse)
 _DELTA_CMAP = LinearSegmentedColormap.from_list("mae_delta", ["#1a9850", "#ffffff", "#d73027"])
 
-# report-card font sizes (points), following the sibling repo's heatmap scale. FONT_CELL sits
-# below its 13 pt default because these cells carry two lines (a value over its error bar or
-# p-value) where that repo's carry one, which is the adjustment its renderer anticipates
-FONT_TITLE = 11
-FONT_AXIS = 9  # x tick labels, bold, and the per-group source labels
-FONT_YTICK = 8  # endpoint row labels
-FONT_CELL = 8  # per-cell value and error-bar/p-value annotation
-FONT_CBAR = 7  # colorbar tick labels
+# report-card font sizes (points), following the sibling repo's heatmap scale but stepped up
+# across the board for legibility: these cards print at roughly 22 x 20 inches, where that
+# repo's scale reads small. FONT_CELL stays below its 13 pt default because these cells carry
+# two lines (a value over its error bar or p-value) where that repo's carry one, which is the
+# adjustment its renderer anticipates
+FONT_TITLE = 14
+FONT_AXIS = 11  # x tick labels, bold, and the per-group source labels
+FONT_YTICK = 10  # endpoint row labels
+FONT_CELL = 10  # per-cell value and error-bar/p-value annotation
+FONT_CBAR = 9  # colorbar tick labels
 
 # cell grid geometry (inches), and the fixed margins the figure size adds around it: the
 # left-margin group boxes, the endpoint row labels, the colorbar, and the height taken by the
 # title and rotated column labels. Sizing from the grid plus fixed margins (rather than the grid
 # plus one lump) keeps the cells the same size on a narrow ablation card and a wide flavor one.
 # The per-column width is below the sibling repo's 1.55 because these cards carry 15 to 17
-# columns against its handful of metric columns, which at 1.55 would run past 30 inches wide
+# columns against its handful of metric columns, which at 1.55 would run past 30 inches wide.
+# The three text-carrying margins track the font scale above, so a font bump does not eat into
+# the space the labels it enlarges are allotted
 CELL_ROW_INCHES = 0.55
 CELL_COL_INCHES = 1.05
-DATASET_LABEL_INCHES = 1.1
-TICK_LABEL_INCHES = 1.8
+DATASET_LABEL_INCHES = 1.3
+TICK_LABEL_INCHES = 2.2
 COLORBAR_INCHES = 1.0
-FIG_HEIGHT_PAD_INCHES = 1.8
+FIG_HEIGHT_PAD_INCHES = 2.2
 
 # output resolution. The sibling repo renders at 600, which suits its compact figures; these
 # cards are roughly 22 x 20 inches, where 600 dpi would mean a 150-megapixel PNG, so they stay
@@ -163,9 +167,9 @@ _COL_DISPLAY: dict[str, str] = {
     "PXR_pEC50": "PXR pEC50",
 }
 
-# Left-margin dataset-group-box x bounds, in axes fraction; the right edge touches the grid
-_BOX_X_L = -0.27
-_BOX_X_R = -0.005
+# slack between the row labels and the group boxes' right edge, in inches, so a label the
+# TICK_LABEL_INCHES allowance underestimates does not butt straight into the bracket
+_BOX_GAP_INCHES = 0.1
 
 # cell text flips to white once the cell color is this far from the colormap's midpoint, where
 # the RdYlGn and delta ramps are dark enough at both ends to swallow black text
@@ -545,6 +549,17 @@ def source_groups(index: pd.Index) -> list[tuple[int, int, str]]:
     return groups
 
 
+def _humanize(label: str) -> str:
+    """Space out the underscores in a tick label.
+
+    Column names and unmapped endpoint names arrive in their on-disk snake_case form
+    (``osmordred_pca80``, ``chembl_clint_hlm_st``), which reads as an identifier rather than a
+    label; the card shows them as words. Only tick labels go through this, so the underlying
+    matrix CSV keeps the original names.
+    """
+    return label.replace("_", " ")
+
+
 def _endpoint_labels(index: pd.Index) -> list[str]:
     """Row tick labels: the source prefix dropped and the endpoint given its short display name.
 
@@ -552,14 +567,15 @@ def _endpoint_labels(index: pd.Index) -> list[str]:
     and the endpoint itself is shortened via ``_COL_DISPLAY`` (``LOG_CLint_HLM`` reads
     ``CLint HLM``). A disambiguating ``" (<recipe>)"`` suffix is preserved, since it is the only
     thing separating two rows measuring the same endpoint. An endpoint missing from the display
-    map falls through unchanged rather than being dropped. AVERAGE and spacer labels pass through.
+    map falls through rather than being dropped. Underscores become spaces throughout, so a
+    fallthrough name and a recipe suffix read as words. AVERAGE and spacer labels pass through.
     """
     labels = []
     for row in index:
         text = str(row)
         endpoint = text.split(" · ", 1)[1] if " · " in text else text
         name, sep, suffix = endpoint.partition(" (")
-        labels.append(_COL_DISPLAY.get(name, name) + sep + suffix)
+        labels.append(_humanize(_COL_DISPLAY.get(name, name) + sep + suffix))
     return labels
 
 
@@ -607,6 +623,21 @@ def _group_label_fontsize(label: str, n_rows: int) -> float:
     return max(4.5, min(float(FONT_AXIS), available_points / (_BOLD_EM_WIDTH * longest)))
 
 
+def _group_box_bounds(n_cols: int) -> tuple[float, float]:
+    """Return the group boxes' ``(left, right)`` x bounds in axes fraction, for ``n_cols`` columns.
+
+    The boxes sit outside the grid, past the row labels, so their natural units are the inches
+    the figure-size rule allots to each margin. Expressing them as a fixed axes fraction instead
+    would put them a different physical distance out on every card, and on a narrow one (the
+    external-foundation cards carry five columns against the flavor cards' seventeen) that
+    distance collapses to less than the row labels need and the labels run into the brackets.
+    The grid's width is what the figure size gives it, ``CELL_COL_INCHES`` per column.
+    """
+    grid_inches = CELL_COL_INCHES * n_cols
+    right = -(TICK_LABEL_INCHES + _BOX_GAP_INCHES) / grid_inches
+    return right - DATASET_LABEL_INCHES / grid_inches, right
+
+
 def _draw_group_boxes(
     ax, groups: list[tuple[int, int, str]], n_cols: int, spacer_cols: list[int]
 ) -> None:
@@ -623,14 +654,15 @@ def _draw_group_boxes(
     # x in axes fraction, y in data coordinates, so the boxes track the rows while sitting at a
     # fixed distance from the grid regardless of how many columns the card has
     trans = blended_transform_factory(ax.transAxes, ax.transData)
+    box_x_l, box_x_r = _group_box_bounds(n_cols)
     groups = _merge_by_display(groups)
     for index, (start, end, source) in enumerate(groups):
         y_top, y_bottom = start - 0.5, end - 0.5
         for y in (y_top, y_bottom) if index == len(groups) - 1 else (y_top,):
-            ax.plot([_BOX_X_L, 0.0], [y, y], transform=trans, color="black", lw=1.0, clip_on=False)
+            ax.plot([box_x_l, 0.0], [y, y], transform=trans, color="black", lw=1.0, clip_on=False)
             _draw_hline(ax, y, n_cols, spacer_cols, linewidth=1.0)
         ax.plot(
-            [_BOX_X_L, _BOX_X_L],
+            [box_x_l, box_x_l],
             [y_top, y_bottom],
             transform=trans,
             color="black",
@@ -639,7 +671,7 @@ def _draw_group_boxes(
         )
         label = f"{_DATASET_DISPLAY.get(source, source)}\n({_SPLIT_TYPE.get(source, 'cluster')})"
         ax.text(
-            (_BOX_X_L + _BOX_X_R) / 2,
+            (box_x_l + box_x_r) / 2,
             (start + end - 1) / 2.0,
             label,
             transform=trans,
@@ -804,7 +836,7 @@ def plot_card(
     x_positions = [i for i in range(n_cols) if i not in spacer_cols]
     ax.set_xticks(
         x_positions,
-        labels=[str(matrix.columns[i]) for i in x_positions],
+        labels=[_humanize(str(matrix.columns[i])) for i in x_positions],
         rotation=45,
         ha="left",
         fontsize=FONT_AXIS,
