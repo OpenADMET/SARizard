@@ -43,7 +43,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402 - set backend before importing pyplot
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
-from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm  # noqa: E402
+from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm, to_hex  # noqa: E402
 from matplotlib.transforms import blended_transform_factory  # noqa: E402
 
 # match the sibling information-gain-metric repo's heatmap styling, so the two projects' figures
@@ -51,6 +51,7 @@ from matplotlib.transforms import blended_transform_factory  # noqa: E402
 # rather than drawn borders, and the dataset grouping carried by left-margin boxes
 plt.style.use("seaborn-v0_8-white")
 
+from sarizard.analysis import card_html  # noqa: E402
 from sarizard.analysis.metrics_spec import DATASETS, dataset_of  # noqa: E402
 from sarizard.analysis.multicomp import MIN_GROUP_SIZE, dunnett_pvalues  # noqa: E402
 from sarizard.analysis.paths import METRICS_CSV, PLOTS_DIR, parse_seed_variant  # noqa: E402
@@ -112,6 +113,9 @@ FIG_HEIGHT_PAD_INCHES = 2.2
 # _fit_cells): how many measure-and-grow passes to run, and how close counts as done
 _FIT_PASSES = 3
 _FIT_TOLERANCE_INCHES = 0.01
+
+# how finely the HTML legend samples the colormap (see card_html)
+_LEGEND_SAMPLES = 48
 
 # output resolution. The sibling repo renders at 600, which suits its compact figures; these
 # cards are roughly 22 x 20 inches, where 600 dpi would mean a 150-megapixel PNG, so they stay
@@ -688,6 +692,68 @@ def _draw_group_boxes(
         )
 
 
+def _html_card(
+    matrix: pd.DataFrame,
+    *,
+    cell_text: list[list[str]],
+    cell_color: list[list[str]],
+    cell_light: list[list[bool]],
+    groups: list[tuple[int, int, str]],
+    spacer_cols: list[int],
+    average_row: int,
+    emphasis_source: str | None,
+    norm,
+    cmap,
+    cbar_ticks: list[float],
+    cbar_labels: list[str],
+    title: str,
+) -> card_html.HtmlCard:
+    """Translate a drawn card into the resolved form :mod:`card_html` renders.
+
+    Takes the cell strings, colors, and contrast flips the PNG just used, and adds the pieces
+    the table needs in its own terms: the group runs merged and labelled as the left-margin
+    boxes are, and the colorbar flattened into gradient stops. Sampling the ramp through the
+    same norm keeps a diverging card's off-center midpoint in the right place on the legend.
+    """
+    merged = [
+        (
+            start,
+            end,
+            f"{_DATASET_DISPLAY.get(source, source)}\n({_SPLIT_TYPE.get(source, 'cluster')})",
+        )
+        for start, end, source in _merge_by_display(groups)
+    ]
+    emphasis_rows = [
+        end - 1 for _, end, source in groups if emphasis_source and source == emphasis_source
+    ]
+
+    # sample the ramp in data space and position each stop by where the norm puts it, so a
+    # TwoSlopeNorm's center lands on the legend where it lands on the cells
+    low, high = float(norm.vmin), float(norm.vmax)
+    samples = np.linspace(low, high, _LEGEND_SAMPLES)
+    legend_stops = [(float(norm(v)), to_hex(cmap(norm(v)))) for v in samples]
+    legend_ticks = [
+        (float(norm(tick)), label)
+        for tick, label in zip(cbar_ticks, cbar_labels, strict=True)
+        if low <= tick <= high
+    ]
+
+    return card_html.HtmlCard(
+        row_labels=_endpoint_labels(matrix.index),
+        col_labels=[_humanize(str(column)) for column in matrix.columns],
+        text=cell_text,
+        color=cell_color,
+        light_text=cell_light,
+        groups=merged,
+        spacer_cols=spacer_cols,
+        average_row=average_row,
+        emphasis_rows=emphasis_rows,
+        legend_stops=legend_stops,
+        legend_ticks=legend_ticks,
+        title=_humanize(title),
+    )
+
+
 def _fit_cells(fig, ax, n_rows: int, n_cols: int, passes: int = _FIT_PASSES) -> None:
     """Grow the figure until each cell is exactly ``CELL_COL_INCHES`` by ``CELL_ROW_INCHES``.
 
@@ -887,21 +953,30 @@ def plot_card(
             label.set_fontweight("bold")
 
     # annotate each cell with its value and, where defined, its auxiliary (error bar or p-value),
-    # flipping the text to white once the cell color is dark enough to swallow black
+    # flipping the text to white once the cell color is dark enough to swallow black. The same
+    # strings, colors, and flips are collected for the HTML rendering, so the two cannot drift
+    cell_text = [["" for _ in range(n_cols)] for _ in range(n_rows)]
+    cell_color = [["" for _ in range(n_cols)] for _ in range(n_rows)]
+    cell_light = [[False for _ in range(n_cols)] for _ in range(n_rows)]
     for i in range(n_rows):
         for j in range(n_cols):
             value = values[i, j]
             if np.isfinite(value):
                 dark = abs(float(normed[i, j]) - 0.5) > _TEXT_FLIP_DISTANCE
+                text = annotate(value, aux_values[i, j])
+                cell_text[i][j] = text
+                cell_light[i][j] = dark
                 ax.text(
                     j,
                     i,
-                    annotate(value, aux_values[i, j]),
+                    text,
                     ha="center",
                     va="center",
                     fontsize=FONT_CELL,
                     color="white" if dark else "black",
                 )
+            if np.isfinite(color_layer[i, j]):
+                cell_color[i][j] = to_hex(cmap(im.norm(color_layer[i, j])))
 
     cbar = fig.colorbar(im, ax=ax, shrink=0.55, pad=0.02)
     cbar.set_ticks(cbar_ticks)
@@ -914,6 +989,26 @@ def plot_card(
     plt.close(fig)
     matrix.to_csv(out_csv)
     logger.info("wrote %s and %s", out_png, out_csv)
+
+    # the same card as a scalable, selectable HTML table, written beside the PNG
+    card_html.write(
+        _html_card(
+            matrix,
+            cell_text=cell_text,
+            cell_color=cell_color,
+            cell_light=cell_light,
+            groups=groups,
+            spacer_cols=spacer_cols,
+            average_row=average_row,
+            emphasis_source=emphasis_source,
+            norm=im.norm,
+            cmap=cmap,
+            cbar_ticks=cbar_ticks,
+            cbar_labels=cbar_labels,
+            title=out_png.stem,
+        ),
+        out_png.with_suffix(".html"),
+    )
 
 
 def _blank_summary_rows(aux: pd.DataFrame, *, keep_average: bool = False) -> pd.DataFrame:
