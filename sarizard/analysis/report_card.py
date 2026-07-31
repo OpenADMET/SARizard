@@ -88,7 +88,6 @@ _DELTA_CMAP = LinearSegmentedColormap.from_list("mae_delta", ["#1a9850", "#fffff
 # repo's scale reads small. FONT_CELL stays below its 13 pt default because these cells carry
 # two lines (a value over its error bar or p-value) where that repo's carry one, which is the
 # adjustment its renderer anticipates
-FONT_TITLE = 14
 FONT_AXIS = 11  # x tick labels, bold, and the per-group source labels
 FONT_YTICK = 10  # endpoint row labels
 FONT_CELL = 10  # per-cell value and error-bar/p-value annotation
@@ -96,7 +95,7 @@ FONT_CBAR = 9  # colorbar tick labels
 
 # cell grid geometry (inches), and the fixed margins the figure size adds around it: the
 # left-margin group boxes, the endpoint row labels, the colorbar, and the height taken by the
-# title and rotated column labels. Sizing from the grid plus fixed margins (rather than the grid
+# rotated column labels. Sizing from the grid plus fixed margins (rather than the grid
 # plus one lump) keeps the cells the same size on a narrow ablation card and a wide flavor one.
 # The per-column width is below the sibling repo's 1.55 because these cards carry 15 to 17
 # columns against its handful of metric columns, which at 1.55 would run past 30 inches wide.
@@ -694,7 +693,6 @@ def plot_card(
     vmin: float | None = None,
     vmax: float | None = None,
     annotate,
-    title: str,
     cbar_ticks: list[float],
     cbar_labels: list[str],
     spacer_cols: list[int],
@@ -725,8 +723,6 @@ def plot_card(
         Maps a finite cell value and its auxiliary value to an annotation string,
         ``annotate(value, aux)``; ``aux`` is NaN where none is defined. The auxiliary value is the
         seed standard deviation on the R² card and the significance p-value on the MAE-delta card.
-    title : str
-        Figure title.
     cbar_ticks, cbar_labels : list
         Colorbar tick positions and their labels.
     spacer_cols : list of int
@@ -873,7 +869,6 @@ def plot_card(
                     color="white" if dark else "black",
                 )
 
-    fig.suptitle(title, fontsize=FONT_TITLE)
     cbar = fig.colorbar(im, ax=ax, shrink=0.55, pad=0.02)
     cbar.set_ticks(cbar_ticks)
     cbar.set_ticklabels(cbar_labels, fontsize=FONT_CBAR)
@@ -1007,7 +1002,6 @@ def render_r2_card(
     out_png: Path,
     *,
     columns: list[str] | None = None,
-    title_prefix: str = "Report card",
 ) -> None:
     """Assemble and render the R-squared card (red = 0, green = 1) with the baseline column.
 
@@ -1025,9 +1019,6 @@ def render_r2_card(
     columns : list of str, optional
         Column order for the card, values of the ``flavor`` field. Defaults to the flavor
         registry order; the ablation report passes its bare ablation names.
-    title_prefix : str, optional
-        Leading text of the figure title, so a reused card can read e.g. ``Ablation report
-        card`` instead of the default ``Report card``.
     """
     flavor_r2 = build_matrix(matrix_frame, "r2", columns=columns)
     flavor_r2_std = build_matrix(matrix_frame, "r2", columns=columns, aggfunc="std")
@@ -1046,7 +1037,6 @@ def render_r2_card(
         vmin=0.0,
         vmax=1.0,
         annotate=lambda v, s: f"{v:.3f}" if not np.isfinite(s) else f"{v:.3f}\n±{s:.3f}",
-        title=f"{title_prefix}: R² (red = 0, green = 1; ± is the seed standard deviation)",
         cbar_ticks=[0.0, 0.5, 1.0],
         cbar_labels=["0.0", "0.5", "1.0"],
         spacer_cols=spacer_cols,
@@ -1074,7 +1064,6 @@ def render_mae_delta_card(
     out_png: Path,
     *,
     columns: list[str] | None = None,
-    title_prefix: str = "Report card",
 ) -> None:
     """Render the MAE %-change card, coloring only cells that differ significantly from baseline.
 
@@ -1098,8 +1087,6 @@ def render_mae_delta_card(
     columns : list of str, optional
         Column order for the card. Defaults to the flavor registry order; the ablation report
         passes its bare ablation names.
-    title_prefix : str, optional
-        Leading text of the figure title (default ``Report card``).
     """
     baseline_mae = build_reference_series(frame, baseline_flavor, "mae")
     if baseline_mae.empty:
@@ -1143,10 +1130,6 @@ def render_mae_delta_card(
         cmap=_DELTA_CMAP,
         norm=norm,
         annotate=lambda v, p: f"{v:+.0f}%\n{_format_pvalue(p)}".rstrip(),
-        title=f"{title_prefix}: MAE % change vs chemeleon baseline (green = lower MAE / better, "
-        f"red = worse; white where p > {SIGNIFICANCE_ALPHA:g}, Dunnett's test on the seeds, "
-        "family-wise across the flavors within each endpoint row, and across endpoints on "
-        "AVERAGE)",
         cbar_ticks=[-extent, 0.0, extent],
         cbar_labels=[f"-{extent:.0f}%", "0% (baseline or not significant)", f"+{extent:.0f}%"],
         spacer_cols=[],
