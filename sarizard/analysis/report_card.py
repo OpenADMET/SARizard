@@ -117,10 +117,10 @@ _FIT_TOLERANCE_INCHES = 0.01
 # how finely the HTML legend samples the colormap (see card_html)
 _LEGEND_SAMPLES = 48
 
-# output resolution. The sibling repo renders at 600, which suits its compact figures; these
-# cards are roughly 22 x 20 inches, where 600 dpi would mean a 150-megapixel PNG, so they stay
-# at 300 and reach about 6500 px wide
-_DPI = 300
+# output resolution, matching the sibling repo's 600. These cards are roughly 22 x 20 inches, so
+# that lands a flavor card near 14000 px wide and 150 megapixels: heavy to open, but the cell
+# annotations and the small group-box labels stay crisp when the card is zoomed or printed
+_DPI = 600
 
 # source group whose last endpoint gets a thicker separator line directly after it
 EMPHASIS_SOURCE = "pxr"
