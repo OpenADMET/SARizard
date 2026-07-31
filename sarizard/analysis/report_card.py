@@ -69,8 +69,8 @@ SIGNIFICANCE_ALPHA = 0.05
 # end color while their annotation still shows the true value
 DELTA_EXTENT_CAP = 25.0
 
-# reference-column labels and the blank labels used for the spacer column(s) and spacer row;
-# the spacers carry no data (painted white) and their tick labels are blanked at render
+# reference-column labels and the blank label used for the spacer column(s); a spacer carries no
+# data (painted white) and its tick label is blanked at render
 BASELINE_LABEL = "chemeleon\nbaseline"
 AVERAGE_LABEL = "AVERAGE"
 
@@ -78,7 +78,6 @@ AVERAGE_LABEL = "AVERAGE"
 # baseline) still groups as one replicate instead of being dropped by the pivot's NaN index
 _UNSEEDED_KEY = -1
 _SPACER_LEFT = " "  # figure space: a unique, blank column label before the flavor block
-_SPACER_ROW = " "
 
 # green-white-red diverging map for the MAE-delta card: green = MAE below baseline (better),
 # white = no change, red = MAE above baseline (worse)
@@ -525,19 +524,19 @@ def assemble_r2_card(
 
 
 def append_average_row(matrix: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-    """Append a blank spacer row then an AVERAGE row meaning each column over the current rows.
+    """Append an AVERAGE row meaning each column over the current rows.
 
     The mean is taken over the endpoint rows present before the append (skipping NaN), so the
-    AVERAGE row summarizes each column across all endpoints; spacer columns stay NaN.
+    AVERAGE row summarizes each column across all endpoints; spacer columns stay NaN. The row
+    follows the endpoint block directly: the group bracket closing above it is what marks it off.
 
     Returns
     -------
     tuple of (pandas.DataFrame, int)
-        The matrix with the two extra rows, and the row index of the AVERAGE row.
+        The matrix with the extra row, and the row index of the AVERAGE row.
     """
     average = matrix.mean(axis=0, skipna=True).rename(AVERAGE_LABEL)
-    spacer = pd.Series(np.nan, index=matrix.columns, name=_SPACER_ROW)
-    out = pd.concat([matrix, spacer.to_frame().T, average.to_frame().T])
+    out = pd.concat([matrix, average.to_frame().T])
     return out, len(out) - 1
 
 
@@ -660,9 +659,9 @@ def _draw_group_boxes(
     run only (each run's top rule closes the one above it), and the source's display name over
     its split strategy set vertically in the margin.
 
-    The bracket column then carries on past the last run, across the blank row and around the
-    AVERAGE row, so the summary label sits inside the same column as the endpoint labels it
-    summarizes rather than floating below where the column stops.
+    The bracket column then carries on past the last run and around the AVERAGE row, so the
+    summary label sits inside the same column as the endpoint labels it summarizes rather than
+    floating below where the column stops.
 
     The grid-crossing part of each rule is broken over any blank spacer column, so no rule runs
     through the white gap that separates the baseline column from the flavor block.
@@ -699,8 +698,8 @@ def _draw_group_boxes(
             clip_on=False,
         )
 
-    # carry the column down past the last group, across the blank row and around AVERAGE: the
-    # vertical continues uninterrupted, and rules close the top and bottom of the AVERAGE row
+    # carry the column down past the last group and around AVERAGE: the vertical continues
+    # uninterrupted and a rule closes under the summary
     if groups:
         ax.plot(
             [box_x_l, box_x_l],
@@ -837,8 +836,8 @@ def plot_card(
     Parameters
     ----------
     matrix : pandas.DataFrame
-        The fully assembled card (endpoint rows, then a spacer row and the AVERAGE row; columns
-        may include blank spacer columns and reference columns). Drives the cell annotations, and
+        The fully assembled card (endpoint rows, then the AVERAGE row; columns may include blank
+        spacer columns and reference columns). Drives the cell annotations, and
         the cell colors unless ``color_values`` is given.
     out_png, out_csv : pathlib.Path
         Image and matrix-CSV output paths.
@@ -925,21 +924,12 @@ def plot_card(
     ax.grid(which="minor", color="white", linewidth=0.6)
     ax.tick_params(which="minor", length=0)
 
-    # the blank spacer row sits directly above the AVERAGE row; its white band is where the
-    # vertical divider lines break so no rule crosses empty space
-    spacer_row_top, spacer_row_bottom = average_row - 1.5, average_row - 0.5
-
-    # paint the spacer columns and the spacer row white (distinct from missing-data lightgrey);
-    # bound each spacer column with divider lines split at the white spacer row so no line
-    # crosses that empty band
+    # paint the spacer columns white (distinct from missing-data lightgrey) and bound each with
+    # divider lines running the full height of the grid
     for col in spacer_cols:
         ax.axvspan(col - 0.5, col + 0.5, color="white", zorder=2)
         for x in (col - 0.5, col + 0.5):
-            ax.plot([x, x], [-0.5, spacer_row_top], color="black", linewidth=1.2, zorder=3)
-            ax.plot(
-                [x, x], [spacer_row_bottom, n_rows - 0.5], color="black", linewidth=1.2, zorder=3
-            )
-    ax.axhspan(spacer_row_top, spacer_row_bottom, color="white", zorder=2)
+            ax.plot([x, x], [-0.5, n_rows - 0.5], color="black", linewidth=1.2, zorder=3)
 
     # left-margin boxes carrying each source's display name and split strategy, bracketing its
     # endpoint rows
@@ -950,8 +940,8 @@ def plot_card(
         for _, end, source in groups:
             if source == emphasis_source:
                 _draw_hline(ax, end - 0.5, n_cols, spacer_cols, linewidth=1.8)
-    # no rule above AVERAGE: the blank row already separates the summary from the endpoints, and
-    # the bracket column closes under it
+    # no rule above AVERAGE: the last group's closing rule already ends the endpoint block, and
+    # the bracket column closes under the summary
 
     # pin the view to the imshow extent so the added line segments do not re-margin the axes
     ax.set_xlim(-0.5, n_cols - 0.5)
@@ -970,10 +960,8 @@ def plot_card(
     ax.xaxis.set_label_position("top")
     ax.xaxis.tick_top()
 
-    # likewise skip the blank spacer row (directly above AVERAGE) so it carries no tick mark
-    spacer_row_index = average_row - 1
     endpoint_labels = _endpoint_labels(matrix.index)
-    y_positions = [i for i in range(n_rows) if i != spacer_row_index]
+    y_positions = list(range(n_rows))
     ax.set_yticks(
         y_positions, labels=[endpoint_labels[i] for i in y_positions], fontsize=FONT_YTICK
     )
@@ -1041,22 +1029,19 @@ def plot_card(
 
 
 def _blank_summary_rows(aux: pd.DataFrame, *, keep_average: bool = False) -> pd.DataFrame:
-    """Null the auxiliary annotation (error bar or p-value) on the spacer and AVERAGE rows.
+    """Null the auxiliary annotation (error bar or p-value) on the AVERAGE row.
 
     ``append_average_row`` would otherwise mean the per-cell auxiliary values into the AVERAGE row,
     conflating a per-cell quantity (seed spread, or a per-cell significance test) with the
-    endpoint-to-endpoint AVERAGE. The AVERAGE row shows a bare mean, so its auxiliary is nulled
-    along with the spacer row.
+    endpoint-to-endpoint AVERAGE, which the row shows as a bare mean.
 
-    ``keep_average`` spares the AVERAGE row for a caller that has already replaced that row with a
-    quantity computed for it directly, as the MAE-delta card does with its own across-endpoint
-    Dunnett p-values; the spacer row is always nulled.
+    ``keep_average`` spares the row for a caller that has already replaced it with a quantity
+    computed for it directly, as the MAE-delta card does with its own across-endpoint Dunnett
+    p-values.
     """
     aux = aux.copy()
-    if keep_average:
-        aux.iloc[-2, :] = np.nan
-    else:
-        aux.iloc[-2:, :] = np.nan
+    if not keep_average:
+        aux.iloc[-1, :] = np.nan
     return aux
 
 

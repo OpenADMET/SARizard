@@ -73,7 +73,7 @@ class HtmlCard:
     spacer_cols : list of int
         Blank separator columns, rendered narrow and empty.
     average_row : int
-        Row index of the AVERAGE row, which takes a rule above it and bold text.
+        Row index of the AVERAGE row, which is set bold and takes its own bracket compartment.
     emphasis_rows : list of int
         Row indices after which a heavier rule is drawn (the endpoint the study leans on).
     legend_stops : list of (float, str)
@@ -154,10 +154,7 @@ td.missing {{ background: {_MISSING_COLOR}; }}
 tr.group-top td.cell, tr.group-top th.label {{ border-top: 1px solid #111111; }}
 tr.rule td.cell, tr.rule th.label {{ border-top: 2px solid #111111; }}
 tr.average th.label, tr.average td.cell {{ font-weight: 700; }}
-tr.blank td, tr.blank th {{ height: 18px; border: none; background: #ffffff; }}
-/* the bracket column crossing the blank row: sides only, so the vertical reads as continuous */
-th.group.thread {{ border-left: 1px solid #111111; border-right: 1px solid #111111; }}
-/* AVERAGE's compartment is open at the top: the blank row is the separator, not a rule */
+/* AVERAGE's compartment is open at the top: the group above it closes the endpoint block */
 th.group.box.open {{ border-top: none; }}
 /* hover: ring the cell under the pointer without moving anything */
 td.cell:hover {{ outline: 2px solid #111111; outline-offset: -2px; }}
@@ -230,8 +227,8 @@ def _header_html(card: HtmlCard) -> str:
 def _row_html(card: HtmlCard, row: int, group_starts: dict[int, tuple[int, str]]) -> str:
     """Render one table row, opening a dataset bracket where a group starts.
 
-    Below the last group the bracket column carries on unlabelled, through the blank row and
-    around AVERAGE, so the summary label is enclosed by the same column as the endpoint labels.
+    Below the last group the bracket column carries on unlabelled around AVERAGE, so the summary
+    label is enclosed by the same column as the endpoint labels.
     """
     below_groups = row >= max((end for _, end, _ in card.groups), default=0)
     classes = []
@@ -241,12 +238,6 @@ def _row_html(card: HtmlCard, row: int, group_starts: dict[int, tuple[int, str]]
         classes.append("average")
     if row - 1 in card.emphasis_rows:
         classes.append("rule")
-    # the blank row above AVERAGE is a gap on the PNG, so it carries no cells here either; only
-    # the bracket column crosses it, which is what joins the group block to the AVERAGE box
-    if not card.row_labels[row].strip() and row != card.average_row:
-        bracket = '<th class="group thread"></th>' if below_groups else '<th class="group"></th>'
-        return f'<tr class="blank">{bracket}<td colspan="{len(card.col_labels) + 1}"></td></tr>'
-
     cells = []
     if row in group_starts:
         span, label = group_starts[row]
