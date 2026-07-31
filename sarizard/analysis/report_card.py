@@ -108,6 +108,11 @@ TICK_LABEL_INCHES = 2.2
 COLORBAR_INCHES = 1.0
 FIG_HEIGHT_PAD_INCHES = 2.2
 
+# correcting the figure size so the laid-out grid actually hits the cell geometry above (see
+# _fit_cells): how many measure-and-grow passes to run, and how close counts as done
+_FIT_PASSES = 3
+_FIT_TOLERANCE_INCHES = 0.01
+
 # output resolution. The sibling repo renders at 600, which suits its compact figures; these
 # cards are roughly 22 x 20 inches, where 600 dpi would mean a 150-megapixel PNG, so they stay
 # at 300 and reach about 6500 px wide
@@ -683,6 +688,35 @@ def _draw_group_boxes(
         )
 
 
+def _fit_cells(fig, ax, n_rows: int, n_cols: int, passes: int = _FIT_PASSES) -> None:
+    """Grow the figure until each cell is exactly ``CELL_COL_INCHES`` by ``CELL_ROW_INCHES``.
+
+    The figure-size rule budgets a fixed number of inches per margin, but constrained layout
+    then takes whatever the decorations actually need out of the axes, so the grid comes out
+    smaller than the budget by a roughly constant amount: about 1.2 inches, dominated by the
+    colorbar's gap and the rotated column labels overhanging the right edge. That barely dents a
+    seventeen-column flavor card but squashes a four-column external-foundation one, which is
+    what the fixed-margin sizing was meant to prevent (a card's cells would otherwise be a
+    quarter narrower than another's).
+
+    Measuring the laid-out axes and growing the figure by the shortfall puts the difference
+    where it belongs, since the decorations keep their size in inches while the axes absorbs the
+    change. A second pass settles the parts that do scale with the figure, the colorbar being
+    sized off the axes height.
+    """
+    target_w, target_h = CELL_COL_INCHES * n_cols, CELL_ROW_INCHES * n_rows
+    for _ in range(passes):
+        fig.canvas.draw()
+        fig_w, fig_h = fig.get_size_inches()
+        position = ax.get_position()
+        grid_w, grid_h = position.width * fig_w, position.height * fig_h
+        if abs(grid_w - target_w) < _FIT_TOLERANCE_INCHES and (
+            abs(grid_h - target_h) < _FIT_TOLERANCE_INCHES
+        ):
+            return
+        fig.set_size_inches(fig_w + (target_w - grid_w), fig_h + (target_h - grid_h))
+
+
 def plot_card(
     matrix: pd.DataFrame,
     out_png: Path,
@@ -872,6 +906,8 @@ def plot_card(
     cbar = fig.colorbar(im, ax=ax, shrink=0.55, pad=0.02)
     cbar.set_ticks(cbar_ticks)
     cbar.set_ticklabels(cbar_labels, fontsize=FONT_CBAR)
+
+    _fit_cells(fig, ax, n_rows, n_cols)
 
     out_png.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_png, dpi=_DPI, bbox_inches="tight")
