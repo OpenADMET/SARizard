@@ -88,16 +88,17 @@ def ablation_metrics_csv(tmp_path):
     rows = []
     # 'full' beats 'minimal' under every protocol, but the margin grows as the backbone unfreezes
     means = {
-        ("full", "frozen"): 0.50, ("minimal", "frozen"): 0.40,
-        ("full", "reduced"): 0.60, ("minimal", "reduced"): 0.45,
-        ("full", "unlocked"): 0.70, ("minimal", "unlocked"): 0.48,
+        ("full", "frozen"): 0.50,
+        ("minimal", "frozen"): 0.40,
+        ("full", "reduced"): 0.60,
+        ("minimal", "reduced"): 0.45,
+        ("full", "unlocked"): 0.70,
+        ("minimal", "unlocked"): 0.48,
     }
     for (name, mode), value in means.items():
         label = "ablation_" + name + "__s42" + ("" if mode == "frozen" else f"__{mode}")
         for endpoint in ("herg", "cyp"):
-            rows.append(
-                {"flavor": label, "recipe": endpoint, "endpoint": endpoint, "r2": value}
-            )
+            rows.append({"flavor": label, "recipe": endpoint, "endpoint": endpoint, "r2": value})
     csv_path = tmp_path / "ablation_metrics.csv"
     pd.DataFrame(rows).to_csv(csv_path, index=False)
     return csv_path
@@ -125,16 +126,82 @@ def test_main_writes_per_protocol_and_comparison_artifacts(
     assert comparison.loc["full", "unlocked"] == pytest.approx(0.70)
 
 
-def test_main_single_protocol_writes_no_comparison(
-    ablation_metrics_csv, tmp_path, monkeypatch
+@pytest.fixture
+def sibling_recipe_metrics_csv(tmp_path):
+    """Ablation metrics where cyp1a2 is scored by both a single-task and a multi-task recipe."""
+    rows = []
+    # under reduced the single-task cyp1a2 row is the outlier, so dropping it moves the average
+    values = {
+        ("full", "frozen"): {"cyp_mt": 0.50, "cyp1a2_st": 0.50, "herg_st": 0.50},
+        ("full", "reduced"): {"cyp_mt": 0.60, "cyp1a2_st": 0.90, "herg_st": 0.60},
+        ("minimal", "frozen"): {"cyp_mt": 0.40, "cyp1a2_st": 0.40, "herg_st": 0.40},
+        ("minimal", "reduced"): {"cyp_mt": 0.30, "cyp1a2_st": 0.30, "herg_st": 0.30},
+    }
+    endpoints = {
+        "cyp_mt": "OPENADMET_LOGAC50_cyp1a2",
+        "cyp1a2_st": "OPENADMET_LOGAC50_cyp1a2",
+        "herg_st": "pchembl_value_mean",
+    }
+    for (name, mode), per_recipe in values.items():
+        label = "ablation_" + name + "__s42" + ("" if mode == "frozen" else f"__{mode}")
+        for recipe, value in per_recipe.items():
+            rows.append(
+                {
+                    "flavor": label,
+                    "recipe": recipe,
+                    "endpoint": endpoints[recipe],
+                    "r2": value,
+                    "mae": 1.0 - value,
+                }
+            )
+    csv_path = tmp_path / "ablation_metrics.csv"
+    pd.DataFrame(rows).to_csv(csv_path, index=False)
+    return csv_path
+
+
+def test_excluded_recipe_leaves_reduced_only_and_remeans_its_average(
+    sibling_recipe_metrics_csv, tmp_path, monkeypatch
 ):
     plots_dir = tmp_path / "plots"
     monkeypatch.setattr(prescaling_report, "PLOTS_DIR", plots_dir)
     monkeypatch.setattr(
         "sys.argv",
         [
-            "prescaling_report", "--metrics-csv", str(ablation_metrics_csv),
-            "--metric", "r2", "--mpnn-lr-mode", "frozen",
+            "prescaling_report",
+            "--metrics-csv",
+            str(sibling_recipe_metrics_csv),
+            "--metric",
+            "r2",
+            "--exclude-recipe",
+            "cyp1a2_st",
+        ],
+    )
+
+    prescaling_report.main()
+
+    reduced = pd.read_csv(plots_dir / "ablation_report_card_r2_reduced.csv", index_col=0)
+    frozen = pd.read_csv(plots_dir / "ablation_report_card_r2.csv", index_col=0)
+    # the single-task row is gone from reduced only, and reduced's AVERAGE means the two rows
+    # that remain (0.60 and 0.60) rather than pulling in the excluded 0.90
+    assert not any("cyp1a2_st" in str(row) for row in reduced.index)
+    assert any("cyp1a2_st" in str(row) for row in frozen.index)
+    assert reduced.loc["AVERAGE", "full"] == pytest.approx(0.60)
+    assert frozen.loc["AVERAGE", "full"] == pytest.approx(0.50)
+
+
+def test_main_single_protocol_writes_no_comparison(ablation_metrics_csv, tmp_path, monkeypatch):
+    plots_dir = tmp_path / "plots"
+    monkeypatch.setattr(prescaling_report, "PLOTS_DIR", plots_dir)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "prescaling_report",
+            "--metrics-csv",
+            str(ablation_metrics_csv),
+            "--metric",
+            "r2",
+            "--mpnn-lr-mode",
+            "frozen",
         ],
     )
 
