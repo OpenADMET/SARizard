@@ -21,9 +21,10 @@ delta card annotates each cell with its change and the test p-value, its AVERAGE
 
 Both cards group the endpoint rows by their source dataset (asap, chembl, expansionrx, ...),
 bracketing each group in a left-margin box labelled with the source's display name and its
-split strategy (the single-endpoint hERG and PXR groups carry the split strategy alone, their
-row labels already naming the assay). The styling follows the sibling information-gain-metric
-repo's heatmaps so the two projects' figures read as one family.
+split strategy (the single-endpoint hERG and PXR groups are the exception: their box is one row
+tall, too short for a legible rotated label, so their name and split lead the row label instead).
+The styling follows the sibling information-gain-metric repo's heatmaps so the two projects'
+figures read as one family.
 
 This step depends only on pandas, numpy, and matplotlib, so it runs without openadmet or a GPU.
 
@@ -151,10 +152,11 @@ _SPLIT_TYPE: dict[str, str] = {
     "pxr": "cluster",
 }
 
-# sources whose group box carries its split strategy alone, without the dataset name. Each is a
-# one-endpoint group whose row label already names the assay (hERG pIC50, PXR pEC50), so the
-# source name is redundant there, and shrunk to fit a single row's height it is unreadable anyway
-_UNNAMED_SOURCES = frozenset({"herg", "pxr"})
+# sources whose name and split strategy move out of the group box and onto the row label. Each
+# is a one-endpoint group, so its bracket is one row tall and the rotated label inside it shrinks
+# past legibility; set horizontally in front of the endpoint it reads at the same size as every
+# other row label. Their brackets stay, carrying no text
+_INLINE_SOURCES = frozenset({"herg", "pxr"})
 
 # Endpoint column -> short row label, also from the sibling repo, so a row reads "CLint HLM"
 # rather than "LOG_CLint_HLM". A disambiguating "(<recipe>)" suffix survives the mapping
@@ -582,13 +584,22 @@ def _endpoint_labels(index: pd.Index) -> list[str]:
     thing separating two rows measuring the same endpoint. An endpoint missing from the display
     map falls through rather than being dropped. Underscores become spaces throughout, so a
     fallthrough name and a recipe suffix read as words. AVERAGE and spacer labels pass through.
+
+    A source in :data:`_INLINE_SOURCES` is the exception: its name and split strategy lead the
+    row label instead of sitting in the group box, so a one-row group's source stays readable.
+    The endpoint keeps the end of the string, where the right-aligned labels meet the grid.
     """
     labels = []
     for row in index:
         text = str(row)
-        endpoint = text.split(" · ", 1)[1] if " · " in text else text
+        source, _, endpoint = text.partition(" · ")
+        if not endpoint:
+            source, endpoint = "", text
         name, sep, suffix = endpoint.partition(" (")
-        labels.append(_humanize(_COL_DISPLAY.get(name, name) + sep + suffix))
+        label = _humanize(_COL_DISPLAY.get(name, name) + sep + suffix)
+        if source in _INLINE_SOURCES:
+            label = f"{_group_label(source, inline=True)} {label}"
+        labels.append(label)
     return labels
 
 
@@ -623,16 +634,18 @@ def _merge_by_display(groups: list[tuple[int, int, str]]) -> list[tuple[int, int
     return merged
 
 
-def _group_label(source: str) -> str:
-    """Return a source's group-box label: its display name over its split strategy.
+def _group_label(source: str, *, inline: bool = False) -> str:
+    """Return a source's display name with its split strategy, for the group box or a row label.
 
-    A source listed in :data:`_UNNAMED_SOURCES` gets the split strategy alone, so its bracket
-    stays informative without repeating a name the single row it covers already carries.
+    The group box stacks the two on separate lines and reads them rotated; a source listed in
+    :data:`_INLINE_SOURCES` instead gets an empty box and, with ``inline``, a one-line form that
+    :func:`_endpoint_labels` sets horizontally in front of its endpoint.
     """
     split = f"({_SPLIT_TYPE.get(source, 'cluster')})"
-    if source in _UNNAMED_SOURCES:
-        return split
-    return f"{_DATASET_DISPLAY.get(source, source)}\n{split}"
+    name = _DATASET_DISPLAY.get(source, source)
+    if source in _INLINE_SOURCES:
+        return f"{name} {split}" if inline else ""
+    return f"{name}\n{split}"
 
 
 def _group_label_fontsize(label: str, n_rows: int) -> float:
@@ -675,7 +688,8 @@ def _draw_group_boxes(
     One box per contiguous source run: a rule along the top of the run reaching from the box's
     left edge across the grid, a vertical closing the box on the left, a bottom rule on the last
     run only (each run's top rule closes the one above it), and the source's display name over
-    its split strategy set vertically in the margin.
+    its split strategy set vertically in the margin. An :data:`_INLINE_SOURCES` run gets the
+    bracket without the text, its name having moved onto the row label.
 
     The bracket column then carries on past the last run and around the AVERAGE row, so the
     summary label sits inside the same column as the endpoint labels it summarizes rather than
@@ -702,7 +716,10 @@ def _draw_group_boxes(
             lw=1.0,
             clip_on=False,
         )
+        # an inline source's bracket is drawn but left empty; its name rides the row label
         label = _group_label(source)
+        if not label:
+            continue
         ax.text(
             (box_x_l + box_x_r) / 2,
             (start + end - 1) / 2.0,
