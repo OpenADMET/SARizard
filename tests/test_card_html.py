@@ -38,15 +38,13 @@ def test_group_bracket_spans_its_rows(card):
     assert '<th class="group box" rowspan="1"' in card_html.render(card)
 
 
-def test_average_row_is_ruled_and_bold(card):
-    doc = card_html.render(card)
-    assert "rule" in doc
-    assert "average" in doc
+def test_average_row_is_bold_and_carries_no_rule_above_it(card):
+    assert '<tr class="average">' in card_html.render(card)
 
 
 def test_bracket_column_encloses_the_average_row(card):
-    # the AVERAGE row gets a bracket cell of its own, unlabelled, below the dataset groups
-    assert '<th class="group box"></th>' in card_html.render(card)
+    # an unlabelled bracket cell below the dataset groups, open at the top where the blank row is
+    assert '<th class="group box open"></th>' in card_html.render(card)
 
 
 def test_bracket_column_crosses_the_blank_row(card):

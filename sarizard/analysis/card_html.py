@@ -157,6 +157,8 @@ tr.average th.label, tr.average td.cell {{ font-weight: 700; }}
 tr.blank td, tr.blank th {{ height: 18px; border: none; background: #ffffff; }}
 /* the bracket column crossing the blank row: sides only, so the vertical reads as continuous */
 th.group.thread {{ border-left: 1px solid #111111; border-right: 1px solid #111111; }}
+/* AVERAGE's compartment is open at the top: the blank row is the separator, not a rule */
+th.group.box.open {{ border-top: none; }}
 /* hover: ring the cell under the pointer without moving anything */
 td.cell:hover {{ outline: 2px solid #111111; outline-offset: -2px; }}
 """
@@ -236,7 +238,7 @@ def _row_html(card: HtmlCard, row: int, group_starts: dict[int, tuple[int, str]]
     if row in group_starts:
         classes.append("group-top")
     if row == card.average_row:
-        classes.extend(["rule", "average"])
+        classes.append("average")
     if row - 1 in card.emphasis_rows:
         classes.append("rule")
     # the blank row above AVERAGE is a gap on the PNG, so it carries no cells here either; only
@@ -253,7 +255,7 @@ def _row_html(card: HtmlCard, row: int, group_starts: dict[int, tuple[int, str]]
             f'style="font-size:{_group_label_px(label, span):.1f}px">{html.escape(label)}</th>'
         )
     elif below_groups:
-        cells.append('<th class="group box"></th>')
+        cells.append('<th class="group box open"></th>')
     elif not any(start <= row < end for start, end, _ in card.groups):
         cells.append('<th class="group"></th>')
     cells.append(f'<th class="label">{html.escape(card.row_labels[row])}</th>')

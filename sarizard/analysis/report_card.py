@@ -710,8 +710,14 @@ def _draw_group_boxes(
             lw=1.0,
             clip_on=False,
         )
-        for y in (average_row - 0.5, average_row + 0.5):
-            ax.plot([box_x_l, 0.0], [y, y], transform=trans, color="black", lw=1.0, clip_on=False)
+        ax.plot(
+            [box_x_l, 0.0],
+            [average_row + 0.5, average_row + 0.5],
+            transform=trans,
+            color="black",
+            lw=1.0,
+            clip_on=False,
+        )
         _draw_hline(ax, average_row + 0.5, n_cols, spacer_cols, linewidth=1.0)
 
 
@@ -944,8 +950,8 @@ def plot_card(
         for _, end, source in groups:
             if source == emphasis_source:
                 _draw_hline(ax, end - 0.5, n_cols, spacer_cols, linewidth=1.8)
-    # rule above the AVERAGE row, separating the summary from the endpoints it summarizes
-    _draw_hline(ax, average_row - 0.5, n_cols, spacer_cols, linewidth=1.8)
+    # no rule above AVERAGE: the blank row already separates the summary from the endpoints, and
+    # the bracket column closes under it
 
     # pin the view to the imshow extent so the added line segments do not re-margin the axes
     ax.set_xlim(-0.5, n_cols - 0.5)
