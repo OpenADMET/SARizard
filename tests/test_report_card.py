@@ -501,12 +501,27 @@ def test_source_groups_are_contiguous_runs_by_dataset():
     [
         ("expansionrx", "ExpRx\n(predefined)"),
         ("openadmet_cyp", "ChEMBL 37\n(cluster)"),
-        ("herg", "(cluster)"),
-        ("pxr", "(cluster)"),
+        ("herg", ""),
+        ("pxr", ""),
     ],
 )
-def test_group_label_drops_the_source_name_for_herg_and_pxr(source, expected):
+def test_group_box_label_is_empty_for_the_inline_sources(source, expected):
     assert report_card._group_label(source) == expected
+
+
+def test_inline_source_leads_its_row_label_with_name_and_split():
+    index = pd.Index(
+        ["expansionrx · LogD", "herg · pchembl_value_mean", "pxr · PXR_pEC50", AVERAGE_LABEL]
+    )
+
+    labels = report_card._endpoint_labels(index)
+
+    assert labels == [
+        "LogD",
+        "ChEMBL 37 (cluster) hERG pIC50",
+        "Octant (cluster) PXR pEC50",
+        AVERAGE_LABEL,
+    ]
 
 
 def test_build_reference_series_uses_disambiguated_rows(tidy_metrics):
