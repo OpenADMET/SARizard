@@ -44,9 +44,17 @@ for mode in "${MODES[@]}"; do
     done
 done
 
+# endpoints dropped from the reduced cards, matching lr_analyze.sbatch: the cyp1a2 and
+# ExpansionRx LogD single-task rows, each of which has a multi-task sibling measuring the same
+# endpoint that stays on the card. prescaling_report scopes them to the reduced protocol, so the
+# frozen and unlocked cards keep every row and their AVERAGE rows are not comparable to reduced's
+CARD_EXCLUDE_RECIPES="${CARD_EXCLUDE_RECIPES:-cyp1a2_st expansionrx_logd_st_rand}"
+
 # collect per-(variant, endpoint) metrics into a dedicated CSV, then compare ablations
 python -m sarizard.analysis.evaluate --accelerator "$ACCELERATOR" \
     --flavors "${LABELS[@]}" --out results/ablation_metrics.csv
-python -m sarizard.analysis.prescaling_report --metric r2
+exclude=()
+[[ -n "$CARD_EXCLUDE_RECIPES" ]] && exclude=(--exclude-recipe $CARD_EXCLUDE_RECIPES)
+python -m sarizard.analysis.prescaling_report --metric r2 "${exclude[@]}"
 
 echo "ablation triage complete; see plots/prescaling_report_r2*.* and prescaling_mode_comparison_r2.*"

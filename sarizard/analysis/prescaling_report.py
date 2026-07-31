@@ -24,9 +24,16 @@ prescaling recipe, so the cards read "how much does each prescaling of an osmord
 help over off-the-shelf CheMeleon". Depends only on pandas, numpy, and matplotlib, so it runs
 without openadmet or a GPU.
 
+``--exclude-recipe`` drops a recipe's rows from the protocols named by ``--exclude-in-mode``
+(reduced by default), matching the flavor cards, whose reduced setup drops the single-task rows
+that have a multi-task sibling measuring the same endpoint. Those protocols' AVERAGE rows and
+rankings then run over the endpoints that remain.
+
 Usage:
     python -m sarizard.analysis.prescaling_report --metric r2                 # all protocols
     python -m sarizard.analysis.prescaling_report --metric r2 --mpnn-lr-mode frozen
+    python -m sarizard.analysis.prescaling_report --metric r2 --mpnn-lr-mode reduced \
+        --exclude-recipe cyp1a2_st expansionrx_logd_st_rand
 """
 
 from __future__ import annotations
@@ -246,6 +253,29 @@ def main() -> None:
         "than one is present, a cross-protocol comparison",
     )
     parser.add_argument(
+        "--exclude-recipe",
+        nargs="*",
+        default=None,
+        dest="exclude_recipes",
+        metavar="RECIPE",
+        help="drop these recipes' rows from the protocols named by --exclude-in-mode (e.g. "
+        "--exclude-recipe cyp1a2_st expansionrx_logd_st_rand). Filtering happens before the row "
+        "identities are built, so a sibling recipe left alone on a (dataset, endpoint) also "
+        "loses its disambiguating '(<recipe>)' suffix. Each affected protocol's AVERAGE row, "
+        "ranking, and comparison entry run over the endpoints that remain, so they are not "
+        "comparable to a protocol rendered without the exclusions",
+    )
+    parser.add_argument(
+        "--exclude-in-mode",
+        nargs="*",
+        default=["reduced"],
+        dest="exclude_modes",
+        choices=LR_MODES,
+        metavar="MODE",
+        help="protocols --exclude-recipe applies to (default: reduced, matching the flavor "
+        "cards, whose reduced setup is the only one that drops rows)",
+    )
+    parser.add_argument(
         "--out-dir",
         type=Path,
         default=PLOTS_DIR,
@@ -270,6 +300,20 @@ def main() -> None:
     raw["flavor"] = parsed.map(lambda base_mode: base_mode[0])
     full = prepare_rows(collapse_seed_variants(raw))
 
+    # the excluded protocols get their own prepared frame, built from the raw rows with the
+    # dropped recipes removed first, so a sibling recipe left alone on a (dataset, endpoint)
+    # sheds its now-redundant "(<recipe>)" suffix exactly as it does on the flavor cards. A name
+    # that matches nothing is a typo that would otherwise silently exclude nothing, so refuse it
+    reduced_full = full
+    if args.exclude_recipes:
+        unknown = sorted(set(args.exclude_recipes) - set(raw["recipe"].unique()))
+        if unknown:
+            raise SystemExit(
+                f"--exclude-recipe: no rows in {args.metrics_csv} for {', '.join(unknown)}"
+            )
+        kept = raw[~raw["recipe"].isin(args.exclude_recipes)]
+        reduced_full = prepare_rows(collapse_seed_variants(kept))
+
     present = [mode for mode in LR_MODES if mode in set(full["mpnn_lr_mode"])]
     requested = list(LR_MODES) if args.mpnn_lr_mode == "all" else [args.mpnn_lr_mode]
     modes = [mode for mode in present if mode in requested]
@@ -279,12 +323,15 @@ def main() -> None:
     # one pair of cards + ranking per protocol; keep each protocol's mean series for the comparison
     per_mode_mean: dict[str, pd.Series] = {}
     for mode in modes:
+        # a protocol named by --exclude-in-mode reads the frame the dropped recipes were filtered
+        # out of, so both its card rows and its baseline reference come from the same row set
+        mode_full = reduced_full if mode in args.exclude_modes else full
         # this protocol's ablation rows, with the ablation_ prefix stripped to bare column names
-        mode_frame = full[
-            (full["mpnn_lr_mode"] == mode) & full["flavor"].str.startswith("ablation_")
+        mode_frame = mode_full[
+            (mode_full["mpnn_lr_mode"] == mode) & mode_full["flavor"].str.startswith("ablation_")
         ].copy()
         mode_frame["flavor"] = mode_frame["flavor"].map(_strip)
-        mean_series = report_one_mode(mode_frame, full, args.metric, mode, args.out_dir)
+        mean_series = report_one_mode(mode_frame, mode_full, args.metric, mode, args.out_dir)
         if mean_series is None:
             logger.warning("protocol %s: no ablation results; skipping", mode)
             continue
@@ -293,8 +340,20 @@ def main() -> None:
     if not per_mode_mean:
         raise SystemExit("no ablation results found in the metrics CSV")
 
-    # cross-protocol read: does the winning recipe hold once the backbone can move?
+    # cross-protocol read: does the winning recipe hold once the backbone can move? Exclusions
+    # scoped to some of the compared protocols put their means over a smaller endpoint set than
+    # the others', which the columns do not show, so say so rather than let it pass silently
     if len(per_mode_mean) > 1:
+        excluded = [
+            mode for mode in per_mode_mean if args.exclude_recipes and mode in args.exclude_modes
+        ]
+        if excluded and len(excluded) < len(per_mode_mean):
+            logger.warning(
+                "protocol(s) %s exclude %s; their comparison means run over fewer endpoints than "
+                "the other protocols' and are not directly comparable",
+                ", ".join(excluded),
+                ", ".join(args.exclude_recipes),
+            )
         comparison = mode_comparison(per_mode_mean)
         comp_csv = args.out_dir / f"prescaling_mode_comparison_{args.metric}.csv"
         comparison.to_csv(comp_csv)

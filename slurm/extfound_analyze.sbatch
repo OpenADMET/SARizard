@@ -45,10 +45,19 @@ done
 python -m sarizard.analysis.evaluate \
     --accelerator "$ACCELERATOR" --flavors "${LABELS[@]}" --out "$EXT_METRICS"
 
+# endpoints dropped from the reduced cards, matching lr_analyze.sbatch: the cyp1a2 and
+# ExpansionRx LogD single-task rows, each of which has a multi-task sibling measuring the same
+# endpoint that stays on the card. Scoped to reduced; the frozen and unlocked cards keep every
+# row, so their AVERAGE rows run over a different endpoint set and are not comparable to reduced's
+CARD_EXCLUDE_RECIPES="${CARD_EXCLUDE_RECIPES:-cyp1a2_st expansionrx_logd_st_rand}"
+
 # one standalone card pair (R² and MAE %-change) per protocol: the columns are exactly the
 # external foundations (--columns), and the baseline is that protocol's stock-CheMeleon run.
 # frozen reads bare-name rows; reduced/unlocked filter the lr_<mode>__ rows and strip the prefix.
 for mode in $EXTFOUND_LR_MODES; do
+    exclude=()
+    [[ "$mode" == "reduced" && -n "$CARD_EXCLUDE_RECIPES" ]] && \
+        exclude=(--exclude-recipe $CARD_EXCLUDE_RECIPES)
     if [[ "$mode" == "frozen" ]]; then
         python -m sarizard.analysis.report_card \
             --metrics-csv "$EXT_METRICS" --out-dir "$CARD_DIR" \
@@ -56,7 +65,8 @@ for mode in $EXTFOUND_LR_MODES; do
     else
         python -m sarizard.analysis.report_card \
             --metrics-csv "$EXT_METRICS" --out-dir "$CARD_DIR" --lr-mode "$mode" \
-            --columns $EXTFOUND_NAMES --baseline-flavor "chemeleon_stock_${mode}"
+            --columns $EXTFOUND_NAMES --baseline-flavor "chemeleon_stock_${mode}" \
+            "${exclude[@]}"
     fi
 done
 
