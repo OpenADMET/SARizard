@@ -84,7 +84,7 @@ __all__ = ["collapse_seed_variants", "rank_ablations", "report_one_mode", "mode_
 def _strip(label: str) -> str:
     """Map an ``ablation_<name>`` result label back to the plain ablation name."""
     prefix = "ablation_"
-    return label[len(prefix):] if label.startswith(prefix) else label
+    return label[len(prefix) :] if label.startswith(prefix) else label
 
 
 def rank_ablations(pivot: pd.DataFrame, metric: str) -> pd.DataFrame:
@@ -202,14 +202,18 @@ def report_one_mode(
     # the two flavor-style cards: R² with per-cell seed std, and MAE %-change vs the stock
     # baseline gated by the unpaired seed t-test (both inherit the flavor-card cosmetics)
     render_r2_card(
-        mode_frame, full_frame, baseline_flavor,
+        mode_frame,
+        full_frame,
+        baseline_flavor,
         out_dir / f"ablation_report_card_r2{suffix}.png",
-        columns=columns, title_prefix="Ablation report card",
+        columns=columns,
     )
     render_mae_delta_card(
-        mode_frame, full_frame, baseline_flavor,
+        mode_frame,
+        full_frame,
+        baseline_flavor,
         out_dir / f"ablation_report_card_mae_delta{suffix}.png",
-        columns=columns, title_prefix="Ablation report card",
+        columns=columns,
     )
 
     # ranking read used to pick the production recipe
@@ -235,12 +239,16 @@ def main() -> None:
         "--metrics-csv", type=Path, default=ABLATION_METRICS_CSV, help="tidy ablation metrics CSV"
     )
     parser.add_argument(
-        "--mpnn-lr-mode", default="all", choices=(*LR_MODES, "all"),
+        "--mpnn-lr-mode",
+        default="all",
+        choices=(*LR_MODES, "all"),
         help="finetune LR protocol to report; 'all' builds every present protocol and, when more "
         "than one is present, a cross-protocol comparison",
     )
     parser.add_argument(
-        "--out-dir", type=Path, default=PLOTS_DIR,
+        "--out-dir",
+        type=Path,
+        default=PLOTS_DIR,
         help="directory for the cards, rankings, and comparison; point at an archived run's plots "
         "dir to render it without overwriting the live report card (default: live plots dir)",
     )
