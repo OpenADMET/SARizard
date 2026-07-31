@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from sarizard.analysis import report_card
 from sarizard.analysis.report_card import (
     AVERAGE_LABEL,
     BASELINE_LABEL,
@@ -493,6 +494,19 @@ def test_source_groups_are_contiguous_runs_by_dataset():
     groups = source_groups(index)
 
     assert groups == [(0, 2, "openadmet_cyp"), (2, 3, "herg"), (3, 4, "pxr")]
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("expansionrx", "ExpRx\n(predefined)"),
+        ("openadmet_cyp", "ChEMBL 37\n(cluster)"),
+        ("herg", "(cluster)"),
+        ("pxr", "(cluster)"),
+    ],
+)
+def test_group_label_drops_the_source_name_for_herg_and_pxr(source, expected):
+    assert report_card._group_label(source) == expected
 
 
 def test_build_reference_series_uses_disambiguated_rows(tidy_metrics):

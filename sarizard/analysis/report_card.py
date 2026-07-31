@@ -21,8 +21,9 @@ delta card annotates each cell with its change and the test p-value, its AVERAGE
 
 Both cards group the endpoint rows by their source dataset (asap, chembl, expansionrx, ...),
 bracketing each group in a left-margin box labelled with the source's display name and its
-split strategy. The styling follows the sibling information-gain-metric repo's heatmaps so the
-two projects' figures read as one family.
+split strategy (the single-endpoint hERG and PXR groups carry the split strategy alone, their
+row labels already naming the assay). The styling follows the sibling information-gain-metric
+repo's heatmaps so the two projects' figures read as one family.
 
 This step depends only on pandas, numpy, and matplotlib, so it runs without openadmet or a GPU.
 
@@ -149,6 +150,11 @@ _SPLIT_TYPE: dict[str, str] = {
     "herg": "cluster",
     "pxr": "cluster",
 }
+
+# sources whose group box carries its split strategy alone, without the dataset name. Each is a
+# one-endpoint group whose row label already names the assay (hERG pIC50, PXR pEC50), so the
+# source name is redundant there, and shrunk to fit a single row's height it is unreadable anyway
+_UNNAMED_SOURCES = frozenset({"herg", "pxr"})
 
 # Endpoint column -> short row label, also from the sibling repo, so a row reads "CLint HLM"
 # rather than "LOG_CLint_HLM". A disambiguating "(<recipe>)" suffix survives the mapping
@@ -617,6 +623,18 @@ def _merge_by_display(groups: list[tuple[int, int, str]]) -> list[tuple[int, int
     return merged
 
 
+def _group_label(source: str) -> str:
+    """Return a source's group-box label: its display name over its split strategy.
+
+    A source listed in :data:`_UNNAMED_SOURCES` gets the split strategy alone, so its bracket
+    stays informative without repeating a name the single row it covers already carries.
+    """
+    split = f"({_SPLIT_TYPE.get(source, 'cluster')})"
+    if source in _UNNAMED_SOURCES:
+        return split
+    return f"{_DATASET_DISPLAY.get(source, source)}\n{split}"
+
+
 def _group_label_fontsize(label: str, n_rows: int) -> float:
     """Shrink a group-box label until its longest line fits the box height.
 
@@ -684,7 +702,7 @@ def _draw_group_boxes(
             lw=1.0,
             clip_on=False,
         )
-        label = f"{_DATASET_DISPLAY.get(source, source)}\n({_SPLIT_TYPE.get(source, 'cluster')})"
+        label = _group_label(source)
         ax.text(
             (box_x_l + box_x_r) / 2,
             (start + end - 1) / 2.0,
@@ -744,12 +762,7 @@ def _html_card(
     same norm keeps a diverging card's off-center midpoint in the right place on the legend.
     """
     merged = [
-        (
-            start,
-            end,
-            f"{_DATASET_DISPLAY.get(source, source)}\n({_SPLIT_TYPE.get(source, 'cluster')})",
-        )
-        for start, end, source in _merge_by_display(groups)
+        (start, end, _group_label(source)) for start, end, source in _merge_by_display(groups)
     ]
     emphasis_rows = [
         end - 1 for _, end, source in groups if emphasis_source and source == emphasis_source
