@@ -155,6 +155,8 @@ tr.group-top td.cell, tr.group-top th.label {{ border-top: 1px solid #111111; }}
 tr.rule td.cell, tr.rule th.label {{ border-top: 2px solid #111111; }}
 tr.average th.label, tr.average td.cell {{ font-weight: 700; }}
 tr.blank td, tr.blank th {{ height: 18px; border: none; background: #ffffff; }}
+/* the bracket column crossing the blank row: sides only, so the vertical reads as continuous */
+th.group.thread {{ border-left: 1px solid #111111; border-right: 1px solid #111111; }}
 /* hover: ring the cell under the pointer without moving anything */
 td.cell:hover {{ outline: 2px solid #111111; outline-offset: -2px; }}
 """
@@ -224,7 +226,12 @@ def _header_html(card: HtmlCard) -> str:
 
 
 def _row_html(card: HtmlCard, row: int, group_starts: dict[int, tuple[int, str]]) -> str:
-    """Render one table row, opening a dataset bracket where a group starts."""
+    """Render one table row, opening a dataset bracket where a group starts.
+
+    Below the last group the bracket column carries on unlabelled, through the blank row and
+    around AVERAGE, so the summary label is enclosed by the same column as the endpoint labels.
+    """
+    below_groups = row >= max((end for _, end, _ in card.groups), default=0)
     classes = []
     if row in group_starts:
         classes.append("group-top")
@@ -232,9 +239,11 @@ def _row_html(card: HtmlCard, row: int, group_starts: dict[int, tuple[int, str]]
         classes.extend(["rule", "average"])
     if row - 1 in card.emphasis_rows:
         classes.append("rule")
-    # the blank row above AVERAGE is a gap on the PNG, so it carries no cells here either
+    # the blank row above AVERAGE is a gap on the PNG, so it carries no cells here either; only
+    # the bracket column crosses it, which is what joins the group block to the AVERAGE box
     if not card.row_labels[row].strip() and row != card.average_row:
-        return f'<tr class="blank"><td colspan="{len(card.col_labels) + 2}"></td></tr>'
+        bracket = '<th class="group thread"></th>' if below_groups else '<th class="group"></th>'
+        return f'<tr class="blank">{bracket}<td colspan="{len(card.col_labels) + 1}"></td></tr>'
 
     cells = []
     if row in group_starts:
@@ -243,6 +252,8 @@ def _row_html(card: HtmlCard, row: int, group_starts: dict[int, tuple[int, str]]
             f'<th class="group box" rowspan="{span}" '
             f'style="font-size:{_group_label_px(label, span):.1f}px">{html.escape(label)}</th>'
         )
+    elif below_groups:
+        cells.append('<th class="group box"></th>')
     elif not any(start <= row < end for start, end, _ in card.groups):
         cells.append('<th class="group"></th>')
     cells.append(f'<th class="label">{html.escape(card.row_labels[row])}</th>')
