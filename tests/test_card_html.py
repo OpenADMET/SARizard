@@ -1,5 +1,7 @@
 """Tests for the HTML rendering of a report card: structure, escaping, and label fitting."""
 
+from dataclasses import replace
+
 import pytest
 
 from sarizard.analysis import card_html
@@ -10,15 +12,15 @@ from sarizard.analysis.card_html import HtmlCard
 def card() -> HtmlCard:
     """A two-column card with one dataset group, a spacer column, and an AVERAGE row."""
     return HtmlCard(
-        row_labels=["CLint HLM", " ", "AVERAGE"],
+        row_labels=["CLint HLM", "AVERAGE"],
         col_labels=["chemeleon\nbaseline", " ", "osmordred"],
-        text=[["0.500\n±0.010", "", "0.600\n±0.020"], ["", "", ""], ["0.550", "", "0.650"]],
-        color=[["#ffffff", "", "#00ff00"], ["", "", ""], ["#eeeeee", "", "#00ee00"]],
-        light_text=[[False, False, True], [False] * 3, [False] * 3],
+        text=[["0.500\n±0.010", "", "0.600\n±0.020"], ["0.550", "", "0.650"]],
+        color=[["#ffffff", "", "#00ff00"], ["#eeeeee", "", "#00ee00"]],
+        light_text=[[False, False, True], [False] * 3],
         groups=[(0, 1, "ASAP\n(predefined)")],
         spacer_cols=[1],
-        average_row=2,
-        emphasis_rows=[0],
+        average_row=1,
+        emphasis_rows=[],
         legend_stops=[(0.0, "#ff0000"), (1.0, "#00ff00")],
         legend_ticks=[(0.0, "0.0"), (1.0, "1.0")],
         title="report card r2 reduced",
@@ -30,8 +32,7 @@ def test_renders_one_cell_per_value(card):
 
 
 def test_spacer_column_carries_no_cell(card):
-    # header plus the two rows that carry cells; the blank row is one colspan cell, not a grid
-    assert card_html.render(card).count('class="spacer"') == 3
+    assert card_html.render(card).count('class="spacer"') == 3  # header plus the two rows
 
 
 def test_group_bracket_spans_its_rows(card):
@@ -42,13 +43,15 @@ def test_average_row_is_bold_and_carries_no_rule_above_it(card):
     assert '<tr class="average">' in card_html.render(card)
 
 
+def test_emphasis_row_rules_the_row_below_it(card):
+    emphasized = replace(card, emphasis_rows=[0])
+
+    assert '<tr class="average rule">' in card_html.render(emphasized)
+
+
 def test_bracket_column_encloses_the_average_row(card):
-    # an unlabelled bracket cell below the dataset groups, open at the top where the blank row is
+    # an unlabelled bracket cell below the dataset groups, open where the group above closes
     assert '<th class="group box open"></th>' in card_html.render(card)
-
-
-def test_bracket_column_crosses_the_blank_row(card):
-    assert '<th class="group thread"></th>' in card_html.render(card)
 
 
 def test_cell_carries_a_hover_tooltip_naming_its_row_and_column(card):

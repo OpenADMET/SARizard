@@ -32,18 +32,54 @@ def tidy_metrics() -> pd.DataFrame:
     # the stored dataset is intentionally the pre-rename value; prepare_rows re-derives it
     return pd.DataFrame(
         [
-            {"flavor": "osmordred", "recipe": "cyp1a2_st", "dataset": "cyp1a2",
-             "endpoint": "OPENADMET_LOGAC50_cyp1a2", "r2": 0.5, "mae": 0.4},
-            {"flavor": "osmordred", "recipe": "cyp_mt", "dataset": "cyp",
-             "endpoint": "OPENADMET_LOGAC50_cyp1a2", "r2": 0.7, "mae": 0.2},
-            {"flavor": "ecfp", "recipe": "cyp1a2_st", "dataset": "cyp1a2",
-             "endpoint": "OPENADMET_LOGAC50_cyp1a2", "r2": 0.3, "mae": 0.6},
-            {"flavor": "ecfp", "recipe": "cyp_mt", "dataset": "cyp",
-             "endpoint": "OPENADMET_LOGAC50_cyp1a2", "r2": 0.6, "mae": 0.3},
-            {"flavor": "osmordred", "recipe": "herg_st", "dataset": "herg",
-             "endpoint": "pchembl_value_mean", "r2": 0.5, "mae": 0.4},
-            {"flavor": "ecfp", "recipe": "herg_st", "dataset": "herg",
-             "endpoint": "pchembl_value_mean", "r2": 0.3, "mae": 0.6},
+            {
+                "flavor": "osmordred",
+                "recipe": "cyp1a2_st",
+                "dataset": "cyp1a2",
+                "endpoint": "OPENADMET_LOGAC50_cyp1a2",
+                "r2": 0.5,
+                "mae": 0.4,
+            },
+            {
+                "flavor": "osmordred",
+                "recipe": "cyp_mt",
+                "dataset": "cyp",
+                "endpoint": "OPENADMET_LOGAC50_cyp1a2",
+                "r2": 0.7,
+                "mae": 0.2,
+            },
+            {
+                "flavor": "ecfp",
+                "recipe": "cyp1a2_st",
+                "dataset": "cyp1a2",
+                "endpoint": "OPENADMET_LOGAC50_cyp1a2",
+                "r2": 0.3,
+                "mae": 0.6,
+            },
+            {
+                "flavor": "ecfp",
+                "recipe": "cyp_mt",
+                "dataset": "cyp",
+                "endpoint": "OPENADMET_LOGAC50_cyp1a2",
+                "r2": 0.6,
+                "mae": 0.3,
+            },
+            {
+                "flavor": "osmordred",
+                "recipe": "herg_st",
+                "dataset": "herg",
+                "endpoint": "pchembl_value_mean",
+                "r2": 0.5,
+                "mae": 0.4,
+            },
+            {
+                "flavor": "ecfp",
+                "recipe": "herg_st",
+                "dataset": "herg",
+                "endpoint": "pchembl_value_mean",
+                "r2": 0.3,
+                "mae": 0.6,
+            },
         ]
     )
 
@@ -97,10 +133,20 @@ def test_columns_default_to_registry_order(tidy_metrics):
 def test_seed_variants_average_into_one_flavor_column():
     frame = pd.DataFrame(
         [
-            {"flavor": "ecfp__s1", "recipe": "herg_st", "dataset": "herg",
-             "endpoint": "herg", "r2": 0.4},
-            {"flavor": "ecfp__s2", "recipe": "herg_st", "dataset": "herg",
-             "endpoint": "herg", "r2": 0.6},
+            {
+                "flavor": "ecfp__s1",
+                "recipe": "herg_st",
+                "dataset": "herg",
+                "endpoint": "herg",
+                "r2": 0.4,
+            },
+            {
+                "flavor": "ecfp__s2",
+                "recipe": "herg_st",
+                "dataset": "herg",
+                "endpoint": "herg",
+                "r2": 0.6,
+            },
         ]
     )
 
@@ -144,15 +190,26 @@ def test_mae_delta_is_nan_when_baseline_missing():
 def test_build_matrix_std_aggregates_the_seed_spread():
     frame = pd.DataFrame(
         [
-            {"flavor": "ecfp__s1", "recipe": "herg_st", "dataset": "herg",
-             "endpoint": "herg", "r2": 0.4},
-            {"flavor": "ecfp__s2", "recipe": "herg_st", "dataset": "herg",
-             "endpoint": "herg", "r2": 0.6},
+            {
+                "flavor": "ecfp__s1",
+                "recipe": "herg_st",
+                "dataset": "herg",
+                "endpoint": "herg",
+                "r2": 0.4,
+            },
+            {
+                "flavor": "ecfp__s2",
+                "recipe": "herg_st",
+                "dataset": "herg",
+                "endpoint": "herg",
+                "r2": 0.6,
+            },
         ]
     )
 
-    std = build_matrix(prepare_rows(collapse_seed_variants(frame)), "r2", columns=["ecfp"],
-                       aggfunc="std")
+    std = build_matrix(
+        prepare_rows(collapse_seed_variants(frame)), "r2", columns=["ecfp"], aggfunc="std"
+    )
 
     # sample std of [0.4, 0.6] is sqrt(((-0.1)^2 + 0.1^2) / 1) = sqrt(0.02)
     assert std.loc["herg · herg", "ecfp"] == pytest.approx(np.sqrt(0.02))
@@ -161,10 +218,20 @@ def test_build_matrix_std_aggregates_the_seed_spread():
 def test_build_reference_series_std_aggregates_baseline_seed_spread():
     frame = pd.DataFrame(
         [
-            {"flavor": "chemeleon_stock__s1", "recipe": "herg_st", "dataset": "herg",
-             "endpoint": "herg", "r2": 0.4},
-            {"flavor": "chemeleon_stock__s2", "recipe": "herg_st", "dataset": "herg",
-             "endpoint": "herg", "r2": 0.6},
+            {
+                "flavor": "chemeleon_stock__s1",
+                "recipe": "herg_st",
+                "dataset": "herg",
+                "endpoint": "herg",
+                "r2": 0.4,
+            },
+            {
+                "flavor": "chemeleon_stock__s2",
+                "recipe": "herg_st",
+                "dataset": "herg",
+                "endpoint": "herg",
+                "r2": 0.6,
+            },
         ]
     )
 
@@ -209,11 +276,13 @@ def _seeded_mae_frame(per_flavor_maes: dict[str, list[float]]) -> pd.DataFrame:
 
 
 def test_mae_significance_flags_clear_difference_and_spares_overlap():
-    frame = _seeded_mae_frame({
-        "chemeleon_stock": [0.50, 0.52, 0.48, 0.51, 0.49],
-        "far": [0.80, 0.82, 0.78, 0.81, 0.79],   # cleanly separated from baseline
-        "near": [0.50, 0.53, 0.47, 0.52, 0.48],   # overlapping baseline
-    })
+    frame = _seeded_mae_frame(
+        {
+            "chemeleon_stock": [0.50, 0.52, 0.48, 0.51, 0.49],
+            "far": [0.80, 0.82, 0.78, 0.81, 0.79],  # cleanly separated from baseline
+            "near": [0.50, 0.53, 0.47, 0.52, 0.48],  # overlapping baseline
+        }
+    )
     mae_matrix = pd.DataFrame({"far": [0.80], "near": [0.50]}, index=["herg · herg"])
 
     pvalues = mae_significance_pvalues(frame, frame, "chemeleon_stock", mae_matrix)
@@ -223,10 +292,12 @@ def test_mae_significance_flags_clear_difference_and_spares_overlap():
 
 
 def test_mae_significance_is_nan_without_enough_seeds():
-    frame = _seeded_mae_frame({
-        "chemeleon_stock": [0.50, 0.52, 0.48],
-        "single": [0.80],   # one seed: no test possible
-    })
+    frame = _seeded_mae_frame(
+        {
+            "chemeleon_stock": [0.50, 0.52, 0.48],
+            "single": [0.80],  # one seed: no test possible
+        }
+    )
     mae_matrix = pd.DataFrame({"single": [0.80]}, index=["herg · herg"])
 
     pvalues = mae_significance_pvalues(frame, frame, "chemeleon_stock", mae_matrix)
@@ -237,13 +308,15 @@ def test_mae_significance_is_nan_without_enough_seeds():
 def test_mae_significance_family_is_the_displayed_columns():
     # the correction is sized to the columns the card actually shows, not to every flavor present
     # in the metrics frame, so a standalone --columns card pays for its own column set only
-    frame = _seeded_mae_frame({
-        "chemeleon_stock": [0.500, 0.518, 0.492, 0.511, 0.487],
-        "shown": [0.545, 0.560, 0.538, 0.556, 0.533],
-        "q1": [0.501, 0.502, 0.5005, 0.5015, 0.501],
-        "q2": [0.502, 0.503, 0.5015, 0.5025, 0.502],
-        "q3": [0.503, 0.504, 0.5025, 0.5035, 0.503],
-    })
+    frame = _seeded_mae_frame(
+        {
+            "chemeleon_stock": [0.500, 0.518, 0.492, 0.511, 0.487],
+            "shown": [0.545, 0.560, 0.538, 0.556, 0.533],
+            "q1": [0.501, 0.502, 0.5005, 0.5015, 0.501],
+            "q2": [0.502, 0.503, 0.5015, 0.5025, 0.502],
+            "q3": [0.503, 0.504, 0.5025, 0.5035, 0.503],
+        }
+    )
     alone = pd.DataFrame({"shown": [0.546]}, index=["herg · herg"])
     with_family = pd.DataFrame(
         {name: [0.546] for name in ("shown", "q1", "q2", "q3")}, index=["herg · herg"]
@@ -259,11 +332,13 @@ def test_mae_significance_tests_a_flavor_with_no_seed_spread():
     # Dunnett pools variance across the family, so a flavor whose own seeds are identical is still
     # testable against the pooled estimate; the per-cell Welch test this replaced skipped such a
     # group for having zero variance and left the cell painted white
-    frame = _seeded_mae_frame({
-        "chemeleon_stock": [0.500, 0.518, 0.492, 0.511, 0.487],
-        "flat": [0.800] * 5,   # identical across seeds: no spread of its own
-        "spread": [0.545, 0.560, 0.538, 0.556, 0.533],
-    })
+    frame = _seeded_mae_frame(
+        {
+            "chemeleon_stock": [0.500, 0.518, 0.492, 0.511, 0.487],
+            "flat": [0.800] * 5,  # identical across seeds: no spread of its own
+            "spread": [0.545, 0.560, 0.538, 0.556, 0.533],
+        }
+    )
     mae_matrix = pd.DataFrame({"flat": [0.800], "spread": [0.546]}, index=["herg · herg"])
 
     # scipy warns of precision loss on a group this degenerate, so pin only that the cell enters
@@ -281,8 +356,13 @@ _AVERAGE_ENDPOINTS = ["e1", "e2", "e3"]
 def _multi_endpoint_seed_frame(per_flavor: dict[str, list[list[float]]]) -> pd.DataFrame:
     """Prepared frame of three endpoints per flavor per seed, from ``__s<seed>`` labels."""
     rows = [
-        {"flavor": f"{flavor}__s{seed}", "recipe": "herg_st", "dataset": "herg",
-         "endpoint": endpoint, "mae": mae}
+        {
+            "flavor": f"{flavor}__s{seed}",
+            "recipe": "herg_st",
+            "dataset": "herg",
+            "endpoint": endpoint,
+            "mae": mae,
+        }
         for flavor, seeds in per_flavor.items()
         for seed, values in enumerate(seeds, start=1)
         for endpoint, mae in zip(_AVERAGE_ENDPOINTS, values, strict=True)
@@ -305,20 +385,31 @@ def test_collapse_seed_variants_keeps_the_seed_number():
 def test_mae_average_pvalues_gates_a_small_mean_change_but_not_a_large_one():
     # both columns improve on the baseline across every endpoint and seed; only the one whose
     # mean change clears the family's pooled seed spread should carry color on the AVERAGE row
-    frame = _multi_endpoint_seed_frame({
-        "chemeleon_stock": [
-            [0.500, 0.600, 0.700], [0.510, 0.610, 0.690], [0.490, 0.590, 0.710],
-            [0.505, 0.605, 0.705], [0.495, 0.595, 0.695],
-        ],
-        "big": [
-            [0.450, 0.545, 0.625], [0.462, 0.544, 0.624], [0.437, 0.532, 0.646],
-            [0.458, 0.541, 0.630], [0.443, 0.538, 0.622],
-        ],
-        "small": [
-            [0.495, 0.596, 0.692], [0.503, 0.607, 0.680], [0.487, 0.581, 0.706],
-            [0.502, 0.597, 0.702], [0.488, 0.592, 0.687],
-        ],
-    })
+    frame = _multi_endpoint_seed_frame(
+        {
+            "chemeleon_stock": [
+                [0.500, 0.600, 0.700],
+                [0.510, 0.610, 0.690],
+                [0.490, 0.590, 0.710],
+                [0.505, 0.605, 0.705],
+                [0.495, 0.595, 0.695],
+            ],
+            "big": [
+                [0.450, 0.545, 0.625],
+                [0.462, 0.544, 0.624],
+                [0.437, 0.532, 0.646],
+                [0.458, 0.541, 0.630],
+                [0.443, 0.538, 0.622],
+            ],
+            "small": [
+                [0.495, 0.596, 0.692],
+                [0.503, 0.607, 0.680],
+                [0.487, 0.581, 0.706],
+                [0.502, 0.597, 0.702],
+                [0.488, 0.592, 0.687],
+            ],
+        }
+    )
     mae = build_matrix(frame, "mae", columns=["big", "small"])
     baseline = build_reference_series(frame, "chemeleon_stock", "mae")
 
@@ -331,16 +422,24 @@ def test_mae_average_pvalues_gates_a_small_mean_change_but_not_a_large_one():
 def test_mae_average_pvalues_tolerates_a_ragged_seed_grid():
     # a flavor missing one (seed, endpoint) result is the real-data case (one sweep flavor is
     # short a single finetune); it must still produce a p-value rather than raise or go NaN
-    frame = _multi_endpoint_seed_frame({
-        "chemeleon_stock": [
-            [0.500, 0.600, 0.700], [0.510, 0.610, 0.690], [0.490, 0.590, 0.710],
-            [0.505, 0.605, 0.705], [0.495, 0.595, 0.695],
-        ],
-        "ragged": [
-            [0.450, 0.545, 0.625], [0.462, 0.544, 0.624], [0.437, 0.532, 0.646],
-            [0.458, 0.541, 0.630], [0.443, 0.538, 0.622],
-        ],
-    })
+    frame = _multi_endpoint_seed_frame(
+        {
+            "chemeleon_stock": [
+                [0.500, 0.600, 0.700],
+                [0.510, 0.610, 0.690],
+                [0.490, 0.590, 0.710],
+                [0.505, 0.605, 0.705],
+                [0.495, 0.595, 0.695],
+            ],
+            "ragged": [
+                [0.450, 0.545, 0.625],
+                [0.462, 0.544, 0.624],
+                [0.437, 0.532, 0.646],
+                [0.458, 0.541, 0.630],
+                [0.443, 0.538, 0.622],
+            ],
+        }
+    )
     frame = frame.drop(frame[(frame["flavor"] == "ragged") & (frame["seed"] == 2)].index[:1])
     mae = build_matrix(frame, "mae", columns=["ragged"])
     baseline = build_reference_series(frame, "chemeleon_stock", "mae")
@@ -384,8 +483,8 @@ def test_append_average_row_means_each_column_over_endpoints():
     assert out.index[average_row] == AVERAGE_LABEL
     assert out.iloc[average_row]["osmordred"] == pytest.approx(0.6)
     assert out.iloc[average_row]["ecfp"] == pytest.approx(0.45)
-    # a blank spacer row sits just above the average row
-    assert out.iloc[average_row - 1].isna().all()
+    # the average follows the endpoint rows directly, with no blank row between
+    assert list(out.index) == [*matrix.index, AVERAGE_LABEL]
 
 
 def test_source_groups_are_contiguous_runs_by_dataset():
@@ -399,8 +498,14 @@ def test_source_groups_are_contiguous_runs_by_dataset():
 def test_build_reference_series_uses_disambiguated_rows(tidy_metrics):
     baseline_rows = pd.DataFrame(
         [
-            {"flavor": "chemeleon_stock", "recipe": "cyp_mt", "dataset": "cyp",
-             "endpoint": "OPENADMET_LOGAC50_cyp1a2", "r2": 0.42, "mae": 0.1},
+            {
+                "flavor": "chemeleon_stock",
+                "recipe": "cyp_mt",
+                "dataset": "cyp",
+                "endpoint": "OPENADMET_LOGAC50_cyp1a2",
+                "r2": 0.42,
+                "mae": 0.1,
+            },
         ]
     )
     frame = prepare_rows(pd.concat([tidy_metrics, baseline_rows], ignore_index=True))
@@ -415,22 +520,56 @@ def test_columns_override_renders_standalone_card_excluding_the_registry(tmp_pat
     # carries osmordred so a regression back to the registry default would surface it as a column
     metrics = pd.DataFrame(
         [
-            {"flavor": "osmordred", "recipe": "herg_st", "dataset": "herg",
-             "endpoint": "pchembl_value_mean", "r2": 0.5, "mae": 0.4},
-            {"flavor": "molpile_1M", "recipe": "herg_st", "dataset": "herg",
-             "endpoint": "pchembl_value_mean", "r2": 0.4, "mae": 0.5},
-            {"flavor": "molpile_5M", "recipe": "herg_st", "dataset": "herg",
-             "endpoint": "pchembl_value_mean", "r2": 0.45, "mae": 0.45},
-            {"flavor": "chemeleon_stock", "recipe": "herg_st", "dataset": "herg",
-             "endpoint": "pchembl_value_mean", "r2": 0.35, "mae": 0.55},
+            {
+                "flavor": "osmordred",
+                "recipe": "herg_st",
+                "dataset": "herg",
+                "endpoint": "pchembl_value_mean",
+                "r2": 0.5,
+                "mae": 0.4,
+            },
+            {
+                "flavor": "molpile_1M",
+                "recipe": "herg_st",
+                "dataset": "herg",
+                "endpoint": "pchembl_value_mean",
+                "r2": 0.4,
+                "mae": 0.5,
+            },
+            {
+                "flavor": "molpile_5M",
+                "recipe": "herg_st",
+                "dataset": "herg",
+                "endpoint": "pchembl_value_mean",
+                "r2": 0.45,
+                "mae": 0.45,
+            },
+            {
+                "flavor": "chemeleon_stock",
+                "recipe": "herg_st",
+                "dataset": "herg",
+                "endpoint": "pchembl_value_mean",
+                "r2": 0.35,
+                "mae": 0.55,
+            },
         ]
     )
     metrics_csv = tmp_path / "metrics.csv"
     metrics.to_csv(metrics_csv, index=False)
-    monkeypatch.setattr(sys, "argv", [
-        "report_card", "--metrics-csv", str(metrics_csv), "--out-dir", str(tmp_path),
-        "--columns", "molpile_1M", "molpile_5M",
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "report_card",
+            "--metrics-csv",
+            str(metrics_csv),
+            "--out-dir",
+            str(tmp_path),
+            "--columns",
+            "molpile_1M",
+            "molpile_5M",
+        ],
+    )
 
     main()
 
