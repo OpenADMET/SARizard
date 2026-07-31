@@ -647,7 +647,11 @@ def _group_box_bounds(n_cols: int) -> tuple[float, float]:
 
 
 def _draw_group_boxes(
-    ax, groups: list[tuple[int, int, str]], n_cols: int, spacer_cols: list[int]
+    ax,
+    groups: list[tuple[int, int, str]],
+    n_cols: int,
+    spacer_cols: list[int],
+    average_row: int,
 ) -> None:
     """Bracket each source's rows with a left-margin box carrying its name and split strategy.
 
@@ -655,6 +659,10 @@ def _draw_group_boxes(
     left edge across the grid, a vertical closing the box on the left, a bottom rule on the last
     run only (each run's top rule closes the one above it), and the source's display name over
     its split strategy set vertically in the margin.
+
+    The bracket column then carries on past the last run, across the blank row and around the
+    AVERAGE row, so the summary label sits inside the same column as the endpoint labels it
+    summarizes rather than floating below where the column stops.
 
     The grid-crossing part of each rule is broken over any blank spacer column, so no rule runs
     through the white gap that separates the baseline column from the flavor block.
@@ -690,6 +698,21 @@ def _draw_group_boxes(
             rotation=90,
             clip_on=False,
         )
+
+    # carry the column down past the last group, across the blank row and around AVERAGE: the
+    # vertical continues uninterrupted, and rules close the top and bottom of the AVERAGE row
+    if groups:
+        ax.plot(
+            [box_x_l, box_x_l],
+            [groups[-1][1] - 0.5, average_row + 0.5],
+            transform=trans,
+            color="black",
+            lw=1.0,
+            clip_on=False,
+        )
+        for y in (average_row - 0.5, average_row + 0.5):
+            ax.plot([box_x_l, 0.0], [y, y], transform=trans, color="black", lw=1.0, clip_on=False)
+        _draw_hline(ax, average_row + 0.5, n_cols, spacer_cols, linewidth=1.0)
 
 
 def _html_card(
@@ -914,7 +937,7 @@ def plot_card(
 
     # left-margin boxes carrying each source's display name and split strategy, bracketing its
     # endpoint rows
-    _draw_group_boxes(ax, groups, n_cols, spacer_cols)
+    _draw_group_boxes(ax, groups, n_cols, spacer_cols, average_row)
     # emphasis line directly after the requested source group's last endpoint, heavier than the
     # group brackets so the endpoint the study leans on stays findable
     if emphasis_source is not None:

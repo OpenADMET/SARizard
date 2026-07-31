@@ -44,6 +44,15 @@ def test_average_row_is_ruled_and_bold(card):
     assert "average" in doc
 
 
+def test_bracket_column_encloses_the_average_row(card):
+    # the AVERAGE row gets a bracket cell of its own, unlabelled, below the dataset groups
+    assert '<th class="group box"></th>' in card_html.render(card)
+
+
+def test_bracket_column_crosses_the_blank_row(card):
+    assert '<th class="group thread"></th>' in card_html.render(card)
+
+
 def test_cell_carries_a_hover_tooltip_naming_its_row_and_column(card):
     assert "CLint HLM · osmordred: 0.600 ±0.020" in card_html.render(card)
 
