@@ -501,7 +501,7 @@ def test_source_groups_are_contiguous_runs_by_dataset():
     ("source", "expected"),
     [
         ("expansionrx", "ExpRx\n(predefined)"),
-        ("openadmet_cyp", "ChEMBL 37\n(cluster)"),
+        ("openadmet_cyp", "ChEMBL CYP\n(cluster)"),
         ("herg", ""),
         ("pxr", ""),
     ],
@@ -519,7 +519,7 @@ def test_inline_source_leads_its_row_label_with_name_and_split():
 
     assert labels == [
         "LogD",
-        "ChEMBL 37 (cluster) hERG pIC50",
+        "ChEMBL (cluster) hERG pIC50",
         "Octant (cluster) PXR pEC50",
         AVERAGE_LABEL,
     ]
