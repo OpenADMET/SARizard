@@ -128,19 +128,23 @@ _DPI = 600
 # source group whose last endpoint gets a thicker separator line directly after it
 EMPHASIS_SOURCE = "pxr"
 
-# Display names and split strategy per dataset group, for the left-margin group boxes. Both are
-# taken from the sibling information-gain-metric repo's analyze.py so the two projects' heatmaps
-# name the same sources the same way. The split types were re-derived from this repo's own
-# recipes rather than copied on trust: a template carrying train_resource/test_resource uses the
-# dataset's predefined split, one without uses anvil's inline ClusterSplitter.
+# Display names and split strategy per dataset group, for the left-margin group boxes. The names
+# follow the sibling information-gain-metric repo's analyze.py, except for the three
+# ChEMBL-derived groups: that repo names them "ChEMBL" and "ChEMBL 37" (the latter shared by the
+# CYP and hERG groups), which reads as though only one of the three came out of ChEMBL and puts
+# the same label on two different assays. All three are ChEMBL extracts, so they are separated by
+# the assay they measure instead of by a release number. The hERG group needs no qualifier: it is
+# one row, and that row already reads "hERG pIC50". The split types were re-derived from this
+# repo's own recipes rather than copied on trust: a template carrying train_resource/test_resource
+# uses the dataset's predefined split, one without uses anvil's inline ClusterSplitter.
 _DATASET_DISPLAY: dict[str, str] = {
     "asap": "ASAP",
     "asap_potency": "ASAP",
     "biogen": "Biogen",
-    "chembl": "ChEMBL",
+    "chembl": "ChEMBL CLint",
     "expansionrx": "ExpRx",
-    "openadmet_cyp": "ChEMBL 37",
-    "herg": "ChEMBL 37",
+    "openadmet_cyp": "ChEMBL CYP",
+    "herg": "ChEMBL",
     "pxr": "Octant",
 }
 _SPLIT_TYPE: dict[str, str] = {

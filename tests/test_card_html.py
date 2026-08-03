@@ -111,7 +111,7 @@ def test_labels_are_html_escaped():
     [(1, True), (12, False)],
 )
 def test_group_label_shrinks_only_when_its_box_is_short(span, expect_shrunk):
-    size = card_html._group_label_px("ChEMBL 37\n(cluster)", span)
+    size = card_html._group_label_px("ChEMBL CYP\n(cluster)", span)
     assert (size < card_html._GROUP_LABEL_PX) is expect_shrunk
 
 
