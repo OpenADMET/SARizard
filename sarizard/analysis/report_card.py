@@ -3,8 +3,8 @@
 Two cards are rendered per setup from the tidy metrics CSV written by ``analysis.evaluate``:
 
 - an R-squared card colored on a fixed red-to-green scale (red = 0, green = 1), with the
-  stock-CheMeleon baseline as the first column (separated from the flavor block by a blank
-  spacer) and a final AVERAGE row that means each column across all endpoints;
+  stock-CheMeleon baseline as the first column (separated from the flavor block by a heavy
+  vertical rule) and a final AVERAGE row that means each column across all endpoints;
 - a delta card whose cells are the percentage change in MAE relative to the stock-CheMeleon
   baseline (green where a flavor's MAE beats the baseline, red where it is worse), flavor columns
   only, with the same AVERAGE row. A cell is painted white unless the flavor's per-seed MAE
@@ -71,15 +71,17 @@ SIGNIFICANCE_ALPHA = 0.05
 # end color while their annotation still shows the true value
 DELTA_EXTENT_CAP = 25.0
 
-# reference-column labels and the blank label used for the spacer column(s); a spacer carries no
-# data (painted white) and its tick label is blanked at render
+# column label for the reference column, and row label for the across-endpoint summary
 BASELINE_LABEL = "chemeleon\nbaseline"
 AVERAGE_LABEL = "AVERAGE"
 
 # pivot key standing in for a missing seed number, so an unseeded label (the legacy single-run
 # baseline) still groups as one replicate instead of being dropped by the pivot's NaN index
 _UNSEEDED_KEY = -1
-_SPACER_LEFT = " "  # figure space: a unique, blank column label before the flavor block
+
+# width of the rule separating the reference column from the block it is compared against,
+# heavy enough to read as a division of the card rather than as another cell border
+_DIVIDER_LINEWIDTH = 3.0
 
 # green-white-red diverging map for the MAE-delta card: green = MAE below baseline (better),
 # white = no change, red = MAE above baseline (worse)
@@ -500,7 +502,7 @@ def mae_significance_pvalues(
 def assemble_r2_card(
     flavor_matrix: pd.DataFrame, baseline: pd.Series
 ) -> tuple[pd.DataFrame, list[int], list[int]]:
-    """Order the R-squared card columns: baseline first (behind a spacer), then the flavors.
+    """Order the R-squared card columns: baseline first, then the flavors behind a heavy rule.
 
     Parameters
     ----------
@@ -508,35 +510,37 @@ def assemble_r2_card(
         Per-flavor R-squared matrix from ``build_matrix``.
     baseline : pandas.Series
         Stock-CheMeleon baseline per endpoint; a non-empty series becomes the first column,
-        separated from the flavor block by a blank spacer column.
+        divided from the flavor block by a heavy vertical rule rather than a gap, so the two
+        blocks read as one grid with a boundary in it.
 
     Returns
     -------
     tuple of (pandas.DataFrame, list of int, list of int)
-        The assembled matrix, the column indices of the blank spacer columns, and the column
-        indices of the reference columns (the baseline) so the caller can bold them.
+        The assembled matrix, the column indices whose left edge carries a divider rule, and
+        the column indices of the reference columns (the baseline) so the caller can bold them.
     """
     index = flavor_matrix.index
-    # (name, series, is_reference, is_spacer) in final left-to-right order
-    entries: list[tuple[str, pd.Series, bool, bool]] = []
+    # (name, series, is_reference) in final left-to-right order
+    entries: list[tuple[str, pd.Series, bool]] = []
     if not baseline.empty:
-        entries.append((BASELINE_LABEL, baseline.reindex(index), True, False))
-        entries.append((_SPACER_LEFT, pd.Series(np.nan, index=index), False, True))
+        entries.append((BASELINE_LABEL, baseline.reindex(index), True))
     for col in flavor_matrix.columns:
-        entries.append((col, flavor_matrix[col], False, False))
+        entries.append((col, flavor_matrix[col], False))
 
-    matrix = pd.concat([series.rename(name) for name, series, _, _ in entries], axis=1)
-    spacer_cols = [i for i, (_, _, _, is_spacer) in enumerate(entries) if is_spacer]
-    ref_cols = [i for i, (_, _, is_ref, _) in enumerate(entries) if is_ref]
-    return matrix, spacer_cols, ref_cols
+    matrix = pd.concat([series.rename(name) for name, series, _ in entries], axis=1)
+    ref_cols = [i for i, (_, _, is_ref) in enumerate(entries) if is_ref]
+    # the rule sits at the left edge of the first non-reference column, so it divides the
+    # baseline from the block measured against it
+    divider_cols = [] if baseline.empty else [1]
+    return matrix, divider_cols, ref_cols
 
 
 def append_average_row(matrix: pd.DataFrame) -> tuple[pd.DataFrame, int]:
     """Append an AVERAGE row meaning each column over the current rows.
 
     The mean is taken over the endpoint rows present before the append (skipping NaN), so the
-    AVERAGE row summarizes each column across all endpoints; spacer columns stay NaN. The row
-    follows the endpoint block directly: the group bracket closing above it is what marks it off.
+    AVERAGE row summarizes each column across all endpoints. The row follows the endpoint block
+    directly: the group bracket closing above it is what marks it off.
 
     Returns
     -------
@@ -583,7 +587,7 @@ def _endpoint_labels(index: pd.Index) -> list[str]:
     ``CLint HLM``). A disambiguating ``" (<recipe>)"`` suffix is preserved, since it is the only
     thing separating two rows measuring the same endpoint. An endpoint missing from the display
     map falls through rather than being dropped. Underscores become spaces throughout, so a
-    fallthrough name and a recipe suffix read as words. AVERAGE and spacer labels pass through.
+    fallthrough name and a recipe suffix read as words. The AVERAGE label passes through.
 
     A source in :data:`_INLINE_SOURCES` is the exception: its name and split strategy lead the
     row label instead of sitting in the group box, so a one-row group's source stays readable.
@@ -603,18 +607,9 @@ def _endpoint_labels(index: pd.Index) -> list[str]:
     return labels
 
 
-def _draw_hline(ax, y: float, n_cols: int, spacer_cols: list[int], *, linewidth: float) -> None:
-    """Draw a horizontal separator at ``y`` across the data columns, broken over spacer columns.
-
-    Splitting the rule at each blank spacer column keeps it from crossing the white reference
-    gap; the segments span the real cells on either side only.
-    """
-    x = -0.5
-    for col in sorted(spacer_cols):
-        if col - 0.5 > x:
-            ax.plot([x, col - 0.5], [y, y], color="black", linewidth=linewidth, zorder=3)
-        x = col + 0.5
-    ax.plot([x, n_cols - 0.5], [y, y], color="black", linewidth=linewidth, zorder=3)
+def _draw_hline(ax, y: float, n_cols: int, *, linewidth: float) -> None:
+    """Draw a horizontal separator at ``y`` across the full width of the data columns."""
+    ax.plot([-0.5, n_cols - 0.5], [y, y], color="black", linewidth=linewidth, zorder=3)
 
 
 def _merge_by_display(groups: list[tuple[int, int, str]]) -> list[tuple[int, int, str]]:
@@ -680,7 +675,6 @@ def _draw_group_boxes(
     ax,
     groups: list[tuple[int, int, str]],
     n_cols: int,
-    spacer_cols: list[int],
     average_row: int,
 ) -> None:
     """Bracket each source's rows with a left-margin box carrying its name and split strategy.
@@ -695,8 +689,8 @@ def _draw_group_boxes(
     summary label sits inside the same column as the endpoint labels it summarizes rather than
     floating below where the column stops.
 
-    The grid-crossing part of each rule is broken over any blank spacer column, so no rule runs
-    through the white gap that separates the baseline column from the flavor block.
+    Each rule runs the full width of the grid, crossing the divider that separates the baseline
+    column from the block compared against it.
     """
     # x in axes fraction, y in data coordinates, so the boxes track the rows while sitting at a
     # fixed distance from the grid regardless of how many columns the card has
@@ -707,7 +701,7 @@ def _draw_group_boxes(
         y_top, y_bottom = start - 0.5, end - 0.5
         for y in (y_top, y_bottom) if index == len(groups) - 1 else (y_top,):
             ax.plot([box_x_l, 0.0], [y, y], transform=trans, color="black", lw=1.0, clip_on=False)
-            _draw_hline(ax, y, n_cols, spacer_cols, linewidth=1.0)
+            _draw_hline(ax, y, n_cols, linewidth=1.0)
         ax.plot(
             [box_x_l, box_x_l],
             [y_top, y_bottom],
@@ -752,7 +746,7 @@ def _draw_group_boxes(
             lw=1.0,
             clip_on=False,
         )
-        _draw_hline(ax, average_row + 0.5, n_cols, spacer_cols, linewidth=1.0)
+        _draw_hline(ax, average_row + 0.5, n_cols, linewidth=1.0)
 
 
 def _html_card(
@@ -762,7 +756,7 @@ def _html_card(
     cell_color: list[list[str]],
     cell_light: list[list[bool]],
     groups: list[tuple[int, int, str]],
-    spacer_cols: list[int],
+    divider_cols: list[int],
     average_row: int,
     emphasis_source: str | None,
     norm,
@@ -803,7 +797,7 @@ def _html_card(
         color=cell_color,
         light_text=cell_light,
         groups=merged,
-        spacer_cols=spacer_cols,
+        divider_cols=divider_cols,
         average_row=average_row,
         emphasis_rows=emphasis_rows,
         legend_stops=legend_stops,
@@ -853,7 +847,7 @@ def plot_card(
     annotate,
     cbar_ticks: list[float],
     cbar_labels: list[str],
-    spacer_cols: list[int],
+    divider_cols: list[int],
     ref_cols: list[int],
     groups: list[tuple[int, int, str]],
     average_row: int,
@@ -866,9 +860,9 @@ def plot_card(
     Parameters
     ----------
     matrix : pandas.DataFrame
-        The fully assembled card (endpoint rows, then the AVERAGE row; columns may include blank
-        spacer columns and reference columns). Drives the cell annotations, and
-        the cell colors unless ``color_values`` is given.
+        The fully assembled card (endpoint rows, then the AVERAGE row; the columns may include
+        reference columns). Drives the cell annotations, and the cell colors unless
+        ``color_values`` is given.
     out_png, out_csv : pathlib.Path
         Image and matrix-CSV output paths.
     cmap : matplotlib colormap
@@ -883,8 +877,9 @@ def plot_card(
         seed standard deviation on the R² card and the significance p-value on the MAE-delta card.
     cbar_ticks, cbar_labels : list
         Colorbar tick positions and their labels.
-    spacer_cols : list of int
-        Column indices of blank spacers to paint white and bound with divider lines.
+    divider_cols : list of int
+        Column indices whose left edge carries a heavy vertical rule, dividing the reference
+        column from the block compared against it.
     ref_cols : list of int
         Column indices whose x labels are bold (reference columns).
     groups : list of (int, int, str)
@@ -954,22 +949,27 @@ def plot_card(
     ax.grid(which="minor", color="white", linewidth=0.6)
     ax.tick_params(which="minor", length=0)
 
-    # paint the spacer columns white (distinct from missing-data lightgrey) and bound each with
-    # divider lines running the full height of the grid
-    for col in spacer_cols:
-        ax.axvspan(col - 0.5, col + 0.5, color="white", zorder=2)
-        for x in (col - 0.5, col + 0.5):
-            ax.plot([x, x], [-0.5, n_rows - 0.5], color="black", linewidth=1.2, zorder=3)
+    # divide the reference column from the block compared against it with a heavy rule running
+    # the full height of the grid, in place of a gap between the two
+    for col in divider_cols:
+        x = col - 0.5
+        ax.plot(
+            [x, x],
+            [-0.5, n_rows - 0.5],
+            color="black",
+            linewidth=_DIVIDER_LINEWIDTH,
+            zorder=4,
+        )
 
     # left-margin boxes carrying each source's display name and split strategy, bracketing its
     # endpoint rows
-    _draw_group_boxes(ax, groups, n_cols, spacer_cols, average_row)
+    _draw_group_boxes(ax, groups, n_cols, average_row)
     # emphasis line directly after the requested source group's last endpoint, heavier than the
     # group brackets so the endpoint the study leans on stays findable
     if emphasis_source is not None:
         for _, end, source in groups:
             if source == emphasis_source:
-                _draw_hline(ax, end - 0.5, n_cols, spacer_cols, linewidth=1.8)
+                _draw_hline(ax, end - 0.5, n_cols, linewidth=1.8)
     # no rule above AVERAGE: the last group's closing rule already ends the endpoint block, and
     # the bracket column closes under the summary
 
@@ -977,8 +977,7 @@ def plot_card(
     ax.set_xlim(-0.5, n_cols - 0.5)
     ax.set_ylim(n_rows - 0.5, -0.5)
 
-    # place ticks only on real columns, so a blank spacer column carries no tick mark or label
-    x_positions = [i for i in range(n_cols) if i not in spacer_cols]
+    x_positions = list(range(n_cols))
     ax.set_xticks(
         x_positions,
         labels=[_humanize(str(matrix.columns[i])) for i in x_positions],
@@ -1045,7 +1044,7 @@ def plot_card(
             cell_color=cell_color,
             cell_light=cell_light,
             groups=groups,
-            spacer_cols=spacer_cols,
+            divider_cols=divider_cols,
             average_row=average_row,
             emphasis_source=emphasis_source,
             norm=im.norm,
@@ -1199,7 +1198,7 @@ def render_r2_card(
     flavor_r2_std = build_matrix(matrix_frame, "r2", columns=columns, aggfunc="std")
     baseline = build_reference_series(frame, baseline_flavor, "r2")
     baseline_std = build_reference_series(frame, baseline_flavor, "r2", agg="std")
-    matrix, spacer_cols, ref_cols = assemble_r2_card(flavor_r2, baseline)
+    matrix, divider_cols, ref_cols = assemble_r2_card(flavor_r2, baseline)
     std, _, _ = assemble_r2_card(flavor_r2_std, baseline_std)
     groups = source_groups(flavor_r2.index)
     matrix, average_row = append_average_row(matrix)
@@ -1214,7 +1213,7 @@ def render_r2_card(
         annotate=lambda v, s: f"{v:.3f}" if not np.isfinite(s) else f"{v:.3f}\n±{s:.3f}",
         cbar_ticks=[0.0, 0.5, 1.0],
         cbar_labels=["0.0", "0.5", "1.0"],
-        spacer_cols=spacer_cols,
+        divider_cols=divider_cols,
         ref_cols=ref_cols,
         groups=groups,
         average_row=average_row,
@@ -1307,7 +1306,7 @@ def render_mae_delta_card(
         annotate=lambda v, p: f"{v:+.0f}%\n{_format_pvalue(p)}".rstrip(),
         cbar_ticks=[-extent, 0.0, extent],
         cbar_labels=[f"-{extent:.0f}%", "0% (baseline or not significant)", f"+{extent:.0f}%"],
-        spacer_cols=[],
+        divider_cols=[],
         ref_cols=[],
         groups=groups,
         average_row=average_row,

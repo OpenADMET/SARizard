@@ -454,22 +454,23 @@ def test_assemble_r2_card_orders_baseline_first_then_flavors(tidy_metrics):
     flavors = build_matrix(prepare_rows(tidy_metrics), "r2")
     baseline = pd.Series(0.4, index=flavors.index)
 
-    matrix, spacer_cols, ref_cols = assemble_r2_card(flavors, baseline)
+    matrix, divider_cols, ref_cols = assemble_r2_card(flavors, baseline)
 
-    # baseline is the first column, behind one spacer that bounds the flavor block; no meta column
+    # baseline is the first column and the divider rule falls at the flavor block's left edge;
+    # no blank column between them, and no meta column
     assert matrix.columns[0] == BASELINE_LABEL
-    assert list(matrix.columns[2:]) == ["osmordred", "ecfp"]
+    assert list(matrix.columns[1:]) == ["osmordred", "ecfp"]
     assert ref_cols == [0]
-    assert spacer_cols == [1]
+    assert divider_cols == [1]
 
 
 def test_assemble_r2_card_without_baseline_is_flavors_only(tidy_metrics):
     flavors = build_matrix(prepare_rows(tidy_metrics), "r2")
 
-    matrix, spacer_cols, ref_cols = assemble_r2_card(flavors, pd.Series(dtype=float))
+    matrix, divider_cols, ref_cols = assemble_r2_card(flavors, pd.Series(dtype=float))
 
     assert list(matrix.columns) == ["osmordred", "ecfp"]
-    assert spacer_cols == []
+    assert divider_cols == []
     assert ref_cols == []
 
 

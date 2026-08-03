@@ -10,15 +10,15 @@ from sarizard.analysis.card_html import HtmlCard
 
 @pytest.fixture
 def card() -> HtmlCard:
-    """A two-column card with one dataset group, a spacer column, and an AVERAGE row."""
+    """A two-column card with one dataset group, a divider rule, and an AVERAGE row."""
     return HtmlCard(
         row_labels=["CLint HLM", "AVERAGE"],
-        col_labels=["chemeleon\nbaseline", " ", "osmordred"],
-        text=[["0.500\n±0.010", "", "0.600\n±0.020"], ["0.550", "", "0.650"]],
-        color=[["#ffffff", "", "#00ff00"], ["#eeeeee", "", "#00ee00"]],
-        light_text=[[False, False, True], [False] * 3],
+        col_labels=["chemeleon\nbaseline", "osmordred"],
+        text=[["0.500\n±0.010", "0.600\n±0.020"], ["0.550", "0.650"]],
+        color=[["#ffffff", "#00ff00"], ["#eeeeee", "#00ee00"]],
+        light_text=[[False, True], [False] * 2],
         groups=[(0, 1, "ASAP\n(predefined)")],
-        spacer_cols=[1],
+        divider_cols=[1],
         average_row=1,
         emphasis_rows=[],
         legend_stops=[(0.0, "#ff0000"), (1.0, "#00ff00")],
@@ -31,8 +31,10 @@ def test_renders_one_cell_per_value(card):
     assert card_html.render(card).count('class="cell') == 4
 
 
-def test_spacer_column_carries_no_cell(card):
-    assert card_html.render(card).count('class="spacer"') == 3  # header plus the two rows
+def test_divider_rules_the_flavor_block(card):
+    doc = card_html.render(card)
+
+    assert doc.count('divide"') == 3  # the header cell and the two body cells under it
 
 
 def test_group_bracket_spans_its_rows(card):
@@ -63,7 +65,7 @@ def test_tooltip_keeps_a_two_line_column_label_on_one_line(card):
 
 
 def test_dark_cell_text_flips_to_white(card):
-    assert 'class="cell light"' in card_html.render(card)
+    assert 'class="cell light' in card_html.render(card)
 
 
 def test_missing_value_renders_as_a_grey_cell():
@@ -74,7 +76,7 @@ def test_missing_value_renders_as_a_grey_cell():
         color=[[""]],
         light_text=[[False]],
         groups=[(0, 1, "ASAP\n(predefined)")],
-        spacer_cols=[],
+        divider_cols=[],
         average_row=0,
         emphasis_rows=[],
         legend_stops=[(0.0, "#ff0000")],
@@ -92,7 +94,7 @@ def test_labels_are_html_escaped():
         color=[["#ffffff"]],
         light_text=[[False]],
         groups=[],
-        spacer_cols=[],
+        divider_cols=[],
         average_row=0,
         emphasis_rows=[],
         legend_stops=[(0.0, "#ff0000")],
