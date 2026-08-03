@@ -6,8 +6,8 @@ the window instead of to 300 dpi, and each cell gets a hover tooltip naming its 
 column. Long cards keep their column headers and row labels pinned while the grid scrolls.
 
 The layout mirrors the PNG deliberately, so the two read as the same card: the dataset group
-boxes down the left margin, the blank spacer column separating the baseline from the block it is
-compared against, the AVERAGE row under its rule, and the colorbar as a gradient legend. Nothing
+boxes down the left margin, the heavy rule dividing the baseline from the block it is compared
+against, the AVERAGE row under its rule, and the colorbar as a gradient legend. Nothing
 here recomputes a number or a color; :func:`report_card.plot_card` passes the values it has
 already resolved, so the two renderings cannot drift.
 
@@ -29,7 +29,9 @@ _CELL_WIDTH_PX = 84
 _CELL_HEIGHT_PX = 44
 _GROUP_COL_PX = 34
 _LABEL_COL_PX = 190
-_SPACER_COL_PX = 16
+
+# the rule dividing the reference column from the block compared against it, in the PNG's weight
+_DIVIDER_PX = 3
 
 # gradient legend: how finely to sample the colormap, and the bar's size in CSS pixels
 _LEGEND_SAMPLES = 48
@@ -63,15 +65,14 @@ class HtmlCard:
         Cell annotation, ``""`` where the cell carries no value. A newline separates the value
         from its error bar or p-value, as in the PNG.
     color : list of list of str
-        Cell background as a hex string; ``""`` for a blank (spacer) cell and ``None`` handling
-        is by :data:`_MISSING_COLOR` for a missing value.
+        Cell background as a hex string; a missing value takes :data:`_MISSING_COLOR`.
     light_text : list of list of bool
         Whether the cell's text flips to white, by the PNG's own contrast rule.
     groups : list of (int, int, str)
         ``(start, end, label)`` runs over the endpoint rows, the label carrying the dataset
         display name and its split strategy on two lines.
-    spacer_cols : list of int
-        Blank separator columns, rendered narrow and empty.
+    divider_cols : list of int
+        Columns whose left edge carries the heavy dividing rule.
     average_row : int
         Row index of the AVERAGE row, which is set bold and takes its own bracket compartment.
     emphasis_rows : list of int
@@ -91,7 +92,7 @@ class HtmlCard:
     color: list[list[str]]
     light_text: list[list[bool]]
     groups: list[tuple[int, int, str]]
-    spacer_cols: list[int]
+    divider_cols: list[int]
     average_row: int
     emphasis_rows: list[int]
     legend_stops: list[tuple[float, str]]
@@ -148,8 +149,9 @@ td.cell {{
 }}
 td.cell .aux {{ font-size: 11px; }}
 td.cell.light {{ color: #ffffff; }}
-td.spacer {{ width: {_SPACER_COL_PX}px; min-width: {_SPACER_COL_PX}px; border: none; }}
 td.missing {{ background: {_MISSING_COLOR}; }}
+/* the reference column's divider, matching the PNG's rule rather than a gap */
+td.divide, th.divide {{ border-left: {_DIVIDER_PX}px solid #111111; }}
 /* group boundaries, the AVERAGE rule, and the emphasis rule, as on the PNG */
 tr.group-top td.cell, tr.group-top th.label {{ border-top: 1px solid #111111; }}
 tr.rule td.cell, tr.rule th.label {{ border-top: 2px solid #111111; }}
@@ -170,19 +172,18 @@ def _group_label_px(label: str, span: int) -> float:
 
 def _cell_html(card: HtmlCard, row: int, col: int) -> str:
     """Render one grid cell, blank where the card has no value there."""
-    if col in card.spacer_cols:
-        return '<td class="spacer"></td>'
+    divide = " divide" if col in card.divider_cols else ""
     text = card.text[row][col]
     color = card.color[row][col]
     if not text and not color:
-        return f'<td class="cell missing" style="background:{_MISSING_COLOR}"></td>'
+        return f'<td class="cell missing{divide}" style="background:{_MISSING_COLOR}"></td>'
 
     # value on the first line, error bar or p-value under it, as the PNG stacks them
     value, _, aux = text.partition("\n")
     body = html.escape(value)
     if aux:
         body += f'<br><span class="aux">{html.escape(aux)}</span>'
-    classes = "cell light" if card.light_text[row][col] else "cell"
+    classes = ("cell light" if card.light_text[row][col] else "cell") + divide
     # the tooltip is one line, so the line breaks that stack a two-line column header or a cell's
     # error bar become spaces rather than riding into the attribute
     row_label, col_label = card.row_labels[row], card.col_labels[col]
@@ -217,10 +218,8 @@ def _header_html(card: HtmlCard) -> str:
     """Render the sticky header row: two label columns, then the column names."""
     cells = ['<th class="group"></th>', '<th class="label"></th>']
     for col, label in enumerate(card.col_labels):
-        if col in card.spacer_cols:
-            cells.append('<th class="spacer"></th>')
-            continue
-        cells.append(f"<th>{html.escape(label).replace(chr(10), '<br>')}</th>")
+        divide = ' class="divide"' if col in card.divider_cols else ""
+        cells.append(f"<th{divide}>{html.escape(label).replace(chr(10), '<br>')}</th>")
     return "<thead><tr>" + "".join(cells) + "</tr></thead>"
 
 
