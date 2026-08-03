@@ -634,6 +634,30 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   COMPLETED); see the unlocked-leg entry under Future experiments. Meta-models still outstanding,
   and are now the last open Milestone-8 step. The single-seed reduced/unlocked cards are
   not rendered against the old baseline; they are redone with these averaged baselines.
+  **Reference divider and ChEMBL group names (2026-08-03, `fa0e652`/`eab8ba1`).** Two card
+  cosmetics, requested against the six reduced-protocol cards (flavors, prescaling ablations,
+  external foundations). (a) The R-squared cards' blank spacer column between the baseline and
+  the flavor block is gone; the boundary is a 3 pt black rule at the flavor block's left edge, so
+  the two blocks sit in one continuous grid instead of being split by a cell width of white.
+  `assemble_r2_card` returns divider column indices in place of spacer indices, the group,
+  emphasis, and AVERAGE rules run the full grid width now that there is no gap to break over, and
+  `card_html` renders the same boundary as a left border. (b) The three ChEMBL-derived source
+  groups were labelled `ChEMBL` (clearance) and `ChEMBL 37` (shared by CYP and hERG), inherited
+  from the sibling information-gain-metric repo; one label on two assays, and the hERG one
+  contradicted `data/README.md`, which records that file as a ChEMBL 240 target aggregation. They
+  are now named for the assay: `ChEMBL CLint`, `ChEMBL CYP`, and a bare `ChEMBL` for the one-row
+  hERG group whose row label already reads "hERG pIC50". The two repos therefore name these
+  groups differently from here on.
+  Both changes are in the shared renderers, so they reach every card on the next render. Only the
+  six reduced cards were re-rendered (job 5741893, cpu, 1:32, off the cached
+  `results/{lr,ablation,external}_metrics.csv`, no GPU): `plots/report_card_{r2,mae_delta}_reduced.*`,
+  `plots/ablation_report_card_{r2,mae_delta}_reduced.*` (via `prescaling_report --mpnn-lr-mode
+  reduced`, which also refreshed that protocol's ranking plots and left the frozen/unlocked
+  artifacts and the cross-protocol comparison alone), and
+  `plots/external_foundations/report_card_{r2,mae_delta}_reduced.*`. The frozen and unlocked cards
+  on disk predate both changes and differ from the reduced set in styling and group labels until
+  someone re-renders them. The render needs more memory than a login session allows (it OOMs
+  there, as the 2026-07-27 re-render also found), so it goes through a batch job.
 - [x] 9. Meta-model: stack per-flavor finetuned predictions per endpoint, fit LGBM/RF/MLP
   on out-of-fold predictions, compare to the best single flavor.
   First real result, produced by the same job 19230968 now that ≥2 flavors have results:

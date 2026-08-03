@@ -28,10 +28,15 @@ foundational pretraining target lends itself to which endpoint and endpoint fami
    format `openadmet-models` consumes via `from_foundation`.
 4. **Finetune per endpoint.** For every flavor, each ADMET benchmark endpoint is
    finetuned with `openadmet anvil`, initialized from that flavor's foundation.
-5. **Evaluate and compare.** Two artifacts: a report-card heatmap (endpoints by
-   flavors, one selectable metric) and a meta-model that stacks the per-flavor
-   predictions per endpoint to test whether an ensemble of foundations beats the
-   best single one.
+5. **Evaluate and compare.** Two artifacts: a pair of report-card heatmaps (endpoints by
+   flavors) and a meta-model that stacks the per-flavor predictions per endpoint to test
+   whether an ensemble of foundations beats the best single one. The R-squared card leads
+   with the stock-CheMeleon baseline column, divided from the flavor block by a heavy rule;
+   the MAE %-change card colors each flavor's change against that baseline, white where
+   Dunnett's test does not separate the two. Each card is written as a PNG and as an
+   equivalent HTML table. Endpoint rows are bracketed by source dataset, and the three
+   ChEMBL-derived sources are named for the assay they measure (ChEMBL CLint, ChEMBL CYP,
+   and, for the single hERG row, ChEMBL) rather than for a release number.
 
 ## Flavors
 

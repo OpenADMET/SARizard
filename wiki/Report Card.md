@@ -23,9 +23,9 @@ tags: [method, status/blue]
 
 ## The two cards
 
-- **R² card**: fixed red-to-green scale (red 0, green 1), the stock baseline as the first column
-  behind a spacer, an AVERAGE row meaning each column across endpoints, and every cell annotated
-  with its ± seed standard deviation.
+- **R² card**: fixed red-to-green scale (red 0, green 1), the stock baseline as the first column,
+  divided from the flavor block by a heavy black rule rather than a gap, an AVERAGE row meaning
+  each column across endpoints, and every cell annotated with its ± seed standard deviation.
 - **MAE %-change card**: `100·(mae_flavor − mae_baseline)/mae_baseline`, green where the flavor's
   MAE is lower. A cell is **colored only where the difference is significant** (p ≤ 0.05);
   non-significant cells are white and annotated with their p-value, so the card shows only what
@@ -54,6 +54,11 @@ correction touches the single-pretraining-seed limitation.
 - Rows group by source dataset with a bold separator and label. Where one (dataset, endpoint)
   pair comes from more than one recipe, the recipe is appended to the row label rather than the
   two being averaged together.
+- Three of the sources are ChEMBL extracts and are named for the assay they measure, not for a
+  release: ChEMBL CLint (clearance), ChEMBL CYP (the IC50 group), and a bare ChEMBL on the single
+  hERG row, whose label already reads "hERG pIC50". The sibling information-gain-metric repo still
+  calls the last two "ChEMBL 37", which put one label on two assays and, for hERG, disagreed with
+  `data/README.md`, where that file is a ChEMBL 240 target aggregation.
 - Binary fingerprint flavors are a leaky, weak pretext; a poor column for them is a result.
 - A single strong cell is weak evidence on its own. The [[PXR External Test]] found that the
   card's cleanest specialization signal, [[rdkit2d]] on PXR, did not reproduce on a fixed
