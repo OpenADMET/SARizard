@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 
 import matplotlib
@@ -77,7 +78,7 @@ AVERAGE_LABEL = "AVERAGE"
 
 # pivot key standing in for a missing seed number, so an unseeded label (the legacy single-run
 # baseline) still groups as one replicate instead of being dropped by the pivot's NaN index
-_UNSEEDED_KEY = -1
+UNSEEDED_KEY = -1
 
 # width of the rule separating the reference column from the block it is compared against,
 # heavy enough to read as a division of the card rather than as another cell border
@@ -85,7 +86,11 @@ _DIVIDER_LINEWIDTH = 3.0
 
 # green-white-red diverging map for the MAE-delta card: green = MAE below baseline (better),
 # white = no change, red = MAE above baseline (worse)
-_DELTA_CMAP = LinearSegmentedColormap.from_list("mae_delta", ["#1a9850", "#ffffff", "#d73027"])
+DELTA_CMAP = LinearSegmentedColormap.from_list("mae_delta", ["#1a9850", "#ffffff", "#d73027"])
+
+# color for a cell with no defined value, distinct from the white a real zero (or a
+# non-significant change) earns
+_MISSING_CELL_COLOR = "lightgrey"
 
 # report-card font sizes (points), following the sibling repo's heatmap scale but stepped up
 # across the board for legibility: these cards print at roughly 22 x 20 inches, where that
@@ -921,7 +926,7 @@ def plot_card(
     )
     n_rows, n_cols = values.shape
     cmap = cmap.copy()
-    cmap.set_bad("lightgrey")  # missing (flavor, endpoint) cells
+    cmap.set_bad(_MISSING_CELL_COLOR)  # missing (flavor, endpoint) cells
 
     # figure size is built from the grid plus each fixed margin it has to carry, the sibling
     # repo's sizing rule, so the cells stay the same size on a narrow ablation card and a wide
@@ -1078,7 +1083,7 @@ def _blank_summary_rows(aux: pd.DataFrame, *, keep_average: bool = False) -> pd.
     return aux
 
 
-def _per_seed_average_delta(
+def per_seed_average_delta(
     frame: pd.DataFrame, flavor: str, rows: pd.Index, baseline_mae: pd.Series
 ) -> np.ndarray:
     """Per-seed mean MAE %-change across ``rows`` for one flavor, one value per finetune seed.
@@ -1097,7 +1102,7 @@ def _per_seed_average_delta(
     # an unseeded label (the legacy single-run baseline) still forms one group of its own, so give
     # it a sentinel key rather than dropping it from the pivot
     table = (
-        subset.assign(seed=subset["seed"].fillna(_UNSEEDED_KEY))
+        subset.assign(seed=subset["seed"].fillna(UNSEEDED_KEY))
         .pivot_table(index="seed", columns="row", values="mae", aggfunc="mean")
         .reindex(columns=rows)
     )
@@ -1124,7 +1129,7 @@ def mae_average_pvalues(
     would conflate a per-endpoint result with a summary across endpoints.
 
     Each group is one value per finetune seed: that seed's mean MAE %-change across the card's
-    endpoints (see ``_per_seed_average_delta``). The control group is the baseline's own seeds put
+    endpoints (see ``per_seed_average_delta``). The control group is the baseline's own seeds put
     through the same aggregation, so it is centered near zero and carries the baseline's seed
     spread. Because every group is expressed against the same per-endpoint baseline means, the
     control and the treatments are not independent of those denominators; read the row as a
@@ -1161,16 +1166,141 @@ def mae_average_pvalues(
         than ``MIN_GROUP_SIZE`` seeds on either side, or no residual variance in the family).
     """
     rows = mae_matrix.index
-    control = _per_seed_average_delta(frame, baseline_flavor, rows, baseline_mae)
+    control = per_seed_average_delta(frame, baseline_flavor, rows, baseline_mae)
     samples = {
         flavor: values
         for flavor in mae_matrix.columns
-        if (values := _per_seed_average_delta(matrix_frame, flavor, rows, baseline_mae)).size
+        if (values := per_seed_average_delta(matrix_frame, flavor, rows, baseline_mae)).size
     }
     pvalues = pd.Series(np.nan, index=mae_matrix.columns, dtype=float)
     for flavor, pvalue in dunnett_pvalues(samples, control).items():
         pvalues[flavor] = pvalue
     return pvalues
+
+
+@dataclass(frozen=True)
+class MaeDeltaCard:
+    """The computed content of an MAE-delta card, before anything is drawn.
+
+    Holds the quantities the card's colors and annotations derive from, so a second figure can
+    reproduce a cell's verdict (and its exact color) without re-deriving the tests or the color
+    scale, which is how a summary plot stays consistent with the card it summarizes.
+
+    Attributes
+    ----------
+    delta : pandas.DataFrame
+        Percentage change in MAE against the baseline, per (endpoint, column). No AVERAGE row.
+    pvalues : pandas.DataFrame
+        Per-cell family-wise Dunnett p-value, aligned to ``delta``.
+    average_delta : pandas.Series
+        Each column's mean change across the endpoints, the AVERAGE row's value.
+    average_pvalues : pandas.Series
+        Each column's family-wise Dunnett p-value for that across-endpoint mean, which gates the
+        AVERAGE row separately from the cells above it (see :func:`mae_average_pvalues`).
+    baseline_mae : pandas.Series
+        Baseline mean MAE per endpoint, the denominator every change is expressed against.
+    extent : float
+        Half-width of the symmetric color scale, in percentage points.
+    """
+
+    delta: pd.DataFrame
+    pvalues: pd.DataFrame
+    average_delta: pd.Series
+    average_pvalues: pd.Series
+    baseline_mae: pd.Series
+    extent: float
+
+
+def build_mae_delta_card(
+    matrix_frame: pd.DataFrame,
+    frame: pd.DataFrame,
+    baseline_flavor: str,
+    *,
+    columns: list[str] | None = None,
+) -> MaeDeltaCard | None:
+    """Compute an MAE-delta card's changes, significance tests, and color scale.
+
+    Split out of :func:`render_mae_delta_card` so the drawing step and any other figure reading
+    the same card share one definition of what a cell says and what color it earns.
+
+    Parameters
+    ----------
+    matrix_frame : pandas.DataFrame
+        Prepared, seed-collapsed metrics for the card columns (carries ``row``, ``flavor``,
+        ``seed``, ``mae``).
+    frame : pandas.DataFrame
+        Prepared, seed-collapsed metrics that include the baseline flavor's rows.
+    baseline_flavor : str
+        Baseline flavor label (e.g. ``chemeleon_stock``).
+    columns : list of str, optional
+        Column order for the card. Defaults to the flavor registry order.
+
+    Returns
+    -------
+    MaeDeltaCard or None
+        ``None`` when the baseline has no MAE in ``frame``, which leaves the card undefined.
+    """
+    baseline_mae = build_reference_series(frame, baseline_flavor, "mae")
+    if baseline_mae.empty:
+        return None
+    mae = build_matrix(matrix_frame, "mae", columns=columns)
+    delta = mae_delta_matrix(mae, baseline_mae)
+    pvalues = mae_significance_pvalues(matrix_frame, frame, baseline_flavor, mae)
+    average_delta = delta.mean(axis=0, skipna=True)
+    average_pvalues = mae_average_pvalues(matrix_frame, frame, baseline_flavor, mae, baseline_mae)
+
+    # symmetric scale centered on 0% (the baseline), capped at DELTA_EXTENT_CAP so a few large
+    # outliers do not wash out the rest; changes beyond the cap saturate at the end color while
+    # their annotation still shows the true value. The AVERAGE row is inside the scale it is
+    # colored on, so it is included in the extent alongside the cells
+    values = np.concatenate([delta.to_numpy(dtype=float).ravel(), average_delta.to_numpy(float)])
+    finite = values[np.isfinite(values)]
+    observed = max(float(np.abs(finite).max()) if finite.size else 1.0, 1e-6)
+    return MaeDeltaCard(
+        delta=delta,
+        pvalues=pvalues,
+        average_delta=average_delta,
+        average_pvalues=average_pvalues,
+        baseline_mae=baseline_mae,
+        extent=min(observed, DELTA_EXTENT_CAP),
+    )
+
+
+def delta_norm(extent: float) -> TwoSlopeNorm:
+    """Return the MAE-delta card's color normalization for a given scale half-width."""
+    return TwoSlopeNorm(vcenter=0.0, vmin=-extent, vmax=extent)
+
+
+def average_cell_colors(card: MaeDeltaCard) -> pd.Series:
+    """Hex color of each column's AVERAGE cell on the MAE-delta card.
+
+    Reproduces the card's own gating: a column whose across-endpoint mean change is not
+    significant at ``SIGNIFICANCE_ALPHA`` is painted white however large the change looks, a
+    column with no defined change takes the card's missing-cell grey, and everything else takes
+    the diverging ramp at its true change. Reading the color out lets another figure carry the
+    card's significance verdict without restating the test.
+
+    Parameters
+    ----------
+    card : MaeDeltaCard
+        The computed card, from :func:`build_mae_delta_card`.
+
+    Returns
+    -------
+    pandas.Series
+        One hex color string per column of ``card.average_delta``.
+    """
+    norm = delta_norm(card.extent)
+    significant = card.average_pvalues.reindex(card.average_delta.index).le(SIGNIFICANCE_ALPHA)
+    colors = {}
+    for column, value in card.average_delta.items():
+        if not np.isfinite(value):
+            colors[column] = to_hex(_MISSING_CELL_COLOR)
+        elif not bool(significant.get(column, False)):
+            colors[column] = to_hex(DELTA_CMAP(norm(0.0)))
+        else:
+            colors[column] = to_hex(DELTA_CMAP(norm(value)))
+    return pd.Series(colors, dtype=object).reindex(card.average_delta.index)
 
 
 def render_r2_card(
@@ -1266,22 +1396,19 @@ def render_mae_delta_card(
         Column order for the card. Defaults to the flavor registry order; the ablation report
         passes its bare ablation names.
     """
-    baseline_mae = build_reference_series(frame, baseline_flavor, "mae")
-    if baseline_mae.empty:
+    card = build_mae_delta_card(matrix_frame, frame, baseline_flavor, columns=columns)
+    if card is None:
         logger.warning("no %s MAE in the metrics; skipping the MAE-delta card", baseline_flavor)
         return
-    mae = build_matrix(matrix_frame, "mae", columns=columns)
-    delta = mae_delta_matrix(mae, baseline_mae)
-    pvalues = mae_significance_pvalues(matrix_frame, frame, baseline_flavor, mae)
+    delta = card.delta
     # paint a non-significant (or untestable) cell white by driving its color to the norm center,
     # while the annotation still shows the real change; leave a missing delta as NaN (grey)
-    significant = pvalues.le(SIGNIFICANCE_ALPHA)
+    significant = card.pvalues.le(SIGNIFICANCE_ALPHA)
     color_delta = delta.mask((~significant) & delta.notna(), 0.0)
 
     # the AVERAGE row runs its own family of tests on the across-endpoint mean, so it is gated by
     # those p-values rather than by anything derived from the per-cell tests above it
-    average_pvalues = mae_average_pvalues(matrix_frame, frame, baseline_flavor, mae, baseline_mae)
-    average_significant = average_pvalues.le(SIGNIFICANCE_ALPHA)
+    average_significant = card.average_pvalues.le(SIGNIFICANCE_ALPHA)
 
     groups = source_groups(delta.index)
     matrix, average_row = append_average_row(delta)
@@ -1290,22 +1417,16 @@ def render_mae_delta_card(
     color_matrix.iloc[-1] = average_delta.mask(
         (~average_significant) & average_delta.notna(), 0.0
     ).to_numpy()
-    pvalue_matrix, _ = append_average_row(pvalues)
-    pvalue_matrix.iloc[-1] = average_pvalues.reindex(pvalue_matrix.columns).to_numpy()
+    pvalue_matrix, _ = append_average_row(card.pvalues)
+    pvalue_matrix.iloc[-1] = card.average_pvalues.reindex(pvalue_matrix.columns).to_numpy()
 
-    finite = matrix.to_numpy(dtype=float)
-    finite = finite[np.isfinite(finite)]
-    # symmetric scale centered on 0% (the baseline), capped at DELTA_EXTENT_CAP so a few large
-    # outliers do not wash out the rest; changes beyond the cap saturate at the end color while
-    # their annotation still shows the true value
-    observed = max(float(np.abs(finite).max()) if finite.size else 1.0, 1e-6)
-    extent = min(observed, DELTA_EXTENT_CAP)
-    norm = TwoSlopeNorm(vcenter=0.0, vmin=-extent, vmax=extent)
+    extent = card.extent
+    norm = delta_norm(extent)
     plot_card(
         matrix,
         out_png,
         out_png.with_suffix(".csv"),
-        cmap=_DELTA_CMAP,
+        cmap=DELTA_CMAP,
         norm=norm,
         annotate=lambda v, p: f"{v:+.0f}%\n{_format_pvalue(p)}".rstrip(),
         cbar_ticks=[-extent, 0.0, extent],
