@@ -1356,12 +1356,21 @@ def render_r2_card(
     )
 
 
-def _format_pvalue(p: float) -> str:
-    """Render a significance p-value compactly for a cell annotation."""
+def format_pvalue(p: float) -> str:
+    """Render a significance p-value compactly for a cell annotation.
+
+    Both tails are bounded rather than rounded. ``p>.999`` matters more here than the familiar
+    ``p<.001``: a Dunnett p-value against a family this size is pushed hard toward 1 for any
+    column near the null (with 15 treatments, the probability that some column's |t| exceeds a
+    near-zero one is all but certain), so values like 0.9997 are routine and printing them as
+    ``p=1.000`` would read as an exact, and impossible, certainty.
+    """
     if not np.isfinite(p):
         return ""
     if p < 0.001:
         return "p<.001"
+    if p > 0.999:
+        return "p>.999"
     return f"p={p:.3f}"
 
 
@@ -1428,7 +1437,7 @@ def render_mae_delta_card(
         out_png.with_suffix(".csv"),
         cmap=DELTA_CMAP,
         norm=norm,
-        annotate=lambda v, p: f"{v:+.0f}%\n{_format_pvalue(p)}".rstrip(),
+        annotate=lambda v, p: f"{v:+.0f}%\n{format_pvalue(p)}".rstrip(),
         cbar_ticks=[-extent, 0.0, extent],
         cbar_labels=[f"-{extent:.0f}%", "0% (baseline or not significant)", f"+{extent:.0f}%"],
         divider_cols=[],
