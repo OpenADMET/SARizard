@@ -658,6 +658,35 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   on disk predate both changes and differ from the reduced set in styling and group labels until
   someone re-renders them. The render needs more memory than a login session allows (it OOMs
   there, as the 2026-07-27 re-render also found), so it goes through a batch job.
+  **AVERAGE-row summary boxplots (2026-08-10).** `sarizard/analysis/average_summary.py` unpacks a
+  card's AVERAGE row into one box per column: the box and whiskers are the endpoint-to-endpoint
+  spread of the cells the AVERAGE means, and a separate error bar is the seed spread of the
+  across-endpoint mean, the quantity the AVERAGE-row Dunnett test actually works on. The MAE
+  figure fills each box with the exact color its AVERAGE cell earns on the delta card, read out
+  of the card via `report_card.average_cell_colors` rather than recomputed, so a box and its cell
+  cannot disagree; the R² figure leaves its boxes black, since the R² card runs no significance
+  test to color them by. To share one definition of a cell's verdict, the delta card's
+  computation moved out of `render_mae_delta_card` into `build_mae_delta_card` (returning a
+  `MaeDeltaCard`), which the renderer and the summary both call; re-rendering a card off the same
+  metrics CSV is byte-identical to what was on disk before the split. Six figures rendered for
+  the reduced protocol (flavors, prescaling ablations, external foundations; R² and MAE each),
+  as `plots/average_summary_{r2,mae_delta}_reduced.*`,
+  `plots/ablation_average_summary_{r2,mae_delta}_reduced.*`, and
+  `plots/external_foundations/average_summary_{r2,mae_delta}_reduced.*`, each with a CSV of the
+  plotted quantities. Every one's `average` column was checked against its card's AVERAGE row and
+  matches exactly. The module is standalone (its own CLI, run once per condition) rather than
+  wired into `report_card.main`/`prescaling_report`, so producing a summary does not force a
+  re-render of the 600 dpi cards; wiring it in is a follow-up if the summaries should refresh
+  automatically. Frozen and unlocked were not rendered.
+  **Caveat on the control depth behind these three (unresolved).** They do not rest on equally
+  deep controls. Only `results/lr_metrics.csv` carries the 20-seed reduced stock control, so the
+  flavor summary is the deepened one; `results/ablation_metrics.csv` and
+  `results/external_metrics.csv` still hold `chemeleon_stock_reduced__s1-s5` and their
+  significance calls run at the old power. The 20-seed control result dirs are on disk, so both
+  are lifted by re-running `analysis.evaluate` over the `s6-s20` labels for those two CSVs and
+  re-rendering; that is the "what it lifts, for free" claim in the 20-seed control-depth entry
+  below, which was only ever realized for the sweep arm and the PXR arm. Until then, do not
+  compare a p-value on the prescaling or external summary against one on the flavor summary.
 - [x] 9. Meta-model: stack per-flavor finetuned predictions per endpoint, fit LGBM/RF/MLP
   on out-of-fold predictions, compare to the best single flavor.
   First real result, produced by the same job 19230968 now that ≥2 flavors have results:
@@ -1212,6 +1241,14 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   Written up in `FINDINGS.md` under Control depth, with the cross-protocol caveat that reduced's
   colored-cell count is no longer comparable to frozen's or unlocked's.
   **Open.** Frozen and unlocked still run 5-seed controls; deepening them is not scheduled.
+  **Open: two of the four families were never actually lifted (found 2026-08-10).** "What it
+  lifts, for free" above names four reduced-protocol families, but only the sweep arm
+  (`results/lr_metrics.csv`) and the PXR arm were re-evaluated. `results/ablation_metrics.csv`
+  and `results/external_metrics.csv` still carry `chemeleon_stock_reduced__s1-s5`, so the reduced
+  prescaling ablation and the reduced external-foundation comparison remain 5-seed-control
+  results and are not comparable on precision to the reduced flavor card. The s6-s20 result dirs
+  are on disk; lifting them is an `analysis.evaluate` pass over those labels for each CSV plus a
+  re-render, no GPU finetuning.
   **Sweep leg complete (2026-07-30).** All 360 finetunes COMPLETED with no failures and no batch
   retries; every result dir carries a `model.pth`. `results/chemeleon_stock_reduced__s1-s20` is now
   20 seeds on disk against 5 per flavor. Not yet re-rendered: `results/lr_metrics.csv` still holds
