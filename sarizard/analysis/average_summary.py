@@ -83,6 +83,7 @@ from sarizard.analysis.report_card import (  # noqa: E402
     build_reference_series,
     collapse_seed_variants,
     filter_lr_mode,
+    format_pvalue,
     per_seed_average_delta,
     prepare_rows,
 )
@@ -156,15 +157,6 @@ def _per_seed_average_metric(
         .mean(axis=1, skipna=True)
     )
     return table.dropna().to_numpy(dtype=float)
-
-
-def _format_pvalue(pvalue: float) -> str:
-    """Render an AVERAGE-row p-value for a tick sub-label, matching the card's annotation."""
-    if not np.isfinite(pvalue):
-        return ""
-    if pvalue < 0.001:
-        return "p<.001"
-    return f"p={pvalue:.3f}"
 
 
 def _box_stats(values: np.ndarray) -> dict[str, float]:
@@ -443,7 +435,7 @@ def render_mae_delta_summary(
     }
     colors = average_cell_colors(card)
     sub_labels = {
-        column: _format_pvalue(card.average_pvalues.get(column, np.nan)) for column in samples
+        column: format_pvalue(card.average_pvalues.get(column, np.nan)) for column in samples
     }
     # the key's swatches are the card's own ramp ends and center, so a legend entry cannot drift
     # from the fills it explains
