@@ -146,6 +146,38 @@ def test_r2_summary_leads_with_the_baseline_column(prepared, tmp_path):
     assert summary.loc["osmordred", "average"] > summary.loc[BASELINE_LABEL, "average"]
 
 
+def test_r2_summary_orders_the_columns_by_descending_average(prepared, tmp_path):
+    # passed in worst-first, so registry order and plotted order cannot coincide by accident
+    render_r2_summary(
+        prepared,
+        prepared,
+        "chemeleon_stock",
+        tmp_path / "summary.png",
+        columns=["ecfp", "rdkit2d", "osmordred"],
+    )
+
+    summary = pd.read_csv(tmp_path / "summary.csv", index_col=0)
+
+    # the baseline stays pinned at the left ahead of the ranking, then best R² to worst
+    assert list(summary.index) == [BASELINE_LABEL, "osmordred", "rdkit2d", "ecfp"]
+
+
+def test_mae_delta_summary_orders_the_columns_by_ascending_average(prepared, tmp_path):
+    render_mae_delta_summary(
+        prepared,
+        prepared,
+        "chemeleon_stock",
+        tmp_path / "summary.png",
+        columns=["ecfp", "rdkit2d", "osmordred"],
+    )
+
+    summary = pd.read_csv(tmp_path / "summary.csv", index_col=0)
+
+    # the largest MAE reduction leads; ecfp, whose MAE is well above the baseline's, sits last
+    assert list(summary.index) == ["osmordred", "rdkit2d", "ecfp"]
+    assert summary["average"].is_monotonic_increasing
+
+
 def test_missing_baseline_skips_the_mae_summary(prepared, tmp_path, caplog):
     render_mae_delta_summary(
         prepared, prepared, "absent_baseline", tmp_path / "summary.png", columns=["osmordred"]

@@ -13,9 +13,15 @@ they are drawn as different marks:
   standard deviation across seeds). This is the precision of the AVERAGE itself, and it is the
   quantity the card's AVERAGE-row Dunnett test works on.
 
+Columns are ordered best to worst left to right by the AVERAGE value the error bar marks, so the
+ranking is readable off the axis rather than reconstructed by eye: descending R² on the R² figure,
+ascending MAE change (most negative, the largest MAE reduction, first) on the MAE figure. The
+stock-CheMeleon baseline column is exempt and stays pinned at the left behind its divider, since it
+is the reference the other columns are ranked against rather than one of the ranked columns.
+
 Two figures are produced per card pair, matching the two cards:
 
-- the R² summary, whose columns follow the R² card (the stock-CheMeleon baseline first, behind a
+- the R² summary, whose columns are the R² card's (the stock-CheMeleon baseline first, behind a
   divider, then the flavors). Its boxes are drawn black: R² carries no significance test of its
   own, so coloring them would imply one;
 - the MAE %-change summary, whose flavor columns are filled with the exact color their AVERAGE
@@ -172,6 +178,46 @@ def _box_stats(values: np.ndarray) -> dict[str, float]:
         "whisker_low": float(inside_low.min()) if inside_low.size else q1,
         "whisker_high": float(inside_high.max()) if inside_high.size else q3,
     }
+
+
+def _best_to_worst(
+    samples: dict[str, np.ndarray],
+    averages: pd.Series,
+    *,
+    ascending: bool,
+    pinned: str | None = None,
+) -> dict[str, np.ndarray]:
+    """Reorder columns best to worst by their AVERAGE value, keeping ``pinned`` at the left.
+
+    Parameters
+    ----------
+    samples : dict of str to numpy.ndarray
+        Per-column per-endpoint values, keyed by column label.
+    averages : pandas.Series
+        The AVERAGE value each column is ranked on, indexed by column label.
+    ascending : bool
+        True where a smaller AVERAGE is better (the MAE %-change figure), False where a larger
+        one is (the R² figure).
+    pinned : str, optional
+        A column held at the left out of the ranking (the stock-CheMeleon baseline, which is the
+        reference rather than a ranked column).
+
+    Returns
+    -------
+    dict of str to numpy.ndarray
+        The same mapping in the plotted left-to-right order. Columns whose AVERAGE is missing or
+        NaN sort last, since they have no rank to claim.
+    """
+    ranked = [column for column in samples if column != pinned]
+    # NaN averages would sort unpredictably, so they are pushed to the right end explicitly
+    ranked.sort(
+        key=lambda column: (
+            not np.isfinite(averages.get(column, np.nan)),
+            (1.0 if ascending else -1.0) * float(averages.get(column, np.nan)),
+        )
+    )
+    ordered = ([pinned] if pinned in samples else []) + ranked
+    return {column: samples[column] for column in ordered}
 
 
 def _draw_summary(
@@ -334,11 +380,12 @@ def render_r2_summary(
     *,
     columns: list[str] | None = None,
 ) -> None:
-    """Draw the R² card's AVERAGE row as one box per column, boxes black.
+    """Draw the R² card's AVERAGE row as one box per column, boxes black, best R² first.
 
-    The columns and their order follow the R² card exactly, baseline first behind the same heavy
-    divider. Nothing is colored: the R² card runs no significance test, so a fill would assert
-    one that was never made. The MAE summary is where the significance verdicts live.
+    The columns are the R² card's, baseline first behind the same heavy divider, but they are
+    ordered by descending AVERAGE R² rather than in the card's registry order. Nothing is
+    colored: the R² card runs no significance test, so a fill would assert one that was never
+    made. The MAE summary is where the significance verdicts live.
 
     Parameters
     ----------
@@ -351,7 +398,8 @@ def render_r2_summary(
     out_png : pathlib.Path
         Image output path; the summary CSV is written alongside it.
     columns : list of str, optional
-        Column order, values of the ``flavor`` field. Defaults to the flavor registry order.
+        Column set, values of the ``flavor`` field. Defaults to the flavor registry. The plotted
+        order is by AVERAGE value regardless.
     """
     flavor_r2 = build_matrix(matrix_frame, "r2", columns=columns)
     baseline_r2 = build_reference_series(frame, baseline_flavor, "r2")
@@ -375,6 +423,7 @@ def render_r2_summary(
         if column in samples
     }
     averages = matrix.mean(axis=0, skipna=True)
+    samples = _best_to_worst(samples, averages, ascending=False, pinned=BASELINE_LABEL)
 
     reference = float(averages[BASELINE_LABEL]) if BASELINE_LABEL in averages else None
     _draw_summary(
@@ -400,6 +449,9 @@ def render_mae_delta_summary(
 ) -> None:
     """Draw the MAE-delta card's AVERAGE row as one box per column, colored by significance.
 
+    Columns run best to worst left to right by AVERAGE MAE change, so the leftmost column is the
+    one that cuts MAE the most against the baseline.
+
     Each box is filled with the color its AVERAGE cell carries on the card: green where the
     column's mean MAE across endpoints is significantly below the baseline's, red where it is
     significantly above, white where Dunnett's test does not separate the two at
@@ -416,7 +468,8 @@ def render_mae_delta_summary(
     matrix_frame, frame, baseline_flavor, out_png
         As in :func:`render_r2_summary`.
     columns : list of str, optional
-        Column order, values of the ``flavor`` field. Defaults to the flavor registry order.
+        Column set, values of the ``flavor`` field. Defaults to the flavor registry. The plotted
+        order is by AVERAGE value regardless.
     """
     card = build_mae_delta_card(matrix_frame, frame, baseline_flavor, columns=columns)
     if card is None:
@@ -433,6 +486,7 @@ def render_mae_delta_summary(
         column: per_seed_average_delta(matrix_frame, column, rows, card.baseline_mae)
         for column in samples
     }
+    samples = _best_to_worst(samples, card.average_delta, ascending=True)
     colors = average_cell_colors(card)
     sub_labels = {
         column: format_pvalue(card.average_pvalues.get(column, np.nan)) for column in samples
@@ -501,7 +555,8 @@ def main() -> None:
         "--columns",
         nargs="*",
         default=None,
-        help="explicit column set (values of the flavor field), overriding the registry-flavor "
+        help="explicit column set (values of the flavor field, ordered by AVERAGE either way), "
+        "overriding the registry-flavor "
         "default (e.g. the external checkpoints: --columns molpile_1M molpile_5M molpile_10M "
         "expansion_gen)",
     )

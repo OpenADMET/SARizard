@@ -678,6 +678,12 @@ Headline results and the read on each flavor: `FINDINGS.md`.
   wired into `report_card.main`/`prescaling_report`, so producing a summary does not force a
   re-render of the 600 dpi cards; wiring it in is a follow-up if the summaries should refresh
   automatically. Frozen and unlocked were not rendered.
+  **Ranked column order (2026-08-17).** All six figures now order their columns best to worst left
+  to right by the AVERAGE the error bar marks (descending R², ascending MAE change), with the
+  stock-CheMeleon baseline pinned at the left behind its divider as the reference rather than a
+  ranked column; the CSVs follow the plotted order. This is a plotting-order change only, no
+  metric moved. The six reduced-protocol figures and CSVs were re-rendered from the same metrics
+  CSVs.
   **Caveat on the control depth behind these three (unresolved).** They do not rest on equally
   deep controls. Only `results/lr_metrics.csv` carries the 20-seed reduced stock control, so the
   flavor summary is the deepened one; `results/ablation_metrics.csv` and
