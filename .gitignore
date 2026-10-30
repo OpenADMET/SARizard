@@ -269,11 +269,9 @@ slurm/logs/
 *.h5
 *.hdf5
 
-# Published foundation checkpoints. The distributable copies under checkpoints/ are tracked
-# deliberately so they ship with the repository, unlike the regenerable foundations/ exports they
-# are copied from. The blanket *.pt rule above would otherwise catch them; the parent directories
-# are not ignored, so re-including the files alone is enough.
-!checkpoints/**/*.pt
+# Published foundation checkpoints live in a separate weights repository; only their README,
+# MANIFEST.csv, and SHA256SUMS are tracked under checkpoints/. The blanket *.pt rule above keeps
+# local copies of the weights placed there out of the index
 
 # Obsidian per-user UI state (keep graph/app config, drop the machine-local layout)
 wiki/.obsidian/workspace.json

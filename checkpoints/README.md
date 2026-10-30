@@ -10,9 +10,10 @@ fraction, pretraining corpus, source, size, and sha256 of each one.
 
 ## Getting the weights
 
-The checkpoints are tracked in this repository, so a clone brings them with it. That makes the
-clone about 900 MB; if you only want the code and the metadata, `git clone --filter=blob:none`
-fetches the blobs lazily and skips them until something asks for one.
+The weights are not tracked in this repository; they live in a separate checkpoints repository
+(about 900 MB) so a clone of SARizard stays small. This directory carries only the metadata. To
+use the weights, copy the four subdirectories from the checkpoints repository into this one;
+`*.pt` is gitignored, so they stay out of the index, and `SHA256SUMS` verifies the copy.
 
 The paths in `MANIFEST.csv` and `SHA256SUMS` are relative to this directory.
 
